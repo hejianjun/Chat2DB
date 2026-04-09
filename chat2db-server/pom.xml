@@ -391,6 +391,7 @@
                     <threshold>High</threshold>
                     <failOnError>false</failOnError>
                     <xmlOutput>true</xmlOutput>
+                    <htmlOutput>true</htmlOutput>
                 </configuration>
                 <dependencies>
                     <dependency>
