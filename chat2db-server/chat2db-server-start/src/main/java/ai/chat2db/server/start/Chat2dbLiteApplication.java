@@ -14,16 +14,16 @@ import org.springframework.stereotype.Indexed;
 
 /**
  * Chat2DB 简化启动类（无登录鉴权）
- * 
+ *
  * <p>适用于：
  * <ul>
  *   <li>本地开发测试场景</li>
  *   <li>不需要用户登录鉴权的简化部署</li>
  *   <li>单元测试启动</li>
  * </ul>
- * 
+ *
  * <p>JAR 文件：chat2db-server-start.jar
- * 
+ *
  * <p><b>注意：生产环境请使用 Chat2dbWebApplication（chat2db-server-web-start.jar）</b>
  *
  * @author Jiaju Zhuang
