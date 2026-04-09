@@ -16,6 +16,8 @@ export interface ITabItem {
   editableName?: boolean;
   canClosed?: boolean;
   styles?: React.CSSProperties;
+  // 是否支持生成标题
+  canGenerateTitle?: boolean;
 }
 
 export interface IOnchangeProps {
@@ -37,6 +39,10 @@ interface IProps {
   // 最后一个tab不能关闭
   lastTabCannotClosed?: boolean;
   destroyInactiveTabPane?: boolean;
+  // 生成标题的回调
+  onGenerateTitle?: (option: ITabItem) => void;
+  // 是否正在生成标题
+  generatingTitleKey?: number | string | null;
 }
 
 export default memo<IProps>((props) => {
@@ -51,6 +57,8 @@ export default memo<IProps>((props) => {
     editableNameOnBlur,
     concealTabHeader,
     destroyInactiveTabPane = false,
+    onGenerateTitle,
+    generatingTitleKey,
   } = props;
   const [internalTabs, setInternalTabs] = useState<ITabItem[]>([]);
   const [internalActiveTab, setInternalActiveTab] = useState<number | string | null>(null);
@@ -180,7 +188,7 @@ export default memo<IProps>((props) => {
       return true;
     }
 
-    const closeTabsMenu = [
+    const closeTabsMenu: any[] = [
       {
         label: i18n('common.button.close'),
         key: 'close',
@@ -203,6 +211,21 @@ export default memo<IProps>((props) => {
         },
       },
     ];
+
+    // 如果支持生成标题，添加生成标题选项
+    if (t.canGenerateTitle && onGenerateTitle) {
+      closeTabsMenu.push({
+        type: 'divider',
+      });
+      closeTabsMenu.push({
+        label: generatingTitleKey === t.key ? i18n('common.text.generatingTitle') : i18n('common.text.generateTitle'),
+        key: 'generateTitle',
+        disabled: generatingTitleKey === t.key,
+        onClick: () => {
+          onGenerateTitle(t);
+        },
+      });
+    }
 
     return (
       <Dropdown key={t.key} menu={{ items: closeTabsMenu }} trigger={['contextMenu']}>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, memo, useContext } from 'react';
 import { IntelligentEditorContext } from '../../index';
-import { Dropdown } from 'antd';
+import { Dropdown, Select } from 'antd';
 import { useConnectionStore } from '@/pages/main/store/connection';
 import connectionService from '@/service/connection';
 import historyService from '@/service/history';
@@ -9,6 +9,7 @@ import { databaseMap } from '@/constants/database';
 import styles from './index.less';
 import sqlService from '@/service/sql';
 import { IBoundInfo } from '@/typings';
+const { Option } = Select;
 
 import {
   registerIntelliSenseField,
@@ -220,7 +221,8 @@ const SelectBoundInfo = memo((props: IProps) => {
 
   // 选择数据库
   const changeDataBase = (item) => {
-    const _databaseName = databaseNameList?.find((i) => i.key === item.key)?.value;
+    // debugger;
+    const _databaseName = databaseNameList?.find((i) => i.key === item)?.value;
 
     setBoundInfo({
       ...boundInfo,
@@ -282,19 +284,20 @@ const SelectBoundInfo = memo((props: IProps) => {
       </Dropdown>
 
       {supportDatabase && (
-        <Dropdown
-          menu={{
-            items: databaseNameList,
-            onClick: changeDataBase,
-          }}
-          trigger={['click']}
+        <Select
+          showSearch
+          placeholder="选择数据库"
+          optionFilterProp="children"
+          value={boundInfo.databaseName}
+          onChange={changeDataBase}
+          className={styles.selectWidth} // 应用定义的 CSS 类
         >
-          <div className={styles.boundInfoBox}>
-            <Iconfont code="&#xe669;" />
-            <div className={styles.boundInfoName}>{boundInfo.databaseName || `<${'database'}>`}</div>
-            <Iconfont code="&#x100be;" />
-          </div>
-        </Dropdown>
+          {databaseNameList.map((item) => (
+            <Option key={item.value} value={item.value} label={item.label}>
+              {item.label}
+            </Option>
+          ))}
+        </Select>
       )}
 
       {supportSchema && (

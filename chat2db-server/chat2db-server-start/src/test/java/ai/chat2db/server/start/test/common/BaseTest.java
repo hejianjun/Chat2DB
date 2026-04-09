@@ -1,6 +1,6 @@
 package ai.chat2db.server.start.test.common;
 
-import ai.chat2db.server.start.Application;
+import ai.chat2db.server.start.Chat2dbLiteApplication;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * @author Jiaju Zhuang
  **/
-@SpringBootTest(classes = {Application.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = {Chat2dbLiteApplication.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Slf4j
 public abstract class BaseTest {
 

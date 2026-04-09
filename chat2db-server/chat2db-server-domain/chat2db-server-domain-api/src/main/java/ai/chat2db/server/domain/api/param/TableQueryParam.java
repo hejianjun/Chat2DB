@@ -2,10 +2,14 @@ package ai.chat2db.server.domain.api.param;
 
 import java.io.Serial;
 
+import com.jayway.jsonpath.internal.function.sequence.Index;
+
 import jakarta.validation.constraints.NotNull;
 
 import ai.chat2db.server.tools.base.wrapper.param.QueryParam;
-
+import ai.chat2db.spi.model.BaseModel;
+import ai.chat2db.spi.model.IndexModel;
+import ai.chat2db.spi.model.TableColumn;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -20,7 +24,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TableQueryParam extends QueryParam {
+public class TableQueryParam extends QueryParam implements BaseModel<IndexModel>{
     @Serial
     private static final long serialVersionUID = -8918610899872508804L;
     /**
@@ -46,4 +50,8 @@ public class TableQueryParam extends QueryParam {
     private String schemaName;
 
     private boolean refresh;
+
+
+    private Class<? extends IndexModel> classType;
+
 }

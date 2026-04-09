@@ -1,0 +1,154 @@
+@import '../../styles/var.less';
+
+.aiChatContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+
+  .statusBar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background-color: #fafafa;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+
+    .selectedTables {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+
+      > span:first-child {
+        color: #666;
+        font-size: 12px;
+      }
+    }
+  }
+
+  .contentArea {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .userBlock {
+      padding: 12px 16px;
+      background-color: #e6f4ff;
+      border-radius: 6px;
+      border: 1px solid #91caff;
+      align-self: flex-end;
+      max-width: 80%;
+    }
+
+    .aiBlock {
+      padding: 16px;
+      background-color: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #e9ecef;
+      align-self: flex-start;
+      max-width: 80%;
+
+      :global {
+        h1, h2, h3, h4, h5, h6 {
+          margin-top: 24px;
+          margin-bottom: 16px;
+          font-weight: 600;
+          line-height: 1.25;
+        }
+
+        p {
+          margin-bottom: 16px;
+          line-height: 1.5;
+        }
+
+        code {
+          padding: 0.2em 0.4em;
+          margin: 0;
+          font-size: 85%;
+          background-color: rgba(27,31,35,0.05);
+          border-radius: 3px;
+        }
+
+        pre {
+          padding: 16px;
+          overflow: auto;
+          font-size: 85%;
+          line-height: 1.45;
+          background-color: #f6f8fa;
+          border-radius: 3px;
+
+          code {
+            padding: 0;
+            margin: 0;
+            background-color: transparent;
+            border: 0;
+            background: none;
+          }
+        }
+
+        ul, ol {
+          padding-left: 2em;
+          margin-bottom: 16px;
+        }
+
+        blockquote {
+          padding: 0 1em;
+          color: #6a737d;
+          border-left: 0.25em solid #dfe2e5;
+          margin: 0 0 16px 0;
+        }
+
+        table {
+          border-spacing: 0;
+          border-collapse: collapse;
+          margin-bottom: 16px;
+
+          th, td {
+            padding: 6px 13px;
+            border: 1px solid #dfe2e5;
+          }
+
+          tr:nth-child(2n) {
+            background-color: #f6f8fa;
+          }
+        }
+      }
+    }
+
+    .errorBlock {
+      padding: 16px;
+      background-color: #fff2f0;
+      border-radius: 6px;
+      border: 1px solid #ffccc7;
+      align-self: flex-start;
+      max-width: 80%;
+    }
+  }
+
+  .inputFormArea {
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    padding: 12px;
+    background-color: #ffffff;
+    flex-shrink: 0;
+    margin-bottom: 20px;
+
+    .ant-input-textarea {
+      margin-bottom: 8px;
+    }
+
+    .buttonGroup {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+  }
+}

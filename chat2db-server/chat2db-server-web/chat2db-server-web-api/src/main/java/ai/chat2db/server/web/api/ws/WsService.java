@@ -12,7 +12,6 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.common.exception.ParamBusinessException;
 import ai.chat2db.server.tools.common.model.LoginUser;
-import ai.chat2db.server.web.api.controller.ai.chat2db.client.Chat2dbAIClient;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.DmlRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ExecuteResultVO;
@@ -48,8 +47,6 @@ public class WsService {
 
     @Autowired
     private DlTemplateService dlTemplateService;
-
-    public static ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     public ListResult<ExecuteResultVO> execute(DmlRequest request) {
         DlExecuteParam param = rdbWebConverter.request2param(request);
@@ -113,16 +110,6 @@ public class WsService {
             connectInfo.setDriverConfig(driverConfig);
         }
         return connectInfo;
-    }
-
-
-    private String getApiKey() {
-        ConfigService configService = ApplicationContextUtil.getBean(ConfigService.class);
-        Config keyConfig = configService.find(Chat2dbAIClient.CHAT2DB_OPENAI_KEY).getData();
-        if (Objects.isNull(keyConfig) || StringUtils.isBlank(keyConfig.getContent())) {
-            return null;
-        }
-        return keyConfig.getContent();
     }
 
 

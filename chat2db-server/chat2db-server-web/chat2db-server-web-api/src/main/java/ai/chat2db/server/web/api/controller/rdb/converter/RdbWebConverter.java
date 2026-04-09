@@ -2,10 +2,38 @@ package ai.chat2db.server.web.api.controller.rdb.converter;
 
 import java.util.List;
 
-import ai.chat2db.server.domain.api.param.*;
+import org.apache.commons.lang3.StringUtils;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Mappings;
+
+import ai.chat2db.server.domain.api.param.DlCountParam;
+import ai.chat2db.server.domain.api.param.DlExecuteParam;
+import ai.chat2db.server.domain.api.param.DropKeyParam;
+import ai.chat2db.server.domain.api.param.DropParam;
+import ai.chat2db.server.domain.api.param.OrderByParam;
+import ai.chat2db.server.domain.api.param.SchemaQueryParam;
+import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
+import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableQueryParam;
+import ai.chat2db.server.domain.api.param.TableVectorParam;
+import ai.chat2db.server.domain.api.param.UpdateSelectResultParam;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.data.source.vo.DatabaseVO;
-import ai.chat2db.server.web.api.controller.rdb.request.*;
+import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DdlCountRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DdlExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DdlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DmlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DmlTableRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.KeyDeleteRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.OrderByRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.SelectResultUpdateRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableBriefQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableDeleteRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableDetailQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableMilvusQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ColumnVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.ExecuteResultVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.IndexVO;
@@ -22,9 +50,6 @@ import ai.chat2db.spi.model.Sql;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.Mappings;
 
 /**
  * @author moji
@@ -107,7 +132,7 @@ public abstract class RdbWebConverter {
      * @param request
      * @return
      */
-    public abstract TablePageQueryParam tablePageRequest2param(ChatQueryRequest request);
+    public abstract TablePageQueryParam chatQueryRequest2page(ChatQueryRequest request);
     /**
      * 参数转换
      *
@@ -145,6 +170,12 @@ public abstract class RdbWebConverter {
      * @return
      */
     public abstract DropParam tableDelete2dropParam(TableDeleteRequest request);
+    /**
+     * 参数转换
+     * @param request
+     * @return
+     */
+    public abstract DropKeyParam keyDelete2dropParm(KeyDeleteRequest request);
 
 
     /**
@@ -169,6 +200,9 @@ public abstract class RdbWebConverter {
      * @param dto
      * @return
      */
+    @Mappings({
+        @Mapping(target = "comment", expression = "java(getComment(dto))")
+    })
     public abstract ColumnVO columnDto2vo(TableColumn dto);
 
     /**
@@ -179,6 +213,10 @@ public abstract class RdbWebConverter {
      */
     public abstract List<ColumnVO> columnDto2vo(List<TableColumn> dtos);
 
+    // 自定义方法，获取非空的comment
+    protected String getComment(TableColumn dto) {
+        return StringUtils.defaultIfBlank(dto.getComment(), dto.getAiComment());
+    }
     /**
      * 模型转换
      *
@@ -207,6 +245,7 @@ public abstract class RdbWebConverter {
     @Mappings({
         @Mapping(source = "columnList", target = "columnList"),
         @Mapping(source = "indexList", target = "indexList"),
+        @Mapping(target = "comment", expression = "java(getComment(dto))")
     })
     public abstract TableVO tableDto2vo(Table dto);
 
@@ -224,6 +263,12 @@ public abstract class RdbWebConverter {
      * @return
      */
     public abstract List<SchemaVO> schemaDto2vo(List<Schema> tableColumns);
+
+
+    // 自定义方法，获取非空的comment
+    protected String getComment(Table dto) {
+        return StringUtils.defaultIfBlank(dto.getComment(), dto.getAiComment());
+    }
 
     /**
      * 模型转换
@@ -263,4 +308,7 @@ public abstract class RdbWebConverter {
     public abstract EsTableSchemaRequest req2req(TableBriefQueryRequest request);
 
     public abstract TablePageQueryParam schemaReq2page(EsTableSchemaRequest request);
+    public abstract SchemaQueryParam chatQueryRequest2schemaParam(ChatQueryRequest queryRequest);
+
+    public abstract TableQueryParam chatQueryRequest2Param(ChatQueryRequest queryRequest);
 }

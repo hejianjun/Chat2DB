@@ -1,36 +1,236 @@
 package ai.chat2db.spi.jdbc;
 
-import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+
+import com.google.common.collect.Lists;
+
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
-import ai.chat2db.spi.model.*;
+import ai.chat2db.spi.model.Database;
+import ai.chat2db.spi.model.Header;
+import ai.chat2db.spi.model.OrderBy;
+import ai.chat2db.spi.model.ResultOperation;
+import ai.chat2db.spi.model.Schema;
+import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableIndexColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.util.SqlUtils;
-import com.google.common.collect.Lists;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class DefaultSqlBuilder implements SqlBuilder {
 
 
-    @Override
+@Override
     public String buildCreateTableSql(Table table) {
-        return null;
+        StringBuilder script = new StringBuilder();
+        script.append("CREATE TABLE ");
+
+        // 添加数据库名
+        if (StringUtils.isNotBlank(table.getDatabaseName())) {
+            script.append("`").append(table.getDatabaseName()).append("`").append(".");
+        }
+        script.append("`").append(table.getName()).append("`").append(" (").append("\n");
+
+        // 添加列
+        appendColumns(script, table.getColumnList());
+
+        // 添加索引
+        appendIndexes(script, table.getIndexList());
+
+        // 移除最后的逗号
+        if (script.length() > 2) {
+            script.setLength(script.length() - 2);
+        }
+        script.append("\n)");
+
+        // 添加表的其他属性
+        appendTableAttributes(script, table);
+
+        script.append(";");
+
+        return script.toString();
+    }
+
+    protected void appendTableAttributes(StringBuilder script, Table table) {
+        // 添加表的存储引擎
+        if (table.getEngine() != null) {
+            script.append(" ENGINE = ").append(table.getEngine());
+        }
+
+        // 添加字符集
+        if (table.getCharset() != null) {
+            script.append(" DEFAULT CHARSET = ").append(table.getCharset());
+        }
+
+        // 添加排序规则
+        if (table.getCollate() != null) {
+            script.append(" COLLATE = ").append(table.getCollate());
+        }
+
+        // 添加分区信息
+        if (table.getPartition() != null) {
+            script.append(" PARTITION BY ").append(table.getPartition());
+        }
+
+        // 添加表空间信息
+        if (table.getTablespace() != null) {
+            script.append(" TABLESPACE = ").append(table.getTablespace());
+        }
+
+        // 添加注释
+        if (table.getComment() != null) {
+            script.append(" COMMENT = '").append(table.getComment()).append("'");
+        }
+    }
+
+    protected void appendIndexes(StringBuilder script, List<TableIndex> indexList) {
+        for (TableIndex index : indexList) {
+            script.append("    INDEX `").append(index.getName()).append("` (");
+
+            // 添加索引包含的列
+            for (TableIndexColumn column : index.getColumnList()) {
+                script.append("`").append(column.getColumnName()).append("`, ");
+            }
+
+            // 移除最后的逗号
+            if (script.length() > 0) {
+                script.setLength(script.length() - 2);
+            }
+
+            script.append(")");
+
+            // 添加索引的其他属性
+            if (Boolean.TRUE.equals(index.getUnique())) {
+                script.append(" UNIQUE");
+            }
+
+            if (index.getComment() != null) {
+                script.append(" COMMENT '").append(index.getComment()).append("'");
+            }
+
+            script.append(",\n");
+        }
+    }
+
+    protected void appendColumns(StringBuilder script, List<TableColumn> columnList) {
+        for (TableColumn column : columnList) {
+            script.append("    `").append(column.getName()).append("` ")
+                    .append(column.getColumnType());
+
+            // 添加列的大小（如果适用）
+            if (column.getColumnSize() != null && column.getColumnSize() > 0) {
+                script.append("(").append(column.getColumnSize());
+                if (column.getDecimalDigits() != null && column.getDecimalDigits() > 0) {
+                    script.append(", ").append(column.getDecimalDigits());
+                }
+                script.append(")");
+            }
+
+            // 添加是否自增
+            if (Boolean.TRUE.equals(column.getAutoIncrement())) {
+                script.append(" AUTO_INCREMENT");
+            }
+
+            // 添加默认值
+            if (column.getDefaultValue() != null) {
+                script.append(" DEFAULT '").append(column.getDefaultValue()).append("'");
+            }
+
+            // 添加注释
+            if (StringUtils.isNotBlank(column.getComment())) {
+                script.append(" COMMENT '").append(column.getComment()).append("'");
+            }
+
+            // 添加是否主键
+            if (Boolean.TRUE.equals(column.getPrimaryKey())) {
+                script.append(" PRIMARY KEY");
+            }
+
+            // 添加注释
+            if(StringUtils.isNotBlank(column.getAiComment())){
+                script.append(" -- ").append(column.getAiComment());
+            }
+            script.append(",\n");
+        }
     }
 
     @Override
     public String buildModifyTaleSql(Table oldTable, Table newTable) {
-        return null;
+        if (oldTable.equals(newTable)) {
+            return "";
+        }
+        StringBuilder script = new StringBuilder();
+        script.append("ALTER TABLE ");
+
+        // 添加数据库名
+        if (StringUtils.isNotBlank(oldTable.getDatabaseName())) {
+            script.append("`").append(oldTable.getDatabaseName()).append("`").append(".");
+        }
+        script.append("`").append(oldTable.getName()).append("`").append("\n");
+
+        // 修改表名和注释
+        modifyTableNameAndComment(script, oldTable, newTable);
+
+        // 修改列
+        modifyColumns(script, oldTable, newTable);
+
+        // 修改索引
+        modifyIndexes(script, oldTable, newTable);
+
+        // 修改外键
+        modifyForeignKeys(script, oldTable, newTable);
+
+        // 添加列重排逻辑
+        script.append(buildGenerateReorderColumnSql(oldTable, newTable));
+
+        // 移除最后的逗号
+        if (script.length() > 2) {
+            script.setLength(script.length() - 2);
+            script.append(";");
+        }
+
+        return script.toString();
     }
+
+    // 修改表名和注释的方法
+    protected void modifyTableNameAndComment(StringBuilder script, Table oldTable, Table newTable) {
+        if (!StringUtils.equalsIgnoreCase(oldTable.getName(), newTable.getName())) {
+            script.append("\t").append("RENAME TO ").append("`").append(newTable.getName()).append("`").append(",\n");
+        }
+        if (!StringUtils.equalsIgnoreCase(oldTable.getComment(), newTable.getComment())) {
+            script.append("\t").append("COMMENT=").append("'").append(newTable.getComment()).append("'").append(",\n");
+        }
+        if (!oldTable.getIncrementValue().equals(newTable.getIncrementValue())) {
+            script.append("\t").append("AUTO_INCREMENT=").append(newTable.getIncrementValue()).append(",\n");
+        }
+    }
+
+    // 修改列的方法
+    protected void modifyColumns(StringBuilder script, Table oldTable, Table newTable) {
+    }
+
+    // 修改索引的方法
+    protected void modifyIndexes(StringBuilder script, Table oldTable, Table newTable) {
+    }
+
+    protected void modifyForeignKeys(StringBuilder script, Table oldTable, Table newTable) {
+    }
+
+    protected String buildGenerateReorderColumnSql(Table oldTable, Table newTable) {
+        return "";
+    }
+
 
     @Override
     public String pageLimit(String sql, int offset, int pageNo, int pageSize) {

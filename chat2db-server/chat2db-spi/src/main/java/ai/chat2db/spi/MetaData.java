@@ -190,12 +190,12 @@ public interface MetaData {
 
 
     /**
+     * @param connection
      * @param databaseName
      * @param schemaName
-     * @param tableName
      * @return
      */
-    TableMeta getTableMeta(String databaseName, String schemaName, String tableName);
+    TableMeta getTableMeta(Connection connection, String databaseName, String schemaName);
 
 
     /**
@@ -216,4 +216,16 @@ public interface MetaData {
      * Get command executor.
      */
     CommandExecutor getCommandExecutor();
+
+    /**
+     * Querying all foreign keys under a table.
+     *
+     * @param connection
+     * @param databaseName
+     * @param schemaName
+     * @param tableName
+     * @return List of foreign keys
+     */
+    List<ForeignKey> foreignKeys(Connection connection, @NotEmpty String databaseName, String schemaName, @NotEmpty String tableName);
+
 }

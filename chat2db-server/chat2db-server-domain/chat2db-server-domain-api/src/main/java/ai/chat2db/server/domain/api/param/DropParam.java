@@ -1,7 +1,6 @@
 package ai.chat2db.server.domain.api.param;
 
 import jakarta.validation.constraints.NotNull;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -35,7 +34,7 @@ public class DropParam {
     private String tableName;
 
     /**
-     *
+     * 模式名
      */
-    private String tableSchema;
+    private String schemaName;
 }

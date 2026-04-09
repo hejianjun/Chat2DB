@@ -259,7 +259,7 @@ public enum OracleColumnTypeEnum implements ColumnBuilder {
 
         script.append(buildDefaultValue(column,type)).append(" ");
 
-        if(oldColumn.getNullable() != column.getNullable()) {
+        if(!oldColumn.getNullable().equals(column.getNullable())) {
             script.append(buildNullable(column, type)).append(" ");
         }
 

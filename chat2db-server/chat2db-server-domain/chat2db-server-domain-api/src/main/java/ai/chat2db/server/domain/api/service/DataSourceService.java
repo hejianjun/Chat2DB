@@ -95,12 +95,13 @@ public interface DataSourceService {
     PageResult<DataSource> queryPageWithPermission(DataSourcePageQueryParam param, DataSourceSelector selector);
 
     /**
-     * 通过ID列表查询数据源
+     * 通过 ID 列表查询数据源
      *
      * @param ids
      * @return
      * @deprecated Use {@link #listQuery(List, DataSourceSelector)}
      */
+    @Deprecated
     ListResult<DataSource> queryByIds(List<Long> ids);
 
     /**

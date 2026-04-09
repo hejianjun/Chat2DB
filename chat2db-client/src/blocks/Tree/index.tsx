@@ -210,7 +210,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
   const { treeData, setTreeData, searchTreeData, setSearchTreeData } = useContext(Context);
 
   // 加载数据
-  function loadData(_props?: { refresh: boolean; pageNo: number; treeNodeData?: ITreeNode }) {
+  function loadData(_props?: { refresh: boolean; pageNo: number; lastDocId:number; treeNodeData?: ITreeNode }) {
     const _treeNodeData = _props?.treeNodeData || props.data;
     const treeNodeConfig: ITreeConfigItem = treeConfig[_treeNodeData.pretendNodeType || _treeNodeData.treeNodeType];
     setIsLoading(true);
@@ -241,6 +241,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
               loadData({
                 refresh: _props?.refresh || false,
                 pageNo: res.pageNo + 1,
+                lastDocId: res.lastDocId,
               });
             }
           } else {

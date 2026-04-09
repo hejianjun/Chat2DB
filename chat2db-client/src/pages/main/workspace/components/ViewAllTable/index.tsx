@@ -1,13 +1,14 @@
-import React, { memo, useEffect } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import i18n from '@/i18n';
 import styles from './index.less';
 import classnames from 'classnames';
-import { Table, Dropdown, Input, Pagination } from 'antd';
+import { Table, Dropdown, Input, Pagination, Button, Form, Modal, message } from 'antd';
 import { DatabaseTypeCode, TreeNodeType, OperationColumn, WorkspaceTabType } from '@/constants';
-import sqlServer from '@/service/sql';
+import sqlServer, { IBatchModifyTableSqlParams } from '@/service/sql';
 import type { ColumnsType } from 'antd/es/table';
 import { IPageParams } from '@/typings';
 import { v4 as uuid } from 'uuid';
+import ExecuteSQL from '@/components/ExecuteSQL';
 
 // ----- components -----
 import Iconfont from '@/components/Iconfont';
@@ -32,18 +33,21 @@ interface IProps {
 }
 
 export default memo<IProps>((props) => {
-  const { className, uniqueData } = props;
-  const [tableData, setTableData] = React.useState<any[] | null>(null);
-  const [tableLoading, setTableLoading] = React.useState<boolean>(false);
+  const { className, uniqueData, } = props;
+  const [tableData, setTableData] = useState<any[] | null>(null);
+  const [tableLoading, setTableLoading] = useState<boolean>(false);
   const tableBoxRef = React.useRef<HTMLDivElement>(null);
-  const [allTableWidth, setAllTableWidth] = React.useState(0);
-  const [allTableHeight, setAllTableHeight] = React.useState(0);
-  // 选中表
-  const [activeId, setActiveId] = React.useState<string>('');
-  const [tableDataTotal, setTableDataTotal] = React.useState(0);
-  const [currentPageNo, setCurrentPageNo] = React.useState(1);
-  const [openDropdown, setOpenDropdown] = React.useState<boolean | undefined>(undefined);
-  const [dropdownItems, setDropdownItems] = React.useState<any[]>([]);
+  const [allTableWidth, setAllTableWidth] = useState(0);
+  const [allTableHeight, setAllTableHeight] = useState(0);
+  const [activeId, setActiveId] = useState<string>('');
+  const [tableDataTotal, setTableDataTotal] = useState(0);
+  const [currentPageNo, setCurrentPageNo] = useState(1);
+  const [openDropdown, setOpenDropdown] = useState<boolean | undefined>(undefined);
+  const [dropdownItems, setDropdownItems] = useState<any[]>([]);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [viewSqlModal, setViewSqlModal] = useState<boolean>(false);
+  const [appendValue, setAppendValue] = useState<string>('');
+  const [form] = Form.useForm();
 
   useEffect(() => {
     getTable({
@@ -111,7 +115,7 @@ export default memo<IProps>((props) => {
   const getDropdownsItems = (record) => {
     const rightClickMenu = getRightClickMenu({
       treeNodeData: record,
-      loadData: () => {},
+      loadData: () => { },
     });
     const dropdownsItems: any = rightClickMenu.map((item) => {
       return {
@@ -137,8 +141,24 @@ export default memo<IProps>((props) => {
     return dropdownsItems.filter((item) => excludeList.includes(item.type));
   };
 
-  const renderCell = (text, record) => {
-    return (
+  const renderCell = (text, record, dataIndex) => {
+    if (dataIndex === 'name') {
+      return (
+        <div className={classnames(styles.tableCell, { [styles.activeTableCell]: activeId === record.key })}>
+          {text}
+        </div>
+      );
+    }
+
+    return isEditing ? (
+      <Form.Item
+        name={[record.key, dataIndex]}
+        style={{ margin: 0 }}
+        rules={dataIndex === 'comment' ? [] : [{ required: true, message: `${dataIndex} is required.` }]} // 去掉 Comment 的必填规则
+      >
+        <Input />
+      </Form.Item>
+    ) : (
       <div className={classnames(styles.tableCell, { [styles.activeTableCell]: activeId === record.key })}>{text}</div>
     );
   };
@@ -148,15 +168,68 @@ export default memo<IProps>((props) => {
       title: 'Table name',
       dataIndex: 'name',
       key: 'name',
-      render: renderCell,
+      render: (text, record) => renderCell(text, record, 'name'),
     },
     {
       title: 'Comment',
       dataIndex: 'comment',
       key: 'comment',
-      render: renderCell,
+      render: (text, record) => renderCell(text, record, 'comment'),
     },
   ];
+
+  const startEditing = () => {
+    form.setFieldsValue(
+      tableData?.reduce((acc, record) => {
+        acc[record.key] = record;
+        return acc;
+      }, {})
+    );
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+  };
+
+  const saveAll = async () => {
+    try {
+      if (tableData && uniqueData.databaseName) {
+        const values = await form.validateFields();
+        const newData = tableData.map((item) => ({
+          ...item,
+          ...values[item.key],
+        }));
+        setIsEditing(false);
+        const params: IBatchModifyTableSqlParams = {
+          databaseName: uniqueData.databaseName,
+          dataSourceId: uniqueData.dataSourceId,
+          schemaName: uniqueData.schemaName,
+          refresh: true,
+          oldTables: tableData,
+          newTables: newData,
+        };
+        // 调用批量获取修改表的SQL语句的API
+        sqlServer.getBatchModifyTableSql(params).then(res => {
+          setViewSqlModal(true); // 显示SQL预览Modal
+          setAppendValue(res?.join('\n'));
+        })
+      }
+
+    } catch (errInfo) {
+      console.log('Validate Failed:', errInfo);
+    }
+  };
+  const executeSuccessCallBack = () => {
+    setViewSqlModal(false);
+    message.success(i18n('common.text.successfulExecution'));
+    // 保存成功后，刷新左侧树
+    getTable({
+      refresh: true,
+      pageNo: currentPageNo,
+      pageSize: 1000,
+    });
+  };
 
   // 监听allTable的高度的变化
   useEffect(() => {
@@ -178,20 +251,6 @@ export default memo<IProps>((props) => {
     resizeObserver.observe(tableBoxRef.current!);
   }, []);
 
-  // useEffect(() => {
-  //   const record = tableData?.find((t) => t.key === activeId);
-  //   if (record) {
-  //     sqlServer
-  //       .exportCreateTableSql({
-  //         ...uniqueData,
-  //         tableName: record.name,
-  //       } as any)
-  //       .then((res) => {
-  //         setViewDDLSql(res);
-  //       });
-  //   }
-  // }, [activeId]);
-
   const onSearch = (value: string) => {
     getTable({
       pageNo: 1,
@@ -201,13 +260,6 @@ export default memo<IProps>((props) => {
   };
 
   return (
-    // <ConfigProvider
-    //   theme={{
-    //     token: {
-    //       motion: false,
-    //     },
-    //   }}
-    // >
     <div className={classnames(styles.allTable, className)}>
       <div className={styles.headerBox}>
         <div className={styles.headerBoxLeft}>
@@ -227,6 +279,20 @@ export default memo<IProps>((props) => {
         </div>
         <div className={styles.headerBoxRight}>
           <Search size="small" placeholder={i18n('common.text.search')} onSearch={onSearch} style={{ width: 150 }} />
+          {isEditing ? (
+            <>
+              <Button onClick={saveAll} style={{ marginLeft: 8 }}>
+                {i18n('common.button.saveAll')}
+              </Button>
+              <Button onClick={cancelEditing} style={{ marginLeft: 8 }}>
+                {i18n('common.button.cancel')}
+              </Button>
+            </>
+          ) : (
+            <Button onClick={startEditing} style={{ marginLeft: 8 }}>
+              {i18n('common.button.editAll')}
+            </Button>
+          )}
         </div>
       </div>
       <div className={styles.contentCenter}>
@@ -241,39 +307,39 @@ export default memo<IProps>((props) => {
           }}
         >
           <div ref={tableBoxRef} className={styles.tableBox}>
-            <Table
-              loading={tableLoading}
-              onRow={(row) => {
-                return {
-                  onClick: () => {
-                    setActiveId(row.key);
-                    setCurrentWorkspaceGlobalExtend({
-                      code: 'viewDDL',
-                      uniqueData: {
-                        ...uniqueData,
-                        tableName: row.name,
-                      }
-                    });
-                  },
-                  onContextMenu: (event) => {
-                    event.preventDefault();
-                    setActiveId(row.key);
-                    setOpenDropdown(true);
-                    setDropdownItems(getDropdownsItems(tableData?.find((t) => t.key === row.key)));
-                  },
-                };
-              }}
-              virtual
-              scroll={{ x: allTableWidth - 10, y: allTableHeight - 25 }}
-              columns={columns}
-              pagination={false}
-              dataSource={tableData || []}
-            />
+            <Form form={form} component={false}>
+              <Table
+                loading={tableLoading}
+                onRow={(row) => {
+                  return {
+                    onClick: () => {
+                      setActiveId(row.key);
+                      setCurrentWorkspaceGlobalExtend({
+                        code: 'viewDDL',
+                        uniqueData: {
+                          ...uniqueData,
+                          tableName: row.name,
+                        }
+                      });
+                    },
+                    onContextMenu: (event) => {
+                      event.preventDefault();
+                      setActiveId(row.key);
+                      setOpenDropdown(true);
+                      setDropdownItems(getDropdownsItems(tableData?.find((t) => t.key === row.key)));
+                    },
+                  };
+                }}
+                virtual
+                scroll={{ x: allTableWidth - 10, y: allTableHeight - 25 }}
+                columns={columns}
+                pagination={false}
+                dataSource={tableData || []}
+              />
+            </Form>
           </div>
         </Dropdown>
       </div>
-      {/* {tableDataTotal > 1000 && (
-      )} */}
       <div className={styles.pagingBox}>
         <Pagination
           onChange={paginationChange}
@@ -283,6 +349,24 @@ export default memo<IProps>((props) => {
           total={tableDataTotal}
         />
       </div>
+      <Modal
+        title={i18n('editTable.title.sqlPreview')}
+        open={!!viewSqlModal} // 控制Modal显示
+        onCancel={() => setViewSqlModal(false)} // 关闭Modal
+        width="60vw"
+        maskClosable={false}
+        footer={false}
+        destroyOnClose={true}
+      >
+        <ExecuteSQL
+          initSql={appendValue}
+          databaseName={uniqueData.databaseName}
+          dataSourceId={uniqueData.dataSourceId}
+          schemaName={uniqueData.schemaName}
+          databaseType={uniqueData.databaseType}
+          executeSuccessCallBack={executeSuccessCallBack}
+        />
+      </Modal>
     </div>
   );
 });

@@ -1,19 +1,19 @@
-import React, { useContext, useEffect, useState, useRef, forwardRef, ForwardedRef, useImperativeHandle } from 'react';
-import styles from './index.less';
-import classnames from 'classnames';
+import CustomSelect from '@/components/CustomSelect';
+import Iconfont from '@/components/Iconfont';
+import { DatabaseTypeCode, EditColumnOperationType, NullableType } from '@/constants';
+import i18n from '@/i18n';
+import { IColumnItemNew, IColumnTypes } from '@/typings';
 import { MenuOutlined } from '@ant-design/icons';
 import { DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { Table, InputNumber, Input, Form, Select, Checkbox } from 'antd';
-import { v4 as uuidv4 } from 'uuid';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Checkbox, Form, Input, InputNumber, Select, Table } from 'antd';
+import classnames from 'classnames';
+import React, { ForwardedRef, forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Context } from '../index';
-import { IColumnItemNew, IColumnTypes } from '@/typings';
-import i18n from '@/i18n';
-import { EditColumnOperationType, DatabaseTypeCode, NullableType } from '@/constants';
-import CustomSelect from '@/components/CustomSelect';
-import Iconfont from '@/components/Iconfont';
+import styles from './index.less';
 
 interface RowProps extends React.HTMLAttributes<HTMLTableRowElement> {
   'data-row-key': string;
@@ -29,6 +29,7 @@ interface IEditingConfig extends IColumnTypes {
 // 本组件暴露给父组件的方法
 export interface IColumnListRef {
   getColumnListInfo: () => IColumnItemNew[];
+  setColumnComment: (columnName: string, comment: string) => void;
 }
 
 const Row = ({ children, ...props }: RowProps) => {
@@ -71,6 +72,7 @@ const createInitialData = () => {
     defaultValue: null,
     autoIncrement: null,
     comment: null,
+    aiComment: null,
     primaryKey: null,
     primaryKeyOrder: null,
     schemaName: null,
@@ -477,6 +479,21 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
 
   useImperativeHandle(ref, () => ({
     getColumnListInfo,
+    setColumnComment: (columnName: string, comment: string) => {
+      setDataSource((prevDataSource) =>
+        prevDataSource.map((column) => {
+          if (column.name === columnName) {
+            return {
+              ...column,
+              comment,
+              aiComment: comment,
+              editStatus:EditColumnOperationType.Modify,
+            };
+          }
+          return column;
+        })
+      );
+    },
   }));
 
   const renderOtherInfoForm = () => {

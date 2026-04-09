@@ -1,63 +1,46 @@
 import i18n from '@/i18n';
-import { IAiConfig } from '@/typings';
 import { AIType } from '@/typings/ai';
 
 export type IAiConfigBooleans = {
-  [K in keyof IAiConfig]?: boolean | string;
+  [key: string]: boolean | string | number;
 };
 
 const AITypeName = {
-  [AIType.CHAT2DBAI]: 'Chat2DB',
-  [AIType.ZHIPUAI]: i18n('setting.tab.aiType.zhipu'),
-  [AIType.BAICHUANAI]: i18n('setting.tab.aiType.baichuan'),
-  [AIType.WENXINAI]: i18n('setting.tab.aiType.wenxin'),
-  [AIType.TONGYIQIANWENAI]: i18n('setting.tab.aiType.tongyiqianwen'),
-  [AIType.OPENAI]: 'Open AI',
-  [AIType.AZUREAI]: 'Azure AI',
-  [AIType.RESTAI]: i18n('setting.tab.custom'),
+  [AIType.ANTHROPIC]: 'Anthropic',
+  [AIType.OPENAI]: 'OpenAI',
 };
 
 const AIFormConfig: Record<AIType, IAiConfigBooleans> = {
-  [AIType.CHAT2DBAI]: {
+  [AIType.ANTHROPIC]: {
     apiKey: true,
-  },
-  [AIType.ZHIPUAI]: {
-    apiKey: true,
-    apiHost: 'https://open.bigmodel.cn/api/paas/v3/model-api/',
-    model: 'chatglm_turbo',
-  },
-  [AIType.BAICHUANAI]: {
-    apiKey: true,
-    secretKey: true,
-    apiHost: 'https://api.baichuan-ai.com/v1/stream/chat/',
-    model: 'Baichuan2-53B',
-  },
-  [AIType.WENXINAI]: {
-    apiKey: true,
-    apiHost: true,
-  },
-  [AIType.TONGYIQIANWENAI]: {
-    apiKey: true,
-    apiHost: true,
-    model: true,
+    apiHost: 'https://api.anthropic.com',
+    model: 'claude-3-5-sonnet-20241022',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 0.999,
+    topK: 5,
+    stopSequences: '',
+    betaVersion: 'tools-2024-05-16',
   },
   [AIType.OPENAI]: {
     apiKey: true,
     apiHost: 'https://api.openai.com/',
-    httpProxyHost: true,
-    httpProxyPort: true,
-    // model: 'gpt-3.5-turbo',
-  },
-  [AIType.AZUREAI]: {
-    apiKey: true,
-    apiHost: true,
-    model: true,
-  },
-  [AIType.RESTAI]: {
-    apiKey: true,
-    apiHost: true,
-    model: true,
+    httpProxyHost: '',
+    httpProxyPort: '',
+    model: 'gpt-4o-mini',
+    temperature: 0.7,
+    maxTokens: 4096,
+    topP: 1,
+    n: 1,
+    stop: '',
+    presencePenalty: 0,
+    frequencyPenalty: 0,
+    logitBias: '',
+    user: '',
+    organizationId: '',
+    projectId: '',
   },
 };
 
 export { AIFormConfig, AITypeName };
+

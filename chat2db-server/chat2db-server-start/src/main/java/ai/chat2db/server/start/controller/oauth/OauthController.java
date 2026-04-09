@@ -68,19 +68,9 @@ public class OauthController {
     }
 
     /**
-     * user
+     * 获取当前登录用户信息
      *
-     * @return
-     */
-    @GetMapping("user")
-    public DataResult<LoginUser> user() {
-        return DataResult.of(getLoginUser());
-    }
-
-    /**
-     * user
-     *
-     * @return
+     * @return 当前登录用户信息
      */
     @GetMapping("user_a")
     public DataResult<LoginUser> usera() {

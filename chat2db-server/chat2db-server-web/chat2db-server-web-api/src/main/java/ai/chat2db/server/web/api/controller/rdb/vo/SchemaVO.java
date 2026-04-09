@@ -13,4 +13,8 @@ public class SchemaVO {
      * 数据名字
      */
     private String name;
+    /**
+     * 子节点类型
+     */
+    private String treeNodeType;
 }

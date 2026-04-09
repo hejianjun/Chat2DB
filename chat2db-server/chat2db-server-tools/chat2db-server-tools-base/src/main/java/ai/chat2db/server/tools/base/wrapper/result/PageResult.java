@@ -75,6 +75,11 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      */
     private String solutionLink;
 
+    /**
+     * 最后id
+     */
+    private Integer lastDocId;
+
     public PageResult() {
         this.pageNo = 1;
         this.pageSize = 10;
@@ -103,6 +108,21 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
         }
         if (pageSize != null) {
             this.pageSize = pageSize;
+        }
+    }
+
+    private PageResult(List<T> data, Long total, Integer pageNo, Integer pageSize, Integer lastDocId) {
+        this();
+        this.data = data;
+        this.total = total;
+        if (pageNo != null) {
+            this.pageNo = pageNo;
+        }
+        if (pageSize != null) {
+            this.pageSize = pageSize;
+        }
+        if (lastDocId != null) {
+            this.lastDocId = lastDocId;
         }
     }
 
@@ -144,7 +164,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      * @return 分页返回对象
      */
     public static <T> PageResult<T> of(List<T> data, Long total, PageQueryParam param) {
-        return new PageResult<>(data, total, param.getPageNo(), param.getPageSize());
+        return new PageResult<>(data, total, param.getPageNo(), param.getPageSize(), param.getLastDocId());
     }
 
     /**
@@ -157,7 +177,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      * @return 分页返回对象
      */
     public static <T> PageResult<T> of(List<T> data, PageQueryParam param) {
-        return new PageResult<>(data, 0L, param.getPageNo(), param.getPageSize());
+        return new PageResult<>(data, 0L, param.getPageNo(), param.getPageSize(), param.getLastDocId());
     }
 
     /**
@@ -193,7 +213,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
     public Boolean calculateHasNextPage() {
         // 存在分页大小 根据分页来计算
         if (total > 0) {
-            return (long)pageSize * pageNo <= total;
+            return (long) pageSize * pageNo <= total;
         }
         // 没有数据 肯定没有下一页
         if (data == null || data.isEmpty()) {
@@ -255,7 +275,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      */
     public static boolean hasData(PageResult<?> pageResult) {
         return pageResult != null && pageResult.getSuccess() && pageResult.getData() != null && !pageResult.getData()
-            .isEmpty();
+                .isEmpty();
     }
 
     /**
@@ -267,7 +287,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      */
     public <R> PageResult<R> map(Function<T, R> mapper) {
         List<R> returnData = hasData(this) ? getData().stream().map(mapper).collect(Collectors.toList())
-            : Collections.emptyList();
+                : Collections.emptyList();
         PageResult<R> pageResult = new PageResult<>();
         pageResult.setSuccess(getSuccess());
         pageResult.setErrorCode(getErrorCode());
@@ -289,7 +309,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      */
     public <R> ListResult<R> mapToList(Function<T, R> mapper) {
         List<R> returnData = hasData(this) ? getData().stream().map(mapper).collect(Collectors.toList())
-            : Collections.emptyList();
+                : Collections.emptyList();
         ListResult<R> result = new ListResult<>();
         result.setSuccess(getSuccess());
         result.setErrorCode(getErrorCode());
@@ -310,7 +330,7 @@ public class PageResult<T> implements Serializable, Result<List<T>> {
      */
     public <R> WebPageResult<R> mapToWeb(Function<T, R> mapper) {
         List<R> returnData = hasData(this) ? getData().stream().map(mapper).collect(Collectors.toList())
-            : Collections.emptyList();
+                : Collections.emptyList();
         WebPageResult<R> pageResult = new WebPageResult<>();
         pageResult.setSuccess(getSuccess());
         pageResult.setErrorCode(getErrorCode());

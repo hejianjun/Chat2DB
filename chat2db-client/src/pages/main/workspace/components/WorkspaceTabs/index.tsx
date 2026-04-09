@@ -1,7 +1,7 @@
-import React, { memo, useEffect, useMemo, Fragment } from 'react';
+import React, { memo, useEffect, useMemo, Fragment, useState, useRef } from 'react';
 import styles from './index.less';
 import i18n from '@/i18n';
-import { Button } from 'antd';
+import { Button, message } from 'antd';
 
 // ----- constants -----
 import { WorkspaceTabType, workspaceTabConfig } from '@/constants';
@@ -13,6 +13,7 @@ import SearchResult from '@/components/SearchResult';
 import DatabaseTableEditor from '@/blocks/DatabaseTableEditor';
 import SQLExecute from '../SQLExecute';
 import ViewAllTable from '../ViewAllTable';
+import ERDiagram from '../ERDiagram';
 import Iconfont from '@/components/Iconfont';
 import ShortcutKey from '@/components/ShortcutKey';
 
@@ -30,6 +31,10 @@ import { useTreeStore } from '@/blocks/Tree/treeStore';
 import historyService from '@/service/history';
 
 import indexedDB from '@/indexedDB';
+import connectToEventSource from '@/utils/eventSource';
+import { formatParams } from '@/utils/url';
+import { getCookie } from '@/utils';
+import { v4 as uuidv4 } from 'uuid';
 
 const WorkspaceTabs = memo(() => {
   const { activeConsoleId, consoleList, workspaceTabList } = useWorkspaceStore((state) => {
@@ -41,6 +46,8 @@ const WorkspaceTabs = memo(() => {
   });
 
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
+  const [generatingTitleKey, setGeneratingTitleKey] = useState<number | string | null>(null);
+  const closeEventSourceRef = useRef<(() => void) | null>(null);
 
   // 获取console
   useEffect(() => {
@@ -150,6 +157,104 @@ const WorkspaceTabs = memo(() => {
     setWorkspaceTabList(_workspaceTabList);
   };
 
+  // AI 生成标题
+  const handleGenerateTitle = async (t: ITabItem) => {
+    const consoleId = t.key as number;
+    const tabData = workspaceTabList?.find((item) => item.id === consoleId);
+    if (!tabData) return;
+
+    // 获取 SQL 内容，优先从 indexedDB 获取（可能有未保存的修改）
+    let sqlContent = '';
+    try {
+      const userId = getCookie('CHAT2DB.USER_ID');
+      const cachedData: any = await indexedDB.getDataByCursor('chat2db', 'workspaceConsoleDDL', {
+        consoleId,
+        userId,
+      });
+      if (cachedData?.[0]?.ddl) {
+        sqlContent = cachedData[0].ddl;
+      } else {
+        // 如果 indexedDB 没有，使用 uniqueData 中的 ddl
+        sqlContent = tabData.uniqueData?.ddl || '';
+      }
+    } catch {
+      sqlContent = tabData.uniqueData?.ddl || '';
+    }
+
+    if (!sqlContent?.trim()) {
+      message.warning(i18n('workspace.tips.noSqlContent'));
+      return;
+    }
+
+    setGeneratingTitleKey(consoleId);
+    const uid = uuidv4();
+    let generatedTitle = '';
+
+    const params = formatParams({
+      message: sqlContent,
+      promptType: 'TITLE_GENERATION',
+      dataSourceId: tabData.uniqueData?.dataSourceId,
+      databaseName: tabData.uniqueData?.databaseName,
+      schemaName: tabData.uniqueData?.schemaName,
+    });
+
+    const handleMessage = (data: string) => {
+      try {
+        const parsedData = JSON.parse(data);
+        if (parsedData?.content) {
+          generatedTitle += parsedData.content;
+        }
+      } catch (error) {
+        console.error('Parse message error:', error);
+      }
+    };
+
+    const handleComplete = (_message: MessageEvent) => {
+      setGeneratingTitleKey(null);
+      const toolFuntion = JSON.parse(_message.data);
+      if ('set_titletitle' == toolFuntion.name) { 
+        // 清理标题，去除引号和多余空白
+        const cleanTitle = JSON.parse(toolFuntion.arguments).title_name.replace(/^["'`]+|["'`]+$/g, '').trim();
+        if (cleanTitle) {
+          // 更新标题
+          const _params: any = {
+            id: consoleId,
+            name: cleanTitle,
+          };
+          historyService.updateSavedConsole(_params);
+
+          const _workspaceTabList: any =
+            workspaceTabList?.map((item) => {
+              if (item.id === consoleId) {
+                return {
+                  ...item,
+                  title: cleanTitle,
+                };
+              }
+              return item;
+            }) || [];
+          setWorkspaceTabList(_workspaceTabList);
+          message.success(i18n('common.tips.updateSuccess'));
+        }
+      }
+    };
+
+    const handleError = (error: any) => {
+      console.error('AI chat error:', error);
+      message.error(i18n('workspace.tips.generateTitleFailed'));
+      setGeneratingTitleKey(null);
+    };
+
+    closeEventSourceRef.current = connectToEventSource({
+      url: `/api/ai/chat?${params}`,
+      uid,
+      onOpen: () => {},
+      onMessage: handleMessage,
+      onError: handleError,
+      onCallback: handleComplete,
+    });
+  };
+
   // 修改tab详情
   const changeTabDetails = (data: IWorkspaceTab) => {
     const list =
@@ -240,9 +345,29 @@ const WorkspaceTabs = memo(() => {
         return renderSearchResult(item);
       case WorkspaceTabType.ViewAllTable:
         return renderViewAllTable(item);
+      case WorkspaceTabType.ViewERDiagram: // 添加对查看 ER 图的支持
+        return renderViewERDiagram(item);
       default:
         return <div>Unknown</div>;
     }
+  };
+
+  // 渲染 ER 图
+  const renderViewERDiagram = (item: IWorkspaceTab) => {
+    const { uniqueData } = item;
+    return <ERDiagram uniqueData={uniqueData} />;
+  };
+  // 判断是否是可以生成标题的 tab 类型
+  const canGenerateTitleType = (type: WorkspaceTabType) => {
+    return (
+      type === WorkspaceTabType.CONSOLE ||
+      type === WorkspaceTabType.FUNCTION ||
+      type === WorkspaceTabType.PROCEDURE ||
+      type === WorkspaceTabType.TRIGGER ||
+      type === WorkspaceTabType.VIEW ||
+      type === ('table' as any) ||
+      !type
+    );
   };
 
   // tab列表
@@ -253,6 +378,7 @@ const WorkspaceTabs = memo(() => {
         label: item.title,
         key: item.id,
         editableName: item.type === WorkspaceTabType.CONSOLE,
+        canGenerateTitle: canGenerateTitleType(item.type),
         children: <Fragment key={item.id}>{workspaceTabConnectionMap(item)}</Fragment>,
       };
     });
@@ -283,6 +409,8 @@ const WorkspaceTabs = memo(() => {
       activeKey={activeConsoleId}
       editableNameOnBlur={editableNameOnBlur}
       items={workspaceTabItems}
+      onGenerateTitle={handleGenerateTitle}
+      generatingTitleKey={generatingTitleKey}
     />
   ) : (
     <div className={styles.ears}>

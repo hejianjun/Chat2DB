@@ -45,10 +45,14 @@ public class DatabaseController {
     public DatabaseConverter databaseConverter;
 
     /**
-     * 查询数据库里包含的database_schema_list
+     * 查询数据库和 Schema 列表
+     * <p>
+     * 返回当前数据源下所有的 Database 和 Schema 信息
+     * 适用于 PostgreSQL 等支持 Schema 概念的数据库，可以同时获取 database 和 schema 列表
+     * </p>
      *
-     * @param request
-     * @return
+     * @param request 请求参数，包含数据源 ID
+     * @return MetaSchemaVO，包含 databases（数据库列表）和 schemas（Schema 列表）
      */
     @GetMapping("/database_schema_list")
     public DataResult<MetaSchemaVO> databaseSchemaList(@Valid DataSourceBaseRequest request) {
@@ -60,6 +64,16 @@ public class DatabaseController {
         return DataResult.of(schemaDto2vo);
     }
 
+    /**
+     * 查询数据库列表
+     * <p>
+     * 返回当前数据源下所有的 Database 信息
+     * 仅获取数据库列表，不包含 Schema 信息
+     * </p>
+     *
+     * @param request 请求参数，包含数据源 ID
+     * @return DatabaseVO 列表，每个 DatabaseVO 包含数据库名称、关联的 schemas、注释等信息
+     */
     @GetMapping("list")
     public ListResult<DatabaseVO> databaseList(@Valid DataSourceBaseRequest request) {
         DatabaseQueryAllParam queryParam = DatabaseQueryAllParam.builder().dataSourceId(request.getDataSourceId())

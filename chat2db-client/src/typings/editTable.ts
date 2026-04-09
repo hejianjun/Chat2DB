@@ -4,6 +4,7 @@ import { EditColumnOperationType, NullableType } from '@/constants';
 export interface IBaseInfo {
   name: string;
   comment?: string | null;
+  aiComment?: string | null;
   charset: string | null; // 字符集
   engine: string | null; // 引擎
   incrementValue: string | null; // 自增值
@@ -25,6 +26,7 @@ export interface IColumnItemNew {
   defaultValue: string | null; // 默认值
   autoIncrement: string | null; // 是否自增
   comment: string | null; // 注释
+  aiComment: string | null; // AI注释
   primaryKey: boolean | null; // 是否主键
   primaryKeyOrder: number | null; // 主键顺序
   typeName: string | null; // 类型名
@@ -42,6 +44,20 @@ export interface IColumnItemNew {
   charSetName: string | null; // 字符集名
   collationName: string | null; // 排序规则名
   value: string | null; // 值
+}
+
+export interface IForeignKeyItemNew {
+  editStatus: EditColumnOperationType | null; // 操作类型
+
+  key?: string;
+  
+  name: string | null; // 外键名称
+  referencedTable: string | null; // 引用的表名
+  referencedColumn: string | null; // 引用的列名
+
+  updateRule: number; // 更新规则
+  deleteRule: number; // 删除规则
+  comment: string | null; // 备注
 }
 
 // 
@@ -80,4 +96,5 @@ export interface IIndexItem {
 export interface IEditTableInfo extends IBaseInfo {
   columnList: IColumnItemNew[];
   indexList: IIndexItem[];
+  foreignKeyList: IForeignKeyItemNew[] | undefined;
 }

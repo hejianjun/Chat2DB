@@ -1,47 +1,70 @@
 package ai.chat2db.server.domain.core.impl;
 
 import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import ai.chat2db.server.domain.api.enums.TableVectorEnum;
-import ai.chat2db.server.domain.api.param.*;
+import ai.chat2db.spi.enums.IndexTypeEnum;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.SetUtils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+import com.google.common.collect.Lists;
+
+import ai.chat2db.server.domain.api.param.DropKeyParam;
+import ai.chat2db.server.domain.api.param.DropParam;
+import ai.chat2db.server.domain.api.param.PinTableParam;
+import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
+import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableQueryParam;
+import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.domain.api.service.PinService;
 import ai.chat2db.server.domain.api.service.TableService;
-import ai.chat2db.server.domain.core.cache.CacheManage;
+import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
+import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
 import ai.chat2db.server.domain.core.converter.PinTableConverter;
-import ai.chat2db.server.domain.core.converter.TableConverter;
-import ai.chat2db.server.domain.repository.Dbutils;
-import ai.chat2db.server.domain.repository.entity.*;
-import ai.chat2db.server.domain.repository.mapper.TableCacheMapper;
-import ai.chat2db.server.domain.repository.mapper.TableCacheVersionMapper;
-import ai.chat2db.server.domain.repository.mapper.TableVectorMappingMapper;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.spi.DBManage;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.enums.EditStatus;
-import ai.chat2db.spi.model.*;
+import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.IndexModel;
+import ai.chat2db.spi.model.IndexType;
+import ai.chat2db.spi.model.SimpleTable;
+import ai.chat2db.spi.model.Sql;
+import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableIndexColumn;
+import ai.chat2db.spi.model.TableMeta;
+import ai.chat2db.spi.model.Type;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.sql.Chat2DBContext;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.google.common.collect.Lists;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import static ai.chat2db.server.domain.core.cache.CacheKey.getColumnKey;
-import static ai.chat2db.server.domain.core.cache.CacheKey.getTableKey;
 
 /**
  * @author moji
@@ -58,36 +81,26 @@ public class TableServiceImpl implements TableService {
     @Autowired
     private PinTableConverter pinTableConverter;
 
-
-    private TableCacheMapper getTableCacheMapper() {
-        return Dbutils.getMapper(TableCacheMapper.class);
-    }
+    @Autowired
+    @Qualifier("indexUpdateExecutor")
+    private ExecutorService executor;
 
     @Autowired
-    private TableConverter tableConverter;
-
-
-
-    private TableCacheVersionMapper getVersionMapper() {
-        return Dbutils.getMapper(TableCacheVersionMapper.class);
-    }
-
-
-    private TableVectorMappingMapper getTableVectorMapper() {
-        return Dbutils.getMapper(TableVectorMappingMapper.class);
-    }
+    private LuceneIndexManagerFactory managerFactory;
 
     @Override
     public DataResult<String> showCreateTable(ShowCreateTableParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                param.getTableName());
         return DataResult.of(ddl);
     }
 
     @Override
     public ActionResult drop(DropParam param) {
         DBManage metaSchema = Chat2DBContext.getDBManage();
-        metaSchema.dropTable(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getTableSchema(), param.getTableName());
+        metaSchema.dropTable(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                param.getTableName());
         return ActionResult.isSuccess();
     }
 
@@ -106,13 +119,19 @@ public class TableServiceImpl implements TableService {
     @Override
     public DataResult<Table> query(TableQueryParam param, TableSelector selector) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        List<Table> tables = metaSchema.tables(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        List<Table> tables = metaSchema.tables(Chat2DBContext.getConnection(), param.getDatabaseName(),
+                param.getSchemaName(), param.getTableName());
         if (!CollectionUtils.isEmpty(tables)) {
             Table table = tables.get(0);
             table.setIndexList(
-                    metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName()));
+                    metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                            param.getTableName()));
             table.setColumnList(
-                    metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName()));
+                    metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                            param.getTableName()));
+            table.setForeignKeyList(
+                    metaSchema.foreignKeys(Chat2DBContext.getConnection(), param.getDatabaseName(),
+                            param.getSchemaName(), param.getTableName()));
             setPrimaryKey(table);
             return DataResult.of(table);
         }
@@ -169,6 +188,19 @@ public class TableServiceImpl implements TableService {
         return ListResult.of(sqls);
     }
 
+    @Override
+    public ListResult<String> buildBatchSql(List<Table> oldTables, List<Table> newTables) {
+        if (oldTables.size() != newTables.size()) {
+            throw new IllegalArgumentException("Old tables and new tables lists must have the same size.");
+        }
+        SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
+        List<String> batchSqls = IntStream.range(0, oldTables.size())
+                .mapToObj(i -> sqlBuilder.buildModifyTaleSql(oldTables.get(i), newTables.get(i)))
+                .filter(StringUtils::isNotEmpty)
+                .collect(Collectors.toList());
+        return ListResult.of(batchSqls);
+    }
+
     private void initUpdatePrimaryKey(Table oldTable, Table newTable) {
         if (newTable == null || oldTable == null) {
             return;
@@ -195,7 +227,8 @@ public class TableServiceImpl implements TableService {
             return;
         }
         boolean flag = false;
-        Map<String, TableColumn> oldColumnMap = oldColumns.stream().collect(Collectors.toMap(TableColumn::getName, Function.identity()));
+        Map<String, TableColumn> oldColumnMap = oldColumns.stream()
+                .collect(Collectors.toMap(TableColumn::getName, Function.identity()));
         for (TableColumn column : newColumns) {
             TableColumn oldColumn = oldColumnMap.get(column.getName());
             if (oldColumn == null) {
@@ -215,8 +248,8 @@ public class TableServiceImpl implements TableService {
         if (table == null || CollectionUtils.isEmpty(table.getColumnList())) {
             return null;
         }
-        return table.getColumnList().stream().filter(tableColumn ->
-                        tableColumn.getPrimaryKey() != null && tableColumn.getPrimaryKey())
+        return table.getColumnList().stream()
+                .filter(tableColumn -> tableColumn.getPrimaryKey() != null && tableColumn.getPrimaryKey())
                 .collect(Collectors.toList());
     }
 
@@ -240,16 +273,18 @@ public class TableServiceImpl implements TableService {
         if (indexes == null) {
             indexes = new ArrayList<>();
         }
-        TableIndex keyIndex = indexes.stream().filter(index -> "Primary".equalsIgnoreCase(index.getType())).findFirst().orElse(null);
+        TableIndex keyIndex = indexes.stream().filter(index -> "Primary".equalsIgnoreCase(index.getType())).findFirst()
+                .orElse(null);
         if (keyIndex == null) {
             keyIndex = new TableIndex();
             keyIndex.setType("Primary");
-            keyIndex.setName(StringUtils.isBlank(column.getPrimaryKeyName()) ? "PRIMARY_KEY" : column.getPrimaryKeyName());
+            keyIndex.setName(
+                    StringUtils.isBlank(column.getPrimaryKeyName()) ? "PRIMARY_KEY" : column.getPrimaryKeyName());
             keyIndex.setTableName(newTable.getName());
             keyIndex.setSchemaName(newTable.getSchemaName());
             keyIndex.setDatabaseName(newTable.getDatabaseName());
             keyIndex.setEditStatus(status);
-            if(!EditStatus.ADD.name().equals(status)){
+            if (!EditStatus.ADD.name().equals(status)) {
                 keyIndex.setOldName(keyIndex.getName());
             }
             indexes.add(keyIndex);
@@ -266,13 +301,15 @@ public class TableServiceImpl implements TableService {
         indexColumn.setOrdinalPosition(Short.valueOf(column.getPrimaryKeyOrder() + ""));
         indexColumn.setEditStatus(status);
         tableIndexColumns.add(indexColumn);
-        List<TableIndexColumn> sortTableIndexColumns = tableIndexColumns.stream().sorted(Comparator.comparing(TableIndexColumn::getOrdinalPosition)).collect(Collectors.toList());
-        Set<String> statusList = sortTableIndexColumns.stream().map(TableIndexColumn::getEditStatus).collect(Collectors.toSet());
+        List<TableIndexColumn> sortTableIndexColumns = tableIndexColumns.stream()
+                .sorted(Comparator.comparing(TableIndexColumn::getOrdinalPosition)).collect(Collectors.toList());
+        Set<String> statusList = sortTableIndexColumns.stream().map(TableIndexColumn::getEditStatus)
+                .collect(Collectors.toSet());
         if (statusList.size() == 1) {
-            //only one status ,set index status
+            // only one status ,set index status
             keyIndex.setEditStatus(statusList.iterator().next());
         } else {
-            //more status ,set index status modify
+            // more status ,set index status modify
             keyIndex.setEditStatus(EditStatus.MODIFY.name());
         }
 
@@ -280,7 +317,6 @@ public class TableServiceImpl implements TableService {
         newTable.setIndexList(indexes);
 
     }
-
 
     private void initOldTable(Table oldTable, Table newTable) {
         if (oldTable == null || newTable == null) {
@@ -312,206 +348,96 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public PageResult<Table> pageQuery(TablePageQueryParam param, TableSelector selector) {
-        LambdaQueryWrapper<TableCacheVersionDO> queryWrapper = new LambdaQueryWrapper<>();
-        String key = getTableKey(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName());
-        queryWrapper.eq(TableCacheVersionDO::getKey, key);
-        TableCacheVersionDO versionDO = getVersionMapper().selectOne(queryWrapper);
-        long total = 0;
-        long version = 0L;
-        if (param.isRefresh() || versionDO == null) {
-           total = addCache(param,versionDO);
-        } else {
-            if ("2".equals(versionDO.getStatus())) {
-                version = versionDO.getVersion() - 1;
-            } else {
-                version = versionDO.getVersion();
-            }
-            total = versionDO.getTableCount();
+        LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
+        Long version = luceneMgr.getMaxVersion(param);
+        // 仅对元数据加载环节加锁
+        if (needRefreshCache(param, version)) {
+            loadAndCacheMetadata(luceneMgr, param, version);
         }
-        Page<TableCacheDO> page = new Page<>(param.getPageNo(), param.getPageSize());
-        // page.setSearchCount(param.getEnableReturnCount());
-        IPage<TableCacheDO> iPage = getTableCacheMapper().pageQuery(page, param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getSearchKey());
-        List<Table> tables = new ArrayList<>();
-        if (CollectionUtils.isNotEmpty(iPage.getRecords())) {
-            for (TableCacheDO tableCacheDO : iPage.getRecords()) {
-                Table t = new Table();
-                t.setName(tableCacheDO.getTableName());
-                t.setComment(tableCacheDO.getExtendInfo());
-                t.setSchemaName(tableCacheDO.getSchemaName());
-                t.setDatabaseName(tableCacheDO.getDatabaseName());
-                if(Boolean.TRUE.equals(selector.getColumnList())){
-                    TableQueryParam tableQueryParam = new TableQueryParam();
-                    tableQueryParam.setDataSourceId(param.getDataSourceId());
-                    tableQueryParam.setDatabaseName(param.getDatabaseName());
-                    tableQueryParam.setSchemaName(param.getSchemaName());
-                    tableQueryParam.setTableName(tableCacheDO.getTableName());
-                    tableQueryParam.setRefresh(false);
-                    List<TableColumn> columns = queryColumns(tableQueryParam);
-                    t.setColumnList(columns);
-                }
-                tables.add(t);
+        List<Table> tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
+        param.setLastDocId(luceneMgr.getLastDocId());
+        long total = luceneMgr.getTotal();
+        for (Table table : tables) {
+            TableQueryParam queryParam = TableQueryParam.builder()
+                    .dataSourceId(param.getDataSourceId())
+                    .schemaName(table.getSchemaName())
+                    .databaseName(table.getDatabaseName())
+                    .tableName(table.getName())
+                    .refresh(param.isRefresh())
+                    .build();
+            if (Boolean.TRUE.equals(selector.getColumnList())) {
+                queryParam.setClassType(TableColumn.class);
+                List<TableColumn> columnList = getTableColumns((LuceneIndexManager) luceneMgr, queryParam);
+                table.setColumnList(columnList);
+            }
+            if (Boolean.TRUE.equals(selector.getForeignKey())) {
+                queryParam.setClassType(ForeignKey.class);
+                List<ForeignKey> foreignKeys = getForeignKeys((LuceneIndexManager) luceneMgr, queryParam);
+                table.setForeignKeyList(foreignKeys);
+            }
+            if (Boolean.TRUE.equals(selector.getColumnList())
+                    && Boolean.TRUE.equals(selector.getForeignKey())) {
+                List<VirtualForeignKey> virtualForeignKeys = findVirtualForeignKeys(luceneMgr, table);
+                table.setVirtualForeignKeyList(virtualForeignKeys);
             }
         }
-        if (param.getPageNo() <= 1) {
+        if (param.getPageNo() < 1) {
             tables = pinTable(tables, param);
         }
+
         return PageResult.of(tables, total, param);
     }
 
-    private long addCache(TablePageQueryParam param,TableCacheVersionDO versionDO){
-        LambdaQueryWrapper<TableCacheVersionDO> queryWrapper = new LambdaQueryWrapper<>();
-        String key = getTableKey(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName());
-        queryWrapper.eq(TableCacheVersionDO::getKey, key);
-        long total = 0;
-        long version = getLock(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), versionDO);
-        if (version == -1) {
-            int n = 0;
-            while (n < 100) {
-                try {
-                    Thread.sleep(200);
-                } catch (InterruptedException e) {
+    @PreDestroy
+    public void shutdownExecutor() {
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
                 }
-                versionDO = getVersionMapper().selectOne(queryWrapper);
-                if (versionDO != null && "1".equals(versionDO.getStatus())) {
-                    version = versionDO.getVersion();
-                    total = versionDO.getTableCount();
-                    break;
-                }
-                n++;
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
             }
-        } else {
-            total = addDBCache(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), version);
-            TableCacheVersionDO versionDO1 = new TableCacheVersionDO();
-            versionDO1.setStatus("1");
-            versionDO1.setTableCount(total);
-            getVersionMapper().update(versionDO1, queryWrapper);
         }
-        return total;
     }
 
     @Override
     public ListResult<SimpleTable> queryTables(TablePageQueryParam param) {
-        LambdaQueryWrapper<TableCacheVersionDO> queryWrapper = new LambdaQueryWrapper<>();
-        String key = getTableKey(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName());
-        queryWrapper.eq(TableCacheVersionDO::getKey, key);
-        TableCacheVersionDO versionDO = getVersionMapper().selectOne(queryWrapper);
-        if (versionDO == null) {
-            addCache(param,versionDO);
-            versionDO = getVersionMapper().selectOne(queryWrapper);
+        LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
+        Long version = luceneMgr.getMaxVersion(param);
+        if (needRefreshCache(param, version)) {
+            loadAndCacheMetadata(luceneMgr, param, version);
         }
-        long version = "2".equals(versionDO.getStatus()) ? versionDO.getVersion() - 1 : versionDO.getVersion();
-
-        LambdaQueryWrapper<TableCacheDO> query = new LambdaQueryWrapper<>();
-        query.eq(TableCacheDO::getVersion, version);
-        query.eq(TableCacheDO::getDataSourceId, param.getDataSourceId());
-        if (StringUtils.isNotBlank(param.getDatabaseName())) {
-            query.eq(TableCacheDO::getDatabaseName, param.getDatabaseName());
-        }
-        if (StringUtils.isNotBlank(param.getSchemaName())) {
-            query.eq(TableCacheDO::getSchemaName, param.getSchemaName());
-        }
+        List<Table> search = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
         List<SimpleTable> tables = new ArrayList<>();
-
-        for (int i = 0; i < versionDO.getTableCount() / 500 + 1; i++) {
-            Page<TableCacheDO> page = new Page<>(i + 1, 500);
-            IPage<TableCacheDO> iPage = getTableCacheMapper().selectPage(page, query);
-            if (CollectionUtils.isNotEmpty(iPage.getRecords())) {
-                for (TableCacheDO tableCacheDO : iPage.getRecords()) {
-                    SimpleTable t = new SimpleTable();
-                    t.setName(tableCacheDO.getTableName());
-                    t.setComment(tableCacheDO.getExtendInfo());
-                    tables.add(t);
-                }
-            }
+        for (Table table : search) {
+            SimpleTable t = new SimpleTable();
+            t.setName(table.getName());
+            t.setComment(table.getComment());
+            tables.add(t);
         }
         return ListResult.of(tables);
     }
 
-    private long addDBCache(Long dataSourceId, String databaseName, String schemaName, long version) {
-        String key = getTableKey(dataSourceId, databaseName, schemaName);
-        Connection connection = Chat2DBContext.getConnection();
-        long n = 0;
-        MetaData metaSchema = Chat2DBContext.getMetaData();
-        List<Table> tables = metaSchema.tables(connection, databaseName, schemaName, null);
-        List<TableCacheDO> cacheDOS = new ArrayList<>();
-        for(Table table : tables){
-            TableCacheDO tableCacheDO = new TableCacheDO();
-            tableCacheDO.setDatabaseName(databaseName);
-            tableCacheDO.setSchemaName(schemaName);
-            tableCacheDO.setTableName(table.getName());
-            tableCacheDO.setExtendInfo(table.getComment());
-            tableCacheDO.setDataSourceId(dataSourceId);
-            tableCacheDO.setVersion(version);
-            tableCacheDO.setKey(key);
-            metaSchema.columns(connection, databaseName, schemaName, table.getName());
-            cacheDOS.add(tableCacheDO);
-            if (cacheDOS.size() >= 500) {
-                getTableCacheMapper().batchInsert(cacheDOS);
-                cacheDOS = new ArrayList<>();
-            }
-            n++;
-        }
-        if (!CollectionUtils.isEmpty(cacheDOS)) {
-            getTableCacheMapper().batchInsert(cacheDOS);
-        }
-        LambdaQueryWrapper<TableCacheDO> q = new LambdaQueryWrapper();
-        q.eq(TableCacheDO::getDataSourceId, dataSourceId);
-        q.lt(TableCacheDO::getVersion, version);
-        if (StringUtils.isNotBlank(databaseName)) {
-            q.eq(TableCacheDO::getDatabaseName, databaseName);
-        }
-        if (StringUtils.isNotBlank(schemaName)) {
-            q.eq(TableCacheDO::getSchemaName, schemaName);
-        }
-        getTableCacheMapper().delete(q);
-        return n;
+    private boolean needRefreshCache(TablePageQueryParam param, Long version) {
+        return param.isRefresh() || version == null;
     }
 
-    private Long getLock(Long dataSourceId, String databaseName, String schemaName, TableCacheVersionDO versionDO) {
-        String key = getTableKey(dataSourceId, databaseName, schemaName);
-        if (versionDO == null) {
-            versionDO = new TableCacheVersionDO();
-            versionDO.setDatabaseName(databaseName);
-            versionDO.setSchemaName(schemaName);
-            versionDO.setDataSourceId(dataSourceId);
-            versionDO.setStatus("2");
-            versionDO.setKey(key);
-            versionDO.setVersion(0L);
-            versionDO.setTableCount(0L);
-            try {
-                getVersionMapper().insert(versionDO);
-                return 0L;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return -1L;
-            }
-        } else {
-            long version = versionDO.getVersion() + 1;
-            LambdaQueryWrapper<TableCacheVersionDO> queryWrapper = new LambdaQueryWrapper<>();
-            queryWrapper.eq(TableCacheVersionDO::getId, versionDO.getId());
-            queryWrapper.eq(TableCacheVersionDO::getVersion, versionDO.getVersion());
-            versionDO.setVersion(version);
-            versionDO.setStatus("2");
-            int n = getVersionMapper().update(versionDO, queryWrapper);
-            if (n == 1) {
-                return version;
-            } else {
-                return -1L;
-            }
+    private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, TablePageQueryParam param, Long version) {
+        mgr.getLock().writeLock().lock();
+        try {
+            Connection conn = Chat2DBContext.getConnection();
+            MetaData meta = Chat2DBContext.getMetaData();
+            List<Table> tables = meta.tables(conn, param.getDatabaseName(), param.getSchemaName(), null);
+            mgr.updateDocuments(tables, version);
+        } catch (Exception e) {
+            log.error("loadAndCacheMetadata error,version:{}", version, e);
+        } finally {
+            mgr.getLock().writeLock().unlock();
         }
     }
-
-
-//    private String buildKey(Long dataSourceId, String databaseName, String schemaName) {
-//        StringBuilder stringBuilder = new StringBuilder(dataSourceId.toString());
-//        if (StringUtils.isNotBlank(databaseName)) {
-//            stringBuilder.append("_").append(databaseName);
-//        }
-//        if (StringUtils.isNotBlank(schemaName)) {
-//            stringBuilder.append("_").append(schemaName);
-//        }
-//        return stringBuilder.toString();
-//    }
 
     private List<Table> pinTable(List<Table> list, TablePageQueryParam param) {
         if (CollectionUtils.isEmpty(list)) {
@@ -524,7 +450,8 @@ public class TableServiceImpl implements TableService {
             return list;
         }
         List<Table> tables = new ArrayList<>();
-        Map<String, Table> tableMap = list.stream().collect(Collectors.toMap(Table::getName, Function.identity()));
+        Map<String, Table> tableMap = list.stream()
+                .collect(Collectors.toMap(Table::getName, Function.identity(), (o1, o2) -> o1));
         for (String tableName : listResult.getData()) {
             Table table = tableMap.get(tableName);
             if (table != null) {
@@ -543,17 +470,37 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public List<TableColumn> queryColumns(TableQueryParam param) {
-        String tableColumnKey = getColumnKey(param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        LuceneIndexManager<TableColumn> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
+        param.setClassType(TableColumn.class);
+        return getTableColumns(luceneIndexManager, param);
+    }
+
+    private List<TableColumn> getTableColumns(LuceneIndexManager<TableColumn> mgr,
+                                              TableQueryParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        return CacheManage.getList(tableColumnKey, TableColumn.class,
-                (key) -> param.isRefresh(), (key) ->
-                        metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName()));
+        Long version = mgr.getMaxVersion(param);
+        if (param.isRefresh() || version == null) {
+            mgr.getLock().writeLock().lock();
+            try {
+                List<TableColumn> columns = metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(),
+                        param.getSchemaName(),
+                        param.getTableName());
+                mgr.updateDocuments(columns, version);
+                return columns;
+            } catch (Exception e) {
+                log.error("getTableColumns error", e);
+            } finally {
+                mgr.getLock().writeLock().unlock();
+            }
+        }
+        return (List<TableColumn>) mgr.search(param, null, null);
     }
 
     @Override
     public List<TableIndex> queryIndexes(TableQueryParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        return metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        return metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                param.getTableName());
 
     }
 
@@ -566,12 +513,14 @@ public class TableServiceImpl implements TableService {
     @Override
     public TableMeta queryTableMeta(TypeQueryParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        TableMeta tableMeta = metaSchema.getTableMeta(null, null, null);
+        Connection connection = Chat2DBContext.getConnection();
+        TableMeta tableMeta = metaSchema.getTableMeta(connection, null, null);
         if (tableMeta != null) {
-            //filter primary key
+            // filter primary key
             List<IndexType> indexTypes = tableMeta.getIndexTypes();
             if (CollectionUtils.isNotEmpty(indexTypes)) {
-                List<IndexType> types = indexTypes.stream().filter(indexType -> !"Primary".equals(indexType.getTypeName())).collect(Collectors.toList());
+                List<IndexType> types = indexTypes.stream()
+                        .filter(indexType -> !"Primary".equals(indexType.getTypeName())).collect(Collectors.toList());
                 tableMeta.setIndexTypes(types);
             }
         }
@@ -580,27 +529,192 @@ public class TableServiceImpl implements TableService {
     }
 
     @Override
-    public ActionResult saveTableVector(TableVectorParam param) {
-        if (checkTableVector(param).getData()) {
-            return ActionResult.isSuccess();
+    public List<ForeignKey> queryForeignKeys(TableQueryParam param) {
+        LuceneIndexManager<ForeignKey> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
+        param.setClassType(ForeignKey.class);
+        return getForeignKeys(luceneIndexManager, param);
+    }
+
+    private List<ForeignKey> getForeignKeys(LuceneIndexManager<ForeignKey> mgr, TableQueryParam param) {
+        // 检查是否需要刷新或Lucene索引是否为空
+        Long version = mgr.getMaxVersion(param);
+        if (param.isRefresh() || version == null) {
+            mgr.getLock().writeLock().lock();
+            try {
+                // 从元数据中查询外键
+                Connection connection = Chat2DBContext.getConnection();
+                MetaData metaSchema = Chat2DBContext.getMetaData();
+                List<ForeignKey> foreignKeys = metaSchema.foreignKeys(connection, param.getDatabaseName(),
+                        param.getSchemaName(),
+                        param.getTableName());
+
+                // 更新Lucene索引
+                mgr.updateDocuments(foreignKeys, version);
+                return foreignKeys;
+            } catch (Exception e) {
+                log.error("getForeignKeys error", e);
+            } finally {
+                mgr.getLock().writeLock().unlock();
+            }
         }
-        TableVectorMappingDO mappingDO = tableConverter.toTableVectorMappingDO(param);
-        mappingDO.setStatus(TableVectorEnum.SAVED.getCode());
-        getTableVectorMapper().insert(mappingDO);
+
+        // 从Lucene索引中查询外键
+        return mgr.search(param, null, null);
+    }
+
+    @Override
+    public void updateAiComment(Long dataSourceId, Table table) {
+        LuceneIndexManager<IndexModel> luceneIndexManager = managerFactory.getManager(dataSourceId);
+        luceneIndexManager.updateDocument(table);
+        // luceneIndexManager.updateDocuments(table.getColumnList());
+    }
+
+    /**
+     * 发现可能的虚拟外键关系（根据命名规范推断）
+     *
+     * @param luceneIndexManager 提供表结构检索能力的索引管理器
+     * @param table              需要分析的表对象
+     * @return 虚拟外键关系列表（符合命名规范但未显式声明的外键）
+     */
+    private List<VirtualForeignKey> findVirtualForeignKeys(LuceneIndexManager<Table> luceneIndexManager, Table table) {
+        // 预加载已明确声明的外键列名（用于排除已存在的外键）
+        Set<String> explicitForeignKeys = table.getForeignKeyList().stream()
+                .map(ForeignKey::getColumn)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // 排除唯一索引
+        table.getIndexList().stream()
+                .filter(index -> Boolean.TRUE.equals(index.getUnique()))
+                .map(TableIndex::getColumnList)
+                .flatMap(List::stream)
+                .map(TableIndexColumn::getColumnName)
+                .forEach(explicitForeignKeys::add);
+        return table.getColumnList().stream()
+                // 初步筛选候选列
+                .filter(this::isPotentialVirtualKeyCandidate)
+                // 排除已声明外键
+                .filter(column -> !explicitForeignKeys.contains(column.getName()))
+                .map(column -> analyzeColumnRelation(luceneIndexManager, table, column))
+                // 过滤掉未找到关联表的情况
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 判断列是否为虚拟外键候选列（核心匹配规则）
+     */
+    private boolean isPotentialVirtualKeyCandidate(TableColumn column) {
+        return column.getName() != null
+                // 匹配后缀命名规范
+                && column.getName().endsWith("_id")
+                // 排除主键列
+                && Boolean.FALSE.equals(column.getPrimaryKey())
+                // 防止类似"id"的误判
+                && column.getName().length() > 3;
+    }
+
+    /**
+     * 分析列关联关系并构建虚拟外键
+     */
+    private VirtualForeignKey analyzeColumnRelation(LuceneIndexManager<Table> luceneIndexManager,
+                                                    Table currentTable,
+                                                    TableColumn currentColumn) {
+        String columnName = currentColumn.getName();
+
+        // 推导关联表名称（移除_id后缀）
+        String referencedTableName = columnName.substring(0, columnName.length() - 3);
+
+        // 排除自关联情况（当前表与目标表同名时跳过）
+        if (referencedTableName.equalsIgnoreCase(currentTable.getName())) {
+            return null;
+        }
+        Table table = Table.builder()
+                .databaseName(currentColumn.getDatabaseName())
+                .schemaName(currentColumn.getSchemaName())
+                .build();
+        // 使用模糊查询查找关联表（考虑表名大小写不敏感的情况）
+        List<Table> matchedTables = luceneIndexManager.search(table, null, referencedTableName);
+        if (CollectionUtils.isEmpty(matchedTables)) {
+            return null;
+        }
+
+        // 取第一个匹配表（实际业务可能需要更精确的匹配策略）
+        Table targetTable = null;
+        for (Table matchedTable : matchedTables) {
+            if (!currentTable.getName().equals(matchedTable.getName())) {
+                targetTable = matchedTable;
+            }
+        }
+
+        if (targetTable == null) {
+            return null;
+        }
+
+        // 二次验证表名匹配（防止大小写不一致导致的误关联）
+        Set<String> currentTables = SetUtils.hashSet(StringUtils.split(targetTable.getName(), "_"));
+        Set<String> targetTables = SetUtils.hashSet(StringUtils.split(currentTable.getName(), "_"));
+        if (!currentTables.containsAll(targetTables)) {
+            return null;
+        }
+        String referencedColumnName = "id";
+        for (TableColumn tableColumn : targetTable.getColumnList()) {
+            if (columnName.equalsIgnoreCase(tableColumn.getName())) {
+                referencedColumnName = tableColumn.getName();
+            } else if (Boolean.TRUE.equals(tableColumn.getPrimaryKey())) {
+                referencedColumnName = tableColumn.getName();
+            }
+        }
+
+        // 构建虚拟外键关系
+        return VirtualForeignKey.builder()
+                // 生成唯一标识
+                .name(String.format("VFK_%s_%s", currentTable.getName(), columnName))
+                .tableName(currentTable.getName())
+                .column(columnName)
+                .referencedTable(targetTable.getName())
+                // 约定外键默认关联目标表主键
+                .referencedColumn(referencedColumnName)
+                .virtualProperty("Inferred from column naming convention")
+                .build();
+    }
+
+    @Override
+    public ActionResult deleteVirtualForeignKey(DropKeyParam param) {
+        LuceneIndexManager<Table> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
+        param.setClassType(Table.class);
+        List<Table> search = luceneIndexManager.search(param, null, null);
+        if (CollectionUtils.isEmpty(search)) {
+            return ActionResult.fail("common.paramError", I18nUtils.getMessage("common.paramError"),
+                    "Lucene not found table");
+        }
+
+        // 处理找到的表
+        for (Table table : search) {
+            if (CollectionUtils.isEmpty(table.getVirtualForeignKeyList())) {
+                continue;
+            }
+            List<VirtualForeignKey> updatedForeignKeys = table.getVirtualForeignKeyList().stream()
+                    .filter(vForeignKey -> !param.getKeyName().equals(vForeignKey.getName()))
+                    .collect(Collectors.toList());
+
+            // 只有在有变化时才更新
+            if (updatedForeignKeys.size() < table.getVirtualForeignKeyList().size()) {
+                table.setVirtualForeignKeyList(updatedForeignKeys);
+                luceneIndexManager.updateDocument(table);
+            } else {
+                return ActionResult.fail("common.paramError", I18nUtils.getMessage("common.paramError"),
+                        "Virtual foreign key not found: " + param.getKeyName());
+            }
+        }
+
         return ActionResult.isSuccess();
     }
 
     @Override
-    public DataResult<Boolean> checkTableVector(TableVectorParam param) {
-        LambdaQueryWrapper<TableVectorMappingDO> queryWrapper = new LambdaQueryWrapper();
-        queryWrapper.eq(TableVectorMappingDO::getApiKey, param.getApiKey());
-        queryWrapper.eq(TableVectorMappingDO::getDataSourceId, param.getDataSourceId());
-        queryWrapper.eq(TableVectorMappingDO::getDatabase, param.getDatabase());
-        queryWrapper.eq(TableVectorMappingDO::getSchema, param.getSchema());
-        TableVectorMappingDO mappingDO = getTableVectorMapper().selectOne(queryWrapper);
-        if (Objects.nonNull(mappingDO) && TableVectorEnum.SAVED.getCode().equals(mappingDO.getStatus())) {
-            return DataResult.of(true);
-        }
-        return DataResult.of(false);
+    public ActionResult truncate(DropParam param) {
+        DBManage metaSchema = Chat2DBContext.getDBManage();
+        metaSchema.truncate(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                param.getTableName());
+        return ActionResult.isSuccess();
     }
+
 }

@@ -39,11 +39,20 @@ public enum PromptType implements BaseEnum<String> {
      */
     TEXT_GENERATION("文本生成"),
 
+    /**
+     * 生成标题
+     */
+    TITLE_GENERATION("生成标题"),
 
     /**
-     * GET_TABLE_COLUMNS
+     * 选择需要查询的表
      */
-    GET_TABLE_COLUMNS("获取指定表的属性"),
+    SELECT_TABLES("选择需要查询的表"),
+
+    /**
+     * 自然语言转换成注释
+     */
+    NL_2_COMMENT("猜测表和字段注释"),
     ;
 
     final String description;

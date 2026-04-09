@@ -1,6 +1,22 @@
 package ai.chat2db.server.web.api.controller.rdb;
 
-import ai.chat2db.server.domain.api.param.*;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import ai.chat2db.server.domain.api.param.DropParam;
+import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
+import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableQueryParam;
+import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.domain.api.service.TableService;
@@ -10,32 +26,34 @@ import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.server.tools.base.wrapper.result.web.WebPageResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
-import ai.chat2db.server.web.api.controller.ai.EmbeddingController;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
-import ai.chat2db.server.web.api.controller.rdb.request.*;
+import ai.chat2db.server.web.api.controller.rdb.request.BatchTableModifySqlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DdlExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableBriefQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableCreateDdlQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableDeleteRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableDetailQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableModifySqlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TableUpdateDdlQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.TypeQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ColumnVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.IndexVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.SqlVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
-import ai.chat2db.spi.model.*;
-import com.google.common.collect.Lists;
+import ai.chat2db.spi.model.SimpleTable;
+import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableMeta;
+import ai.chat2db.spi.model.Type;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 @Slf4j
 @ConnectionInfoAspect
 @RequestMapping("/api/rdb/table")
 @RestController
-public class TableController extends EmbeddingController {
+public class TableController {
 
     @Autowired
     private TableService tableService;
@@ -65,21 +83,8 @@ public class TableController extends EmbeddingController {
         tableSelector.setIndexList(false);
         PageResult<Table> tableDTOPageResult = tableService.pageQuery(queryParam, tableSelector);
         List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
-//        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
-//        singleThreadExecutor.submit(() -> {
-//            try {
-//                Chat2DBContext.putContext(connectInfo);
-//                syncTableVector(request);
-////                syncTableEs(request);
-//            } catch (Exception e) {
-//                log.error("sync table vector error", e);
-//            } finally {
-//                Chat2DBContext.removeContext();
-//            }
-//            log.info("sync table vector finish");
-//        });
         return WebPageResult.of(tableVOS, tableDTOPageResult.getTotal(), request.getPageNo(),
-                request.getPageSize());
+                request.getPageSize(), queryParam.getLastDocId());
     }
 
     /**
@@ -94,9 +99,6 @@ public class TableController extends EmbeddingController {
         return tableService.queryTables(queryParam);
 
     }
-
-
-
 
 
     /**
@@ -114,6 +116,8 @@ public class TableController extends EmbeddingController {
         return ListResult.of(tableVOS);
     }
 
+
+
     /**
      * 查询当前DB下的表index
      *
@@ -126,18 +130,6 @@ public class TableController extends EmbeddingController {
         List<TableIndex> tableIndices = tableService.queryIndexes(queryParam);
         List<IndexVO> indexVOS = rdbWebConverter.indexDto2vo(tableIndices);
         return ListResult.of(indexVOS);
-    }
-
-    /**
-     * 查询当前DB下的表key
-     *
-     * @param request
-     * @return
-     */
-    @GetMapping("/key_list")
-    public ListResult<IndexVO> keyList(@Valid TableDetailQueryRequest request) {
-        // TODO 增加查询key实现
-        return ListResult.of(Lists.newArrayList());
     }
 
     /**
@@ -199,7 +191,7 @@ public class TableController extends EmbeddingController {
      */
     @PostMapping("/modify/sql")
     public ListResult<SqlVO> modifySql(@Valid @RequestBody TableModifySqlRequest request) {
-        Table table =  rdbWebConverter.tableRequest2param(request.getNewTable());
+        Table table = rdbWebConverter.tableRequest2param(request.getNewTable());
         table.setSchemaName(request.getSchemaName());
         table.setDatabaseName(request.getDatabaseName());
         for (TableColumn tableColumn : table.getColumnList()) {
@@ -212,12 +204,21 @@ public class TableController extends EmbeddingController {
             tableIndex.setTableName(table.getName());
             tableIndex.setDatabaseName(request.getDatabaseName());
         }
-
-        return tableService.buildSql(rdbWebConverter.tableRequest2param(request.getOldTable()),table)
+        tableService.updateAiComment(request.getDataSourceId(),table);
+        return tableService.buildSql(rdbWebConverter.tableRequest2param(request.getOldTable()), table)
                 .map(rdbWebConverter::dto2vo);
     }
 
-
+    /**
+     * 批量获取修改表的sql语句
+     *
+     * @param request
+     * @return
+     */
+    @PostMapping("/batch/modify/sql")
+    public ListResult<String> batchModifySql(@Valid @RequestBody BatchTableModifySqlRequest request) {
+        return tableService.buildBatchSql(request.getOldTables(), request.getNewTables());
+    }
 
     /**
      * 数据库支持的数据类型
@@ -253,38 +254,4 @@ public class TableController extends EmbeddingController {
     }
 
 
-    /**
-     * 查询ER图
-     *
-     * @param request
-     * @return
-     */
-    @GetMapping("/er-diagram")
-    public DataResult<ErDiagram> erDiagram(@Valid TableBriefQueryRequest request) {
-        TablePageQueryParam queryParam = rdbWebConverter.tablePageRequest2param(request);
-        TableSelector tableSelector = new TableSelector();
-        tableSelector.setColumnList(true);
-        tableSelector.setIndexList(false);
-        PageResult<Table> tableDTOPageResult = tableService.pageQuery(queryParam, tableSelector);
-        List<ErDiagram.Node> entityList = tableDTOPageResult.getData().stream().map(table -> {
-            ErDiagram.Node entity = new ErDiagram.Node(table.getName(),
-                    StringUtils.defaultIfBlank(table.getComment(), table.getName()));
-            return entity;
-        }).collect(Collectors.toList());
-        List<ErDiagram.Edge> relationList = tableDTOPageResult.getData().stream().flatMap(table -> {
-            return table.getColumnList().stream().filter(column -> {
-                String columnName = column.getName();
-                Boolean primaryKey = column.getPrimaryKey();
-                return columnName != null && columnName.matches(".+_id") && Boolean.FALSE.equals(primaryKey);
-            }).map(column -> {
-                String columnName = column.getName();
-                String tableName = column.getTableName();
-                // 从列名中移除"_id"以获取可能的关联表名
-                String potentialForeignKeyTable = columnName.substring(0, columnName.length() - 3);
-                ErDiagram.Edge relation = new ErDiagram.Edge(columnName,tableName, potentialForeignKeyTable,column.getComment());
-                return relation;
-            });
-        }).collect(Collectors.toList());
-        return DataResult.of(new ErDiagram(entityList, relationList));
-    }
 }

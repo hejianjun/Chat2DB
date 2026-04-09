@@ -1,6 +1,6 @@
-import { ITreeNode, IConnectionDetails } from '@/typings';
-import { TreeNodeType, OperationColumn } from '@/constants';
+import { OperationColumn, TreeNodeType } from '@/constants';
 import connectionService from '@/service/connection';
+import { IConnectionDetails, ITreeNode } from '@/typings';
 import { v4 as uuid } from 'uuid';
 
 import mysqlServer from '@/service/sql';
@@ -32,7 +32,14 @@ export const switchIcon: Partial<{ [key in TreeNodeType]: { icon: string; unfold
     icon: '\ueabe',
     unfoldIcon: '\ueabf',
   },
+  [TreeNodeType.V_KEYS]: {
+    icon: '\ueabe',
+    unfoldIcon: '\ueabf',
+  },
   [TreeNodeType.KEY]: {
+    icon: '\ue775',
+  },
+  [TreeNodeType.V_KEY]: {
     icon: '\ue775',
   },
   [TreeNodeType.INDEXES]: {
@@ -164,7 +171,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 uuid: uuid(),
                 key: t.name,
                 name: t.name,
-                treeNodeType: TreeNodeType.SCHEMAS,
+                treeNodeType: t.treeNodeType === 'tables'? TreeNodeType.TABLES : TreeNodeType.SCHEMAS,
                 schemaName: t.name,
                 extraParams: {
                   ..._extraParams,
@@ -259,6 +266,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 extraParams: {
                   ..._extraParams,
                   tableName: t.name,
+                  virtualForeignKeyList: t.virtualForeignKeyList,
                 },
               };
             });
@@ -278,6 +286,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
     operationColumn: [
       OperationColumn.CreateConsole,
       OperationColumn.ViewAllTable,
+      OperationColumn.ViewERDiagram,
       OperationColumn.CreateTable,
       OperationColumn.Refresh,
     ],
@@ -306,6 +315,13 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           },
           {
             uuid: uuid(),
+            key: `${preCode}-virtual-keys`,
+            name: 'virtual-keys',
+            treeNodeType: TreeNodeType.V_KEYS,
+            extraParams: params.extraParams,
+          },
+          {
+            uuid: uuid(),
             key: `${preCode}-indexs`,
             name: 'indexs',
             treeNodeType: TreeNodeType.INDEXES,
@@ -325,6 +341,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
       OperationColumn.CopyName,
       OperationColumn.Refresh,
       OperationColumn.DeleteTable,
+      OperationColumn.TruncateTable,
     ],
   },
 
@@ -630,5 +647,32 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   [TreeNodeType.INDEX]: {
     icon: '\ue65b',
     operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
+  },
+  [TreeNodeType.V_KEYS]: {
+    icon: '\ueac5', // 使用与 KEYS 相同的图标，或者选择一个新的图标
+    getChildren: (params) => {
+      const { virtualForeignKeyList } = params.extraParams!;
+      console.log(params.extraParams)
+      return new Promise((r: (value: ITreeNode[]) => void) => {
+        const virtualForeignKeys: ITreeNode[] = virtualForeignKeyList?.map((item) => ({
+          uuid: uuid(),
+          name: item.name,
+          treeNodeType: TreeNodeType.V_KEY,
+          key: item.name,
+          isLeaf: true,
+          extraParams: params.extraParams,
+        })) || [];
+        r(virtualForeignKeys);
+      });
+    },
+    operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
+  },
+  [TreeNodeType.V_KEY]: {
+    icon: '\ue775',
+    operationColumn: [
+      OperationColumn.CreateConsole, 
+      OperationColumn.CopyName,
+      OperationColumn.DeleteVirtualKey
+    ],
   },
 };

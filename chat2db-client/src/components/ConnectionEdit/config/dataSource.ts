@@ -2076,4 +2076,122 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
     extendInfo: [],
     type: DatabaseTypeCode.MONGODB
   },
+  // 在文件的适当位置添加 Phoenix 的配置
+  {
+    type: DatabaseTypeCode.PHOENIX,
+    baseInfo: {
+      items: [
+        {
+          defaultValue: '@localhost',
+          inputType: InputType.INPUT,
+          labelNameCN: '名称',
+          labelNameEN: 'Name',
+          name: 'alias',
+          required: true,
+          styles: {
+            width: '100%',
+          }
+        },
+        envItem,
+        {
+          defaultValue: 'localhost',
+          inputType: InputType.INPUT,
+          labelNameCN: '主机',
+          labelNameEN: 'Host',
+          name: 'host',
+          required: true,
+          styles: {
+            width: '70%',
+          }
+        },
+        {
+          defaultValue: '2181', // Phoenix 的默认端口
+          inputType: InputType.INPUT,
+          labelNameCN: '端口',
+          labelNameEN: 'Port',
+          name: 'port',
+          labelTextAlign: 'right',
+          required: true,
+          styles: {
+            width: '30%',
+            labelWidthEN: '40px',
+            labelWidthCN: '40px',
+            labelAlign: 'right'
+          }
+        },
+        {
+          defaultValue: AuthenticationType.USERANDPASSWORD,
+          inputType: InputType.SELECT,
+          labelNameCN: '身份验证',
+          labelNameEN: 'Authentication',
+          name: 'authenticationType',
+          required: true,
+          selects: [
+            {
+              items: [
+                {
+                  defaultValue: 'root',
+                  inputType: InputType.INPUT,
+                  labelNameCN: '用户名',
+                  labelNameEN: 'User',
+                  name: 'user',
+                  required: true,
+                  styles: {
+                    width: '100%',
+                  }
+                },
+                {
+                  defaultValue: '',
+                  inputType: InputType.PASSWORD,
+                  labelNameCN: '密码',
+                  labelNameEN: 'Password',
+                  name: 'password',
+                  required: true,
+                  styles: {
+                    width: '100%',
+                  }
+                },
+              ],
+              label: 'User&Password',
+              value: AuthenticationType.USERANDPASSWORD,
+            },
+            {
+              label: 'NONE',
+              value: AuthenticationType.NONE,
+              items: [],
+            },
+          ],
+          styles: {
+            width: '50%',
+          }
+        },
+        {
+          defaultValue: 'hbase',
+          inputType: InputType.INPUT,
+          labelNameCN: '根目录',
+          labelNameEN: 'rootdir',
+          name: 'rootdir',
+          required: false,
+          styles: {
+            width: '100%',
+          }
+        },
+        {
+          defaultValue: 'jdbc:phoenix:localhost:2181:/hbase',
+          inputType: InputType.INPUT,
+          labelNameCN: 'URL',
+          labelNameEN: 'URL',
+          name: 'url',
+          required: true,
+          styles: {
+            width: '100%',
+          }
+        },
+      ],
+      pattern: /jdbc:phoenix:(.*):(\d+)(\/(\w+))?:/,
+      template: 'jdbc:phoenix:{host}:{port}:/{rootdir}',
+    },
+    ssh: sshConfig,
+    extendInfo: [],
+  }
 ];

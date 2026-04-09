@@ -1,10 +1,8 @@
 .chatWrapper {
   display: flex;
   align-items: center;
-  padding: 2px 4px 2px 20px;
-  height: 42px;
-  box-sizing: border-box;
-  border-bottom: 1px solid var(--color-border-secondary);
+  gap: 8px;
+  width: 100%;
 }
 
 .chatShortcut {
@@ -86,4 +84,10 @@
   padding-bottom: 4px;
   border-bottom: 1px solid var(--color-border-secondary);
   margin-bottom: 4px;
+}
+
+.tableSelect {
+  min-width: 10%;
+  max-width: 50%;
+  flex: 0 1 auto; // 允许收缩但不允许增长，保持自动基础大小
 }

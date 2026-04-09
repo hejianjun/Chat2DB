@@ -1,0 +1,1 @@
+update DBHUB_USER set USER_NAME='hejianjun' WHERE USER_NAME='$2a$10$gMvgU3XegmyrBKSHluSLu.uKDOfjGQN1g267bnLSPrzHeRmSUOany'

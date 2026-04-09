@@ -1,0 +1,28 @@
+{
+  "dbType": "PHOENIX",
+  "supportDatabase": false,
+  "supportSchema": false,
+  "driverConfigList": [
+    {
+      "url": "jdbc:phoenix://localhost:2181/",
+      "defaultDriver": true,
+      "custom": false,
+      "downloadJdbcDriverUrls": [
+        "https://oss.sqlgpt.cn/lib/phoenix-client-hbase-2.3-5.1.2.jar"
+      ],
+      "jdbcDriver": "phoenix-client-hbase-2.3-5.1.2.jar",
+      "jdbcDriverClass": "org.apache.phoenix.jdbc.PhoenixDriver"
+    },
+    {
+      "url": "jdbc:mysql://localhost:3306/",
+      "defaultDriver": false,
+      "custom": false,
+      "downloadJdbcDriverUrls": [
+        "https://oss.sqlgpt.cn/lib/phoenix-5.0.0-HBase-2.0-client.jar"
+      ],
+      "jdbcDriver": "phoenix-5.0.0-HBase-2.0-client.jar",
+      "jdbcDriverClass": "org.apache.phoenix.jdbc.PhoenixDriver"
+    }
+  ],
+  "name": "Phoenix"
+}

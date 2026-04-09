@@ -1,17 +1,23 @@
-import React, { memo, useRef, useState, createContext, useEffect, useMemo } from 'react';
-import { Button, Modal, message } from 'antd';
-import i18n from '@/i18n';
-import lodash from 'lodash';
-import styles from './index.less';
-import classnames from 'classnames';
-import IndexList, { IIndexListRef } from './IndexList';
-import ColumnList, { IColumnListRef } from './ColumnList';
-import BaseInfo, { IBaseInfoRef } from './BaseInfo';
-import sqlService, { IModifyTableSqlParams } from '@/service/sql';
 import ExecuteSQL from '@/components/ExecuteSQL';
-import { IEditTableInfo, IWorkspaceTab, IColumnTypes } from '@/typings';
-import { DatabaseTypeCode, WorkspaceTabType } from '@/constants';
 import LoadingContent from '@/components/Loading/LoadingContent';
+import { DatabaseTypeCode, WorkspaceTabType } from '@/constants';
+import i18n from '@/i18n';
+import sqlService, { IModifyTableSqlParams } from '@/service/sql';
+import { IColumnTypes, IEditTableInfo, IWorkspaceTab } from '@/typings';
+import connectToEventSource from '@/utils/eventSource';
+import { formatParams } from '@/utils/url';
+import { Button, Drawer, Modal, Spin, message } from 'antd';
+import classnames from 'classnames';
+import lodash from 'lodash';
+import React, { createContext, memo, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { v4 as uuidv4 } from 'uuid';
+import BaseInfo, { IBaseInfoRef } from './BaseInfo';
+import ColumnList, { IColumnListRef } from './ColumnList';
+import ForeignKeyList, { IForeignKeyListRef } from './ForeignKeyList';
+import styles from './index.less';
+import IndexList, { IIndexListRef } from './IndexList';
+
 interface IProps {
   dataSourceId: number;
   databaseName: string;
@@ -21,6 +27,14 @@ interface IProps {
   changeTabDetails: (data: IWorkspaceTab) => void;
   tabDetails: IWorkspaceTab;
   submitCallback: () => void;
+}
+enum IPromptType {
+  NL_2_SQL = 'NL_2_SQL',
+  SQL_EXPLAIN = 'SQL_EXPLAIN',
+  SQL_OPTIMIZER = 'SQL_OPTIMIZER',
+  SQL_2_SQL = 'SQL_2_SQL',
+  NL_2_COMMENT = 'NL_2_COMMENT',
+  ChatRobot = 'ChatRobot',
 }
 
 interface ITabItem {
@@ -35,6 +49,7 @@ interface IContext extends IProps {
   baseInfoRef: React.RefObject<IBaseInfoRef>;
   columnListRef: React.RefObject<IColumnListRef>;
   indexListRef: React.RefObject<IIndexListRef>;
+  foreignKeyListRef: React.RefObject<IForeignKeyListRef>;
   databaseSupportField: IDatabaseSupportField;
 }
 
@@ -75,7 +90,13 @@ export default memo((props: IProps) => {
   const baseInfoRef = useRef<IBaseInfoRef>(null);
   const columnListRef = useRef<IColumnListRef>(null);
   const indexListRef = useRef<IIndexListRef>(null);
+  const foreignKeyListRef = useRef<IForeignKeyListRef>(null);
   const [appendValue, setAppendValue] = useState<string>('');
+  const [isAiDrawerLoading, setIsAiDrawerLoading] = useState(false);
+  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [isStream, setIsStream] = useState(false);
+  const [aiContent, setAiContent] = useState('');
+  const chatResult = useRef('');
   const tabList = useMemo(() => {
     return [
       {
@@ -96,6 +117,12 @@ export default memo((props: IProps) => {
         key: 'index',
         component: <IndexList ref={indexListRef} />,
       },
+      {
+        index: 3,
+        title: i18n('editTable.tab.foreignKeyInfo'),
+        key: 'foreignKey',
+        component: <ForeignKeyList ref={foreignKeyListRef} />,
+      },
     ];
   }, []);
   const [currentTab, setCurrentTab] = useState<ITabItem>(tabList[0]);
@@ -107,7 +134,8 @@ export default memo((props: IProps) => {
     defaultValues: [],
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
-
+  const uid = useMemo(() => uuidv4(), []);
+  const closeEventSource = useRef<any>();
   function changeTab(item: ITabItem) {
     setCurrentTab(item);
   }
@@ -210,6 +238,7 @@ export default memo((props: IProps) => {
         ...baseInfoRef.current.getBaseInfo(),
         columnList: columnListRef.current.getColumnListInfo()!,
         indexList: indexListRef.current.getIndexListInfo()!,
+        foreignKeyList: foreignKeyListRef.current?.getForeignKeyListInfo(),
       };
 
       const params: IModifyTableSqlParams = {
@@ -227,6 +256,71 @@ export default memo((props: IProps) => {
       sqlService.getModifyTableSql(params).then((res) => {
         setViewSqlModal(true);
         setAppendValue(res?.[0].sql);
+      });
+    }
+  }
+
+  function guess() {
+    const handleError = (error: any) => {
+      console.error('Error:', error);
+      setIsLoading(false);
+      closeEventSource.current();
+    };
+    const handleCallback = (_message: MessageEvent) => {
+      setIsLoading(false);
+      const toolFuntion = JSON.parse(_message.data);
+      if ('set_table_comment' == toolFuntion.name) {
+        // 设置表注释
+        baseInfoRef.current?.setTableComment(JSON.parse(toolFuntion.arguments).comment);
+      } else if ('set_column_comment' == toolFuntion.name) {
+        // 设置列注释
+        const columnArgs = JSON.parse(toolFuntion.arguments);
+        columnListRef.current?.setColumnComment(columnArgs.columnName, columnArgs.comment);
+      }
+    }
+    const handleMessage = (_message: string) => {
+      setIsLoading(false);
+      setIsAiDrawerLoading(false);
+      try {
+        const isEOF = _message === '[DONE]';
+        if (isEOF) {
+          closeEventSource.current();
+          setIsStream(false);
+          setIsAiDrawerLoading(false);
+          chatResult.current += '\n';
+          setAiContent(chatResult.current);
+          chatResult.current = '';
+          return
+        }
+        chatResult.current += JSON.parse(_message).content;
+        setAiContent(chatResult.current);
+      } catch (error) {
+        setIsLoading(false);
+        setIsStream(false);
+        setIsAiDrawerLoading(false);
+        closeEventSource.current();
+      }
+    };
+    if (baseInfoRef.current && columnListRef.current && indexListRef.current) {
+      const params = formatParams({
+        databaseName,
+        dataSourceId,
+        schemaName,
+        tableNames: tableName ? [tableName] : [],
+        promptType: IPromptType.NL_2_COMMENT,
+      });
+      setAiContent('');
+      setIsAiDrawerOpen(true);
+      setIsAiDrawerLoading(true);
+      closeEventSource.current = connectToEventSource({
+        url: `/api/ai/chat?${params}`,
+        uid,
+        onOpen: () => {
+          setIsLoading(true);
+        },
+        onMessage: handleMessage,
+        onCallback: handleCallback,
+        onError: handleError,
       });
     }
   }
@@ -259,6 +353,7 @@ export default memo((props: IProps) => {
         baseInfoRef,
         columnListRef,
         indexListRef,
+        foreignKeyListRef,
         databaseSupportField,
         databaseType,
       }}
@@ -279,6 +374,11 @@ export default memo((props: IProps) => {
             })}
           </div>
           <div className={styles.saveButton}>
+            <Button type="link" onClick={guess}>
+              {i18n('common.button.guess')}
+            </Button>
+          </div>
+          <div className={styles.saveButton}>
             <Button type="primary" onClick={submit}>
               {i18n('common.button.save')}
             </Button>
@@ -294,7 +394,27 @@ export default memo((props: IProps) => {
           })}
         </div>
       </LoadingContent>
-
+      <Drawer
+        open={isAiDrawerOpen}
+        getContainer={false}
+        mask={false}
+        onClose={() => {
+          try {
+            setIsAiDrawerOpen(false);
+            setIsAiDrawerLoading(false);
+            setIsStream(false);
+            closeEventSource.current && closeEventSource.current();
+          } catch (error) {
+            console.error('close drawer', error);
+          }
+        }}
+      >
+        <Spin spinning={isAiDrawerLoading} style={{ height: '100%' }}>
+          <div className={styles.aiBlock}>
+            <ReactMarkdown>{aiContent}</ReactMarkdown>
+          </div>
+        </Spin>
+      </Drawer>
       <Modal
         title={i18n('editTable.title.sqlPreview')}
         open={!!viewSqlModal}

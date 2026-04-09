@@ -6,10 +6,27 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.bson.Document;
+import org.springframework.util.Assert;
+
+import com.alibaba.druid.DbType;
+import com.alibaba.druid.sql.SQLUtils;
+import com.alibaba.druid.sql.ast.SQLStatement;
+import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
+import com.alibaba.druid.sql.parser.ParserException;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 import ai.chat2db.server.tools.base.constant.EasyToolsConstant;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
@@ -21,23 +38,23 @@ import ai.chat2db.spi.ValueHandler;
 import ai.chat2db.spi.enums.DataTypeEnum;
 import ai.chat2db.spi.enums.SqlTypeEnum;
 import ai.chat2db.spi.jdbc.DefaultValueHandler;
-import ai.chat2db.spi.model.*;
+import ai.chat2db.spi.model.Command;
+import ai.chat2db.spi.model.Database;
+import ai.chat2db.spi.model.ExecuteResult;
+import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.Header;
+import ai.chat2db.spi.model.Procedure;
+import ai.chat2db.spi.model.Schema;
+import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableIndexColumn;
+import ai.chat2db.spi.model.Type;
 import ai.chat2db.spi.util.JdbcUtils;
 import ai.chat2db.spi.util.ResultSetUtils;
 import ai.chat2db.spi.util.SqlUtils;
 import cn.hutool.core.date.TimeInterval;
-import com.alibaba.druid.DbType;
-import com.alibaba.druid.sql.SQLUtils;
-import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
-import com.alibaba.druid.sql.parser.ParserException;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.bson.Document;
-import org.springframework.util.Assert;
 
 /**
  * Dbhub 统一数据库连接管理
@@ -100,10 +117,10 @@ public class SQLExecutor implements CommandExecutor {
                     List<Header> headerList = Lists.newArrayListWithExpectedSize(col);
                     for (int i = 1; i <= col; i++) {
                         headerList.add(Header.builder()
-                            .dataType(JdbcUtils.resolveDataType(
-                                resultSetMetaData.getColumnTypeName(i), resultSetMetaData.getColumnType(i)).getCode())
-                            .name(ResultSetUtils.getColumnName(resultSetMetaData, i))
-                            .build());
+                                .dataType(JdbcUtils.resolveDataType(
+                                        resultSetMetaData.getColumnTypeName(i), resultSetMetaData.getColumnType(i)).getCode())
+                                .name(ResultSetUtils.getColumnName(resultSetMetaData, i))
+                                .build());
                     }
                     headerConsumer.accept(headerList);
 
@@ -131,13 +148,13 @@ public class SQLExecutor implements CommandExecutor {
      * @throws SQLException
      */
     public ExecuteResult execute(final String sql, Connection connection, ValueHandler valueHandler)
-        throws SQLException {
+            throws SQLException {
         return execute(sql, connection, true, null, null, valueHandler);
     }
 
     @Override
     public ExecuteResult executeUpdate(String sql, Connection connection, int n)
-        throws SQLException {
+            throws SQLException {
         Assert.notNull(sql, "SQL must not be null");
         log.info("execute:{}", sql);
         // connection.setAutoCommit(false);
@@ -147,8 +164,8 @@ public class SQLExecutor implements CommandExecutor {
             if (affectedRows != n) {
                 executeResult.setSuccess(false);
                 executeResult.setMessage("Update error " + sql + " update affectedRows = " + affectedRows
-                    + ", Each SQL statement should update no more than one record. Please use a unique key for "
-                    + "updates.");
+                        + ", Each SQL statement should update no more than one record. Please use a unique key for "
+                        + "updates.");
                 // connection.rollback();
             }
         }
@@ -158,18 +175,20 @@ public class SQLExecutor implements CommandExecutor {
 
     /**
      * Executes the given SQL query using the provided connection.
-     * @param sql The SQL query to be executed.
-     * @param connection The database connection to use for the query.
+     *
+     * @param sql          The SQL query to be executed.
+     * @param connection   The database connection to use for the query.
      * @param limitRowSize Flag to indicate if row size should be limited.
-     * @param offset The starting point of rows to fetch in the result set.
-     * @param count The number of rows to fetch from the result set.
+     * @param offset       The starting point of rows to fetch in the result set.
+     * @param count        The number of rows to fetch from the result set.
      * @param valueHandler Handles the processing of the result set values.
      * @return ExecuteResult containing the result of the execution.
      * @throws SQLException If there is any SQL related error.
      */
+    @Override
     public ExecuteResult execute(final String sql, Connection connection, boolean limitRowSize, Integer offset,
-        Integer count, ValueHandler valueHandler)
-        throws SQLException {
+                                 Integer count, ValueHandler valueHandler)
+            throws SQLException {
         Assert.notNull(sql, "SQL must not be null");
         log.info("execute:{}", sql);
 
@@ -214,11 +233,11 @@ public class SQLExecutor implements CommandExecutor {
                             continue;
                         }
                         String dataType = JdbcUtils.resolveDataType(
-                            resultSetMetaData.getColumnTypeName(i), resultSetMetaData.getColumnType(i)).getCode();
+                                resultSetMetaData.getColumnTypeName(i), resultSetMetaData.getColumnType(i)).getCode();
                         headerList.add(Header.builder()
-                            .dataType(dataType)
-                            .name(name)
-                            .build());
+                                .dataType(dataType)
+                                .name(name)
+                                .build());
                     }
 
                     // 获取数据信息
@@ -258,16 +277,16 @@ public class SQLExecutor implements CommandExecutor {
                                 if (o instanceof Document document) {
                                     for (String string : document.keySet()) {
                                         headerListMap.computeIfAbsent(string, k -> Header.builder()
-                                            .dataType("string")
-                                            .name(string)
-                                            .build());
+                                                .dataType("string")
+                                                .name(string)
+                                                .build());
                                         row.put(string, Objects.toString(document.get(string)));
                                     }
                                 } else {
                                     headerListMap.computeIfAbsent("_unknown", k -> Header.builder()
-                                        .dataType("string")
-                                        .name("_unknown")
-                                        .build());
+                                            .dataType("string")
+                                            .name("_unknown")
+                                            .build());
                                     row.put("_unknown", Objects.toString(o));
                                 }
                             }
@@ -380,39 +399,54 @@ public class SQLExecutor implements CommandExecutor {
      * @return
      */
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName,
-        String types[]) {
-
+                              String types[]) {
         try {
             DatabaseMetaData metadata = connection.getMetaData();
-            ResultSet resultSet = metadata.getTables(databaseName, schemaName, tableName,
-                types);
+            ResultSet resultSet = metadata.getTables(databaseName, schemaName, tableName, types);
+
             // 如果connection为mysql
             if ("MySQL".equalsIgnoreCase(metadata.getDatabaseProductName())) {
-                // 获取mysql表的comment
-                List<Table> tables = ResultSetUtils.toObjectList(resultSet, Table.class);
-                if (CollectionUtils.isNotEmpty(tables)) {
-                    for (Table table : tables) {
-                        String sql = "show table status where name = '" + table.getName() + "'";
-                        try (Statement stmt = connection.createStatement()) {
-                            boolean query = stmt.execute(sql);
-                            if (query) {
-                                try (ResultSet rs = stmt.getResultSet();) {
-                                    while (rs.next()) {
-                                        table.setComment(rs.getString("Comment"));
-                                    }
-                                }
-                            }
-                        }
-                    }
+                // 获取数据库版本
+                String version = metadata.getDatabaseProductVersion();
+                String[] versionParts = version.split("\\.");
+                int majorVersion = Integer.parseInt(versionParts[0]);
 
-                    return tables;
+                List<Table> tables = ResultSetUtils.toObjectList(resultSet, Table.class);
+                // 只有在版本小于8时才执行查询表注释的SQL
+                if (majorVersion < 8) {
+                    if (CollectionUtils.isNotEmpty(tables)) {
+                        for (Table table : tables) {
+                            setTableComment(connection, table);
+                        }
+                        return tables;
+                    }
                 }
+                return tables;
             }
             return ResultSetUtils.toObjectList(resultSet, Table.class);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
+
+    private void setTableComment(Connection connection, Table table) {
+        String sql = "SHOW TABLE STATUS WHERE Name = '" + table.getName() + "'";
+        try (Statement stmt = connection.createStatement()) {
+            boolean query = stmt.execute(sql);
+            if (query) {
+                try (ResultSet rs = stmt.getResultSet()) {
+                    while (rs.next()) {
+                        table.setComment(rs.getString("Comment"));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            // 处理异常，可以选择记录日志或抛出运行时异常
+            throw new RuntimeException("获取表注释失败: " + table.getName(), e);
+        }
+    }
+
+
 
     /**
      * 获取所有的数据库表列
@@ -425,10 +459,10 @@ public class SQLExecutor implements CommandExecutor {
      * @return
      */
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String
-        tableName,
-        String columnName) {
+            tableName,
+                                     String columnName) {
         try (ResultSet resultSet = connection.getMetaData().getColumns(databaseName, schemaName, tableName,
-            columnName)) {
+                columnName)) {
             return ResultSetUtils.toObjectList(resultSet, TableColumn.class);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -447,22 +481,22 @@ public class SQLExecutor implements CommandExecutor {
     public List<TableIndex> indexes(Connection connection, String databaseName, String schemaName, String tableName) {
         List<TableIndex> tableIndices = Lists.newArrayList();
         try (ResultSet resultSet = connection.getMetaData().getIndexInfo(databaseName, schemaName, tableName,
-            false,
-            false)) {
+                false,
+                false)) {
             List<TableIndexColumn> tableIndexColumns = ResultSetUtils.toObjectList(resultSet, TableIndexColumn.class);
             tableIndexColumns.stream().filter(c -> c.getIndexName() != null).collect(
-                    Collectors.groupingBy(TableIndexColumn::getIndexName)).entrySet()
-                .stream().forEach(entry -> {
-                    TableIndex tableIndex = new TableIndex();
-                    TableIndexColumn column = entry.getValue().get(0);
-                    tableIndex.setName(entry.getKey());
-                    tableIndex.setTableName(column.getTableName());
-                    tableIndex.setSchemaName(column.getSchemaName());
-                    tableIndex.setDatabaseName(column.getDatabaseName());
-                    tableIndex.setUnique(!column.getNonUnique());
-                    tableIndex.setColumnList(entry.getValue());
-                    tableIndices.add(tableIndex);
-                });
+                            Collectors.groupingBy(TableIndexColumn::getIndexName)).entrySet()
+                    .stream().forEach(entry -> {
+                        TableIndex tableIndex = new TableIndex();
+                        TableIndexColumn column = entry.getValue().get(0);
+                        tableIndex.setName(entry.getKey());
+                        tableIndex.setTableName(column.getTableName());
+                        tableIndex.setSchemaName(column.getSchemaName());
+                        tableIndex.setDatabaseName(column.getDatabaseName());
+                        tableIndex.setUnique(!column.getNonUnique());
+                        tableIndex.setColumnList(entry.getValue());
+                        tableIndices.add(tableIndex);
+                    });
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -478,7 +512,7 @@ public class SQLExecutor implements CommandExecutor {
      * @return List<Function>
      */
     public List<ai.chat2db.spi.model.Function> functions(Connection connection, String databaseName,
-        String schemaName) {
+                                                         String schemaName) {
         try (ResultSet resultSet = connection.getMetaData().getFunctions(databaseName, schemaName, null);) {
             return ResultSetUtils.toObjectList(resultSet, ai.chat2db.spi.model.Function.class);
         } catch (Exception e) {
@@ -670,5 +704,28 @@ public class SQLExecutor implements CommandExecutor {
                     .build();
         }
         return executeResult;
+    }
+
+
+    /**
+     * 获取指定数据库和表的外键列表
+     *
+     * @param connection 数据库连接对象，用于执行元数据查询
+     * @param databaseName 数据库名称，指定要查询外键的数据库
+     * @param schemaName 架构名称，用于限定查询范围
+     * @param tableName 表名称，指定要查询外键的表
+     * @return 返回一个包含表中外键信息的列表
+     * @throws RuntimeException 如果查询过程中发生错误，将抛出运行时异常
+     *
+     * 此方法通过数据库连接对象的元数据方法获取外键信息，
+     * 并将结果集转换为ForeignKey对象的列表返回
+     */
+    public List<ForeignKey> foreignKeys(Connection connection, String databaseName,
+                                      String schemaName, String tableName) {
+        try (ResultSet resultSet = connection.getMetaData().getImportedKeys(databaseName, schemaName, tableName);) {
+            return ResultSetUtils.toObjectList(resultSet, ai.chat2db.spi.model.ForeignKey.class);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

@@ -24,5 +24,9 @@ public class TableSelector {
      * 索引列表
      */
     private Boolean indexList;
+    /**
+     * 外键
+     */
+    private Boolean foreignKey;
 
 }

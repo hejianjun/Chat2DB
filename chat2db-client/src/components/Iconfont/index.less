@@ -1,7 +1,14 @@
 @font-face {
-  font-family: 'iconfont'; /* Project id 3633546 */
+  font-family: 'iconfont';
+  /* Project id 3633546 */
   src: url('../../assets/font/iconfont.woff2') format('woff2'), url('../../assets/font/iconfont.woff') format('woff'),
     url('../../assets/font/iconfont.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'iconfont';
+  /* Project id 4688110 */
+  src: url('../../assets/font/iconfont-he.woff2') format('woff2'), url('../../assets/font/iconfont-he.woff') format('woff'),
+    url('../../assets/font/iconfont-he.ttf') format('truetype');
 }
 
 .iconBox {
@@ -12,8 +19,10 @@
   justify-content: center;
   border-radius: 4px;
   cursor: pointer;
+
   &:hover {
     background-color: var(--color-hover-bg);
+
     .iconfont {
       color: var(--color-primary);
     }
@@ -22,6 +31,7 @@
 
 .activeIconBox {
   background-color: var(--color-hover-bg);
+
   .iconfont {
     color: var(--color-primary);
   }

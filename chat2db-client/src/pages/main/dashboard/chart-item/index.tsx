@@ -356,7 +356,6 @@ function ChartItem(props: IChartItemProps) {
               defaultValue={initDDLMemo.text}
               boundInfo={chartData as any}
               setBoundInfo={setBoundInfo}
-              hasAiChat={true}
               hasAi2Lang={false}
               hasSaveBtn={false}
               value={chartData?.ddl}

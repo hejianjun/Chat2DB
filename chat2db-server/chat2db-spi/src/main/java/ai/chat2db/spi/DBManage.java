@@ -108,4 +108,12 @@ public interface DBManage {
      */
     void dropProcedure(Connection connection, @NotEmpty String databaseName, String schemaName,
         @NotEmpty String triggerName);
+    /**
+     * 
+     * @param connection
+     * @param databaseName
+     * @param schemaName
+     * @param tableName
+     */
+    void truncate(Connection connection,@NotEmpty String databaseName, String schemaName, @NotEmpty String tableName);
 }

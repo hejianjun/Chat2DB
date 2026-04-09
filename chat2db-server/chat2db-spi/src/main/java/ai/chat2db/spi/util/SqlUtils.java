@@ -1,42 +1,48 @@
-
 package ai.chat2db.spi.util;
-
-import ai.chat2db.server.tools.base.excption.BusinessException;
-import ai.chat2db.spi.enums.DataTypeEnum;
-import ai.chat2db.spi.model.ExecuteResult;
-import com.alibaba.druid.DbType;
-import com.alibaba.druid.sql.SQLUtils;
-import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
-import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
-import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
-import com.alibaba.druid.sql.ast.statement.SQLTableSource;
-import com.alibaba.druid.sql.parser.SQLParserUtils;
-import net.sf.jsqlparser.expression.BinaryExpression;
-import net.sf.jsqlparser.expression.Function;
-import net.sf.jsqlparser.parser.CCJSqlParser;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.Statements;
-import net.sf.jsqlparser.statement.select.*;
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+
+import com.alibaba.druid.DbType;
+import com.alibaba.druid.sql.SQLUtils;
+import com.alibaba.druid.sql.ast.SQLStatement;
+import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
+import com.alibaba.druid.sql.ast.statement.SQLJoinTableSource;
+import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
+import com.alibaba.druid.sql.ast.statement.SQLShowVariantsStatement;
+import com.alibaba.druid.sql.ast.statement.SQLTableSource;
+import com.alibaba.druid.sql.parser.SQLParserUtils;
+
+import ai.chat2db.server.tools.base.excption.BusinessException;
+import ai.chat2db.spi.enums.DataTypeEnum;
+import ai.chat2db.spi.model.ExecuteResult;
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.statement.Statements;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
+import net.sf.jsqlparser.statement.select.SelectBody;
+import net.sf.jsqlparser.statement.select.SelectExpressionItem;
+import net.sf.jsqlparser.statement.select.SelectItem;
+
 /**
  * @author jipengfei
  * @version : SqlUtils.java
  */
+@Slf4j
 public class SqlUtils {
 
     public static final String DEFAULT_TABLE_NAME = "table1";
 
     public static void buildCanEditResult(String sql, DbType dbType, ExecuteResult executeResult) {
         try {
-            Statement statement ;
+            Statement statement;
             if (DbType.sqlserver.equals(dbType)) {
                 statement = CCJSqlParserUtil.parse(sql, ccjSqlParser -> ccjSqlParser.withSquareBracketQuotation(true));
             } else {
@@ -80,7 +86,7 @@ public class SqlUtils {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("buildCanEditResult error:", e);
             executeResult.setCanEdit(false);
         }
     }
@@ -94,16 +100,27 @@ public class SqlUtils {
     }
 
     public static String getTableName(String sql, DbType dbType) {
-        SQLStatement sqlStatement = SQLUtils.parseSingleStatement(sql, dbType);
-        if (!(sqlStatement instanceof SQLSelectStatement sqlSelectStatement)) {
-            throw new BusinessException("dataSource.sqlAnalysisError");
-        }
-        SQLExprTableSource sqlExprTableSource = (SQLExprTableSource) getSQLExprTableSource(
-                sqlSelectStatement.getSelect().getFirstQueryBlock().getFrom());
-        if (sqlExprTableSource == null) {
+        try {
+            SQLStatement sqlStatement = SQLUtils.parseSingleStatement(sql, dbType);
+            if (sqlStatement instanceof SQLSelectStatement sqlSelectStatement) {
+                SQLExprTableSource sqlExprTableSource = (SQLExprTableSource) getSQLExprTableSource(
+                        sqlSelectStatement.getSelect().getFirstQueryBlock().getFrom());
+                if (sqlExprTableSource == null) {
+                    return DEFAULT_TABLE_NAME;
+                }
+                return sqlExprTableSource.getTableName();
+            } else if (sqlStatement instanceof SQLShowVariantsStatement) {
+                // 对于 SHOW VARIABLES 语句，返回一个默认表名
+                return "VARIABLES";
+            }
+            log.error("sqlStatement error:{}", sqlStatement.getClass().getName());
+        } catch (Exception e) {
+            log.error("getTableName error:", e);
+            // 当SQL解析失败时，返回默认表名而不是抛出异常
             return DEFAULT_TABLE_NAME;
         }
-        return sqlExprTableSource.getTableName();
+        // 对于不支持的语句类型，返回默认表名
+        return DEFAULT_TABLE_NAME;
     }
 
     private static SQLTableSource getSQLExprTableSource(SQLTableSource sqlTableSource) {
@@ -112,6 +129,7 @@ public class SqlUtils {
         } else if (sqlTableSource instanceof SQLJoinTableSource sqlJoinTableSource) {
             return getSQLExprTableSource(sqlJoinTableSource.getLeft());
         }
+        log.error("getSQLExprTableSource error:{}", sqlTableSource.getClass().getName());
         return null;
     }
 
@@ -124,6 +142,7 @@ public class SqlUtils {
                 list.add(stmt.toString());
             }
         } catch (Exception e) {
+            log.error("parse error:", e);
             list = SQLParserUtils.splitAndRemoveComment(sql, dbType);
         }
         return list;
@@ -145,12 +164,10 @@ public class SqlUtils {
     public static boolean hasPageLimit(String sql, DbType dbType) {
         try {
             Statement statement = CCJSqlParserUtil.parse(sql);
-            if (statement instanceof Select) {
-                Select selectStatement = (Select) statement;
+            if (statement instanceof Select selectStatement) {
                 SelectBody selectBody = selectStatement.getSelectBody();
                 // 检查常见的分页方法
-                if (selectBody instanceof PlainSelect) {
-                    PlainSelect plainSelect = (PlainSelect) selectBody;
+                if (selectBody instanceof PlainSelect plainSelect) {
                     // 检查 LIMIT
                     if (plainSelect.getLimit() != null || plainSelect.getOffset() != null || plainSelect.getTop() != null || plainSelect.getFetch() != null) {
                         return true;
@@ -161,6 +178,7 @@ public class SqlUtils {
                 }
             }
         } catch (Exception e) {
+            log.error("hasPageLimit error:", e);
             return false;
         }
         return false;

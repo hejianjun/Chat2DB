@@ -2,12 +2,25 @@ package ai.chat2db.server.domain.api.service;
 
 import java.util.List;
 
-import ai.chat2db.server.domain.api.param.*;
-import ai.chat2db.spi.model.*;
+import ai.chat2db.server.domain.api.param.DropKeyParam;
+import ai.chat2db.server.domain.api.param.DropParam;
+import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
+import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableQueryParam;
+import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
+import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.SimpleTable;
+import ai.chat2db.spi.model.Sql;
+import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableMeta;
+import ai.chat2db.spi.model.Type;
 
 /**
  * 数据源管理服务
@@ -33,6 +46,15 @@ public interface TableService {
      * @return
      */
     ActionResult drop(DropParam param);
+
+
+    /**
+     * 截断表
+     *
+     * @param param
+     * @return
+     */
+    ActionResult truncate(DropParam param);
 
     /**
      * 创建表结构的样例
@@ -66,6 +88,13 @@ public interface TableService {
      * @return
      */
     ListResult<Sql> buildSql(Table oldTable, Table newTable);
+    /**
+     * 批量生成sql
+     * @param oldTables
+     * @param newTables
+     * @return
+     */
+    ListResult<String> buildBatchSql(List<Table> oldTables, List<Table> newTables);
 
     /**
      * 分页查询表信息
@@ -113,20 +142,21 @@ public interface TableService {
      * @return
      */
     TableMeta queryTableMeta(TypeQueryParam param);
-
     /**
-     * save table vector
-     *
+     * 查询外键
      * @param param
      * @return
      */
-    ActionResult saveTableVector(TableVectorParam param);
+    List<ForeignKey> queryForeignKeys(TableQueryParam param);
+    /**
+     * 更新表的AI注释
+     * @param table
+     */
+    void updateAiComment(Long dataSourceId,Table table);
 
     /**
-     * check if table vector saved status
-     *
-     * @param param
-     * @return
+     * 删除虚拟外键
      */
-    DataResult<Boolean> checkTableVector(TableVectorParam param);
+    ActionResult deleteVirtualForeignKey(DropKeyParam param);
+
 }

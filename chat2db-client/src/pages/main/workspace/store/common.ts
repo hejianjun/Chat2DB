@@ -1,6 +1,14 @@
 import { IConnectionListItem } from '@/typings/connection';
 import { useWorkspaceStore } from './index';
 
+export type IAiChatPromptType = 'NL_2_SQL' | 'SQL_EXPLAIN' | 'SQL_OPTIMIZER' | 'SQL_2_SQL';
+
+export interface IPendingAiChat {
+  dataSourceId: number;
+  message: string;
+  promptType: IAiChatPromptType;
+}
+
 export interface ICommonStore {
   currentConnectionDetails: IConnectionListItem | null;
   currentWorkspaceExtend: string | null;
@@ -8,12 +16,14 @@ export interface ICommonStore {
     code: string,
     uniqueData: any,
   } | null;
+  pendingAiChat: IPendingAiChat | null;
 }
 
 export const initCommonStore: ICommonStore = {
   currentConnectionDetails: null,
   currentWorkspaceExtend: null,
   currentWorkspaceGlobalExtend: null,
+  pendingAiChat: null,
 }
 
 export const setCurrentConnectionDetails = (connectionDetails: ICommonStore['currentConnectionDetails']) => {
@@ -26,4 +36,8 @@ export const setCurrentWorkspaceExtend = (workspaceExtend: ICommonStore['current
 
 export const setCurrentWorkspaceGlobalExtend = (workspaceGlobalExtend: ICommonStore['currentWorkspaceGlobalExtend']) => {
   return useWorkspaceStore.setState({ currentWorkspaceGlobalExtend: workspaceGlobalExtend });
+}
+
+export const setPendingAiChat = (pendingAiChat: ICommonStore['pendingAiChat']) => {
+  return useWorkspaceStore.setState({ pendingAiChat });
 }

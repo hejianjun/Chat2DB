@@ -1,16 +1,16 @@
-import createRequest from './base';
-import {
-  IPageResponse,
-  IPageParams,
-  IUniversalTableParams,
-  IManageResultData,
-  IRoutines,
-  IDatabaseSupportField,
-  IEditTableInfo,
-  ITable,
-} from '@/typings';
 import { DatabaseTypeCode } from '@/constants';
+import {
+    IDatabaseSupportField,
+    IEditTableInfo,
+    IManageResultData,
+    IPageParams,
+    IPageResponse,
+    IRoutines,
+    ITable,
+    IUniversalTableParams,
+} from '@/typings';
 import { ExportSizeEnum, ExportTypeEnum } from '@/typings/resultTable';
+import createRequest from './base';
 
 export interface IGetTableListParams extends IPageParams {
   dataSourceId: number;
@@ -43,6 +43,33 @@ export interface IConnectConsoleParams {
   dataSourceId: number;
   databaseName: string;
 }
+
+// 定义返回值类型
+interface INode {
+  id: string;
+  label: string;
+}
+
+interface IEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+}
+
+interface IErDiagram {
+  nodes: INode[];
+  edges: IEdge[];
+}
+
+export interface IErParams {
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  refresh: boolean;
+}
+// 创建请求
+const getErDiagram = createRequest<IErParams, IErDiagram>('/api/ai/er/diagram', { method: 'get' });
 
 const getTableList = createRequest<IGetTableListParams, IPageResponse<ITable>>('/api/rdb/table/list', { method: 'get' });
 
@@ -81,6 +108,17 @@ export interface IColumn {
   comment: string;
 }
 
+/** 外键定义接口 */
+export interface IForeignKey {
+  name: string; // 外键名称
+  referencedTable: string; // 引用的表名
+  referencedColumn: string; // 引用的列名
+  updateRule: number; // 更新规则
+  deleteRule: number; // 删除规则
+  comment?: string; // 备注（可选）
+  isNullable: boolean; // 是否允许为空
+}
+
 export interface ISchemaParams {
   dataSourceId: number;
   databaseName: string;
@@ -103,7 +141,24 @@ export interface Schema {
   name: string;
 }
 
+export interface IFunctionCall {
+  name?: string;
+  arguments?: string;
+}
+
+export interface IToolCall {
+  id?: string;
+  type?: string;
+  function?: IFunctionCall;
+}
+
+export interface IMessage {
+  role?: string;
+  tool_calls?: IToolCall[];
+}
+
 const deleteTable = createRequest<ITableParams, void>('/api/rdb/ddl/delete', { method: 'post' });
+const truncateTable = createRequest<ITableParams, void>('/api/rdb/ddl/truncate', { method: 'post' });
 const createTableExample = createRequest<{ dbType: DatabaseTypeCode }, string>('/api/rdb/ddl/create/example', {
   method: 'get',
 });
@@ -121,7 +176,7 @@ const getIndexList = createRequest<ITableParams, IColumn[]>('/api/rdb/ddl/index_
   method: 'get',
   delayTime: 200,
 });
-const getKeyList = createRequest<ITableParams, IColumn[]>('/api/rdb/ddl/key_list', { method: 'get', delayTime: 200 });
+const getKeyList = createRequest<ITableParams, IForeignKey[]>('/api/rdb/ddl/foreign_key_list', { method: 'get', delayTime: 200 });
 const getSchemaList = createRequest<ISchemaParams, ISchemaResponse[]>('/api/rdb/ddl/schema_list', {
   method: 'get',
   delayTime: 200,
@@ -260,6 +315,20 @@ const getAllFieldByTable = createRequest<
   Array<{ name: string; tableName: string }>
 >('/api/rdb/table/column_list', { method: 'get' });
 
+
+const getAiGuess = createRequest<
+  {
+    dataSourceId: number;
+    databaseName: string;
+    schemaName?: string | null | undefined;
+    tableNames: string[];
+    promptType: string;
+  }
+  , IMessage>('/api/ai/er/guess', {
+    method: 'get',
+  });
+
+
 export interface IModifyTableSqlParams {
   dataSourceId: number;
   databaseName: string;
@@ -269,12 +338,24 @@ export interface IModifyTableSqlParams {
   newTable: IEditTableInfo;
   refresh: boolean;
 }
+export interface IBatchModifyTableSqlParams {
+  dataSourceId: string;
+  databaseName: string;
+  schemaName?: string | null;
+  tableName?: string;
+  oldTables?: any[];
+  newTables: any[];
+  refresh: boolean;
+}
 
 /** 获取修改表的sql */
 const getModifyTableSql = createRequest<IModifyTableSqlParams, { sql: string }[]>('/api/rdb/table/modify/sql', {
   method: 'post',
 });
-
+/** 定义批量获取修改表的SQL语句的API接口 */
+const getBatchModifyTableSql = createRequest<IBatchModifyTableSqlParams, { sql: string }[]>('/api/rdb/table/batch/modify/sql', {
+  method: 'post',
+});
 /** 执行编辑表的sql, 专为编辑表而生 */
 const executeDDL = createRequest<IExecuteSqlParams, { success: boolean; message: string; originalSql: string }>(
   '/api/rdb/dml/execute_ddl',
@@ -290,18 +371,26 @@ const executeUpdateDataSql = createRequest<IExecuteSqlParams, { success: boolean
 /** 获取修改表数据的接口 */
 const getExecuteUpdateSql = createRequest<any, string>('/api/rdb/dml/get_update_sql', { method: 'post' });
 
-/** 创建数据库  */ 
+/** 创建数据库  */
 const getCreateDatabaseSql = createRequest<{
   dataSourceId: number;
   databaseName: string;
 }, { sql: string }>('/api/rdb/database/create_database_sql', { method: 'post' });
 
-/** 创建schema  */ 
+/** 创建schema  */
 const getCreateSchemaSql = createRequest<{
   dataSourceId: number;
   databaseName?: string;
   schemaName?: string;
-}, {sql:string}>('/api/rdb/schema/create_schema_sql', { method: 'post' });
+}, { sql: string }>('/api/rdb/schema/create_schema_sql', { method: 'post' });
+
+const deleteVirtualForeignKey = createRequest<{
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  tableName: string;
+  keyName: string;
+}, void>('/api/rdb/ddl/delete_virtual_foreign_key', { method: 'post' });
 
 export default {
   getCreateSchemaSql,
@@ -310,6 +399,7 @@ export default {
   executeDDL,
   getExecuteUpdateSql,
   getModifyTableSql,
+  getBatchModifyTableSql,
   getTableDetails,
   getDatabaseFieldTypeList,
   sqlFormat,
@@ -323,6 +413,7 @@ export default {
   getFunctionList,
   getViewList,
   getTableList,
+  getErDiagram,
   executeSql,
   executeTable,
   connectConsole,
@@ -342,4 +433,7 @@ export default {
   // exportResultTable
   getAllTableList,
   getAllFieldByTable,
+  getAiGuess,
+  deleteVirtualForeignKey,
+  truncateTable,
 };

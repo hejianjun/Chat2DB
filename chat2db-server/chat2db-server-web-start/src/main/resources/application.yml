@@ -83,3 +83,8 @@ forest:
   log-response-content: true
   read-timeout: 30000
   timeout: 30000
+thread-pool:
+  core-size: 2
+  max-size: 5
+  keep-alive: 60
+  queue-capacity: 1000

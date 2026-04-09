@@ -11,6 +11,8 @@ import ai.chat2db.spi.sql.ConnectInfo;
 import ai.chat2db.spi.sql.IDriverManager;
 import ai.chat2db.spi.sql.SQLExecutor;
 import ai.chat2db.spi.ssh.SSHManager;
+import jakarta.validation.constraints.NotEmpty;
+
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 import org.apache.commons.lang3.StringUtils;
@@ -138,4 +140,12 @@ public class DefaultDBManage implements DBManage {
         String sql = "DROP TABLE "+ tableName ;
         SQLExecutor.getInstance().execute(connection,sql, resultSet -> null);
     }
+
+    @Override
+    public void truncate(Connection connection, @NotEmpty String databaseName, String schemaName,
+            @NotEmpty String tableName) {
+        String sql = "TRUNCATE TABLE "+ tableName;
+        SQLExecutor.getInstance().execute(connection,sql, resultSet -> null);
+    }
+
 }

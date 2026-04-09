@@ -22,25 +22,25 @@ public class CacheKey {
     }
 
     public static String getTableKey(Long dataSourceId, String databaseName, String schemaName) {
-        StringBuffer stringBuffer = new StringBuffer("tables_dataSourceId_" + dataSourceId);
+        StringBuilder stringBuffer = new StringBuilder("tables_dataSourceId_" + dataSourceId);
         if (!StringUtils.isEmpty(databaseName)) {
-            stringBuffer.append("_databaseName_" + databaseName);
+            stringBuffer.append("_databaseName_").append(databaseName);
         }
         if (!StringUtils.isEmpty(schemaName)) {
-            stringBuffer.append("_schemaName_" + schemaName);
+            stringBuffer.append("_schemaName_").append(schemaName);
         }
         return stringBuffer.toString();
     }
 
-    public static String getColumnKey(Long dataSourceId, String databaseName, String schemaName,String tableName) {
+    public static String getColumnKey(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         StringBuffer stringBuffer = new StringBuffer("columns_dataSourceId_" + dataSourceId);
         if (!StringUtils.isEmpty(databaseName)) {
-            stringBuffer.append("_databaseName_" + databaseName);
+            stringBuffer.append("_databaseName_").append(databaseName);
         }
         if (!StringUtils.isEmpty(schemaName)) {
-            stringBuffer.append("_schemaName_" + schemaName);
+            stringBuffer.append("_schemaName_").append(schemaName);
         }
-        stringBuffer.append("_tableName_"+tableName);
+        stringBuffer.append("_tableName_" + tableName);
         return stringBuffer.toString();
     }
 }

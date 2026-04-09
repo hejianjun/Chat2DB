@@ -27,6 +27,7 @@ export default {
   'common.button.execute': 'Run',
   "common.button.import": 'Import SQL',
   'common.button.format': 'Format',
+  'common.button.guess': 'Guess',
   'common.message.successfulConfig': 'Successful configuration',
   'common.text.successful': 'successful',
   'common.text.failure': 'failure',
@@ -92,8 +93,8 @@ export default {
   'common.button.cancelRequest': 'Cancel Request',
   'common.button.executionError': 'Execution Error',
   'common.text.affectedRows': 'Affected rows: {1}',
-  'common.text.selectFile' : 'Select File',
-  'common.text.noTableFoundUp' : 'No tables in this database',
+  'common.text.selectFile': 'Select File',
+  'common.text.noTableFoundUp': 'No tables in this database',
   'common.text.noTableFoundDown': 'Switch databases at the top',
   'common.title.preview': 'Preview',
   'common.title.errorMessage': 'Error message',
@@ -120,4 +121,8 @@ export default {
   'common.label.LocalFile': 'LocalFile',
   'common.text.rename': 'Rename',
   'common.title.info': 'Info',
-};  
+  'common.button.saveAll': 'Save All',
+  'common.button.editAll': 'Edit All',
+  'common.text.generateTitle': 'AI Generate Title',
+  'common.text.generatingTitle': 'Generating Title...',
+};

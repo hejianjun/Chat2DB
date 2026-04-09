@@ -187,7 +187,7 @@ public class Dbutils {
         Enumeration<URL> mapper = contextClassLoader.getResources(classPath);
         while (mapper.hasMoreElements()) {
             URL url = mapper.nextElement();
-            if (url.getProtocol().equals("file")) {
+            if ("file".equals(url.getProtocol())) {
                 String path = url.getPath();
                 File file = new File(path);
                 File[] files = file.listFiles();

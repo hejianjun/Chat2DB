@@ -5,7 +5,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import ai.chat2db.plugin.mysql.builder.MysqlSqlBuilder;
 import ai.chat2db.plugin.mysql.type.*;
@@ -136,22 +135,23 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         });
     }
 
-    private static String SELECT_TABLE_COLUMNS = "SELECT * FROM information_schema.COLUMNS  WHERE TABLE_SCHEMA =  '%s'  AND TABLE_NAME =  '%s'  order by ORDINAL_POSITION";
+    private static final String SELECT_TABLE_COLUMNS_TEMPLATE = "SELECT * FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '%s' %s ORDER BY ORDINAL_POSITION";
 
     @Override
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String tableName) {
-        String sql = String.format(SELECT_TABLE_COLUMNS, databaseName, tableName);
+        // 构建 SQL 查询语句
+        String tableCondition = (tableName != null) ? String.format("AND TABLE_NAME = '%s'", tableName) : "";
+        String sql = String.format(SELECT_TABLE_COLUMNS_TEMPLATE, databaseName, tableCondition);
+
         List<TableColumn> tableColumns = new ArrayList<>();
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             while (resultSet.next()) {
                 TableColumn column = new TableColumn();
                 column.setDatabaseName(databaseName);
-                column.setTableName(tableName);
+                column.setTableName(resultSet.getString("TABLE_NAME"));
                 column.setOldName(resultSet.getString("COLUMN_NAME"));
                 column.setName(resultSet.getString("COLUMN_NAME"));
-                //column.setColumnType(resultSet.getString("COLUMN_TYPE"));
                 column.setColumnType(resultSet.getString("DATA_TYPE").toUpperCase());
-                //column.setDataType(resultSet.getInt("DATA_TYPE"));
                 column.setDefaultValue(resultSet.getString("COLUMN_DEFAULT"));
                 column.setAutoIncrement(resultSet.getString("EXTRA").contains("auto_increment"));
                 column.setComment(resultSet.getString("COLUMN_COMMENT"));
@@ -167,6 +167,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
             return tableColumns;
         });
     }
+
 
     private void setColumnSize(TableColumn column, String columnType) {
         try {
@@ -283,7 +284,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
-    public TableMeta getTableMeta(String databaseName, String schemaName, String tableName) {
+    public TableMeta getTableMeta(Connection connection, String databaseName, String schemaName) {
         return TableMeta.builder()
                 .columnTypes(MysqlColumnTypeEnum.getTypes())
                 .charsets(MysqlCharsetEnum.getCharsets())

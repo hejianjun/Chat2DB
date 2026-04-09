@@ -2,6 +2,7 @@ import mysqlLogo from '@/assets/img/databaseImg/mysql.png';
 import redisLogo from '@/assets/img/databaseImg/redis.png';
 import h2Logo from '@/assets/img/databaseImg/h2.png';
 import moreDBLogo from '@/assets/img/databaseImg/other.png';
+import phoenixLogo from '@/assets/img/databaseImg/phoenixLogo.png';
 import { IDatabase } from '@/typings';
 import { DatabaseTypeCode } from '@/constants'
 
@@ -118,13 +119,20 @@ export const databaseMap: {
     // port: 27017,
     icon: '\uec21',
   },
-  // [DatabaseTypeCode.REDIS]: {
-  //   name: 'Redis',
-  //   img: moreDBLogo,
-  //   code: DatabaseTypeCode.REDIS,
-  //   // port: 6379,
-  //   icon: '\ue6a2',
-  // },
+  [DatabaseTypeCode.REDIS]: {
+    name: 'Redis',
+    img: redisLogo,
+    code: DatabaseTypeCode.REDIS,
+    // port: 6379,
+    icon: '\ue6a2',
+  },
+  [DatabaseTypeCode.PHOENIX]: { // 添加 Phoenix
+    name: 'Phoenix',
+    img: phoenixLogo, // 确保你有 phoenixLogo 的定义
+    code: DatabaseTypeCode.PHOENIX,
+    // port: 8765, // 根据需要添加端口
+    icon: '\ue712', // 根据需要选择合适的图标
+  },
 };
 
 export const databaseTypeList = Object.keys(databaseMap).map((keys) => {

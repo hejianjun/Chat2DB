@@ -1,0 +1,32 @@
+.erDiagramContainer {
+  position: relative;
+  height: 100vh;
+}
+
+.buttonContainer {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+}
+
+.chartContainer {
+  width: 100%; /* 宽度占满 */
+  height: calc(100vh - 40px); /* 高度全屏 */
+}
+
+// 可选的标题样式
+.title {
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 10px; // 标题与图表之间的间距
+}
+
+// 可选的 tooltip 样式
+.tooltip {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 5px;
+  border-radius: 4px;
+}

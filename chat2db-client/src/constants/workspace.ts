@@ -15,6 +15,7 @@ export enum WorkspaceTabType {
   CreateTable = 'createTable',
   EditTableData = 'editTableData',
   ViewAllTable = 'viewAllTable',
+  ViewERDiagram = 'viewERDiagram', // 添加查看 ER 图的类型
 }
 
 // 工作台Tab的类型对应的一些配置
@@ -49,6 +50,9 @@ export const workspaceTabConfig: {
   },
   [WorkspaceTabType.ViewAllTable]: {
     icon: '\ue611'
+  },
+  [WorkspaceTabType.ViewERDiagram]: { // 添加查看 ER 图的配置
+    icon: '\u2721' // 选择一个合适的图标
   },
 }
 

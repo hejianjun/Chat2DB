@@ -35,6 +35,7 @@ export const openView = (props:{
 }
 
 export const openFunction = (props:{
+  addWorkspaceTab: any;
   treeNodeData: any;
 }) => {
   const { treeNodeData } = props;
@@ -66,6 +67,7 @@ export const openFunction = (props:{
 }
 
 export const openProcedure = (props:{
+  addWorkspaceTab: any;
   treeNodeData: any;
 }) => {
   const { treeNodeData } = props;
@@ -97,6 +99,7 @@ export const openProcedure = (props:{
 }
 
 export const openTrigger = (props:{
+  addWorkspaceTab: any;
   treeNodeData: any;
 }) => {
   const {treeNodeData } = props;

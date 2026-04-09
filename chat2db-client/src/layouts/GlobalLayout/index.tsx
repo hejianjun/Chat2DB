@@ -62,15 +62,15 @@ const GlobalLayout = () => {
     matchMedia.onchange = change;
   };
 
-  // 等待状态页面
-  // if (serviceStatus === ServiceStatus.PENDING || curUser === null) {
-  //   return (
-  //     <div className={styles.app}>
-  //       <AppTitleBar className={styles.appTitleBar} />
-  //       <Spin className={styles.loadingBox} size="large" />
-  //     </div>
-  //   );
-  // }
+  //等待状态页面
+  if (serviceStatus === ServiceStatus.PENDING || curUser === null) {
+    return (
+      <div className={styles.app}>
+        <AppTitleBar className={styles.appTitleBar} />
+        <Spin className={styles.loadingBox} size="large" />
+      </div>
+    );
+  }
 
   // 错误状态页面
   if (serviceStatus === ServiceStatus.FAILURE) {

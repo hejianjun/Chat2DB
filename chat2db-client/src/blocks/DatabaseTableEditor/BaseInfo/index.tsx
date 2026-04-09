@@ -1,14 +1,15 @@
-import React, { useContext, useEffect, useImperativeHandle, ForwardedRef, forwardRef } from 'react';
-import styles from './index.less';
-import classnames from 'classnames';
-import { Form, Input } from 'antd';
-import { Context } from '../index';
-import { IBaseInfo } from '@/typings';
 import { DatabaseTypeCode } from '@/constants';
 import i18n from '@/i18n';
+import { IBaseInfo } from '@/typings';
+import { Form, Input } from 'antd';
+import classnames from 'classnames';
+import { ForwardedRef, forwardRef, useContext, useEffect, useImperativeHandle } from 'react';
+import { Context } from '../index';
+import styles from './index.less';
 
 export interface IBaseInfoRef {
   getBaseInfo: () => IBaseInfo;
+  setTableComment: (comment: string) => void;
 }
 
 interface IProps {
@@ -24,6 +25,7 @@ const BaseInfo = forwardRef((props: IProps, ref: ForwardedRef<IBaseInfoRef>) => 
     form.setFieldsValue({
       name: tableDetails.name,
       comment: tableDetails.comment,
+      aiComment: tableDetails.aiComment,
       charset: tableDetails.charset,
       engine: tableDetails.engine,
       incrementValue: tableDetails.incrementValue,
@@ -36,6 +38,9 @@ const BaseInfo = forwardRef((props: IProps, ref: ForwardedRef<IBaseInfoRef>) => 
 
   useImperativeHandle(ref, () => ({
     getBaseInfo,
+    setTableComment: (comment: string) => {
+      form.setFieldsValue({ comment:comment,aiComment:comment });
+    },
   }));
 
   return (

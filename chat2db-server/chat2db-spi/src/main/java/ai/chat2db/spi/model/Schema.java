@@ -37,4 +37,8 @@ public class Schema implements Serializable {
 
 
     private String owner;
+
+    private String treeNodeType;
+
+    private String keyType;
 }

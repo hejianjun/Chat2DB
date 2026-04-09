@@ -829,3 +829,10 @@
   content: "\e61a";
 }
 
+.icon-Phoenix:before {
+  content: "\e712";
+}
+
+.icon-wuguan:before {
+  content: "\ec5f";
+}

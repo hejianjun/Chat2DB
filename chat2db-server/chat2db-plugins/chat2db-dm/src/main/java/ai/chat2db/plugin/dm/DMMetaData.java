@@ -30,6 +30,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
         List<Schema> schemas = SQLExecutor.getInstance().schemas(connection, databaseName, null);
         return SortUtils.sortSchema(schemas, systemSchemas);
     }
+    @Override
     public String tableDDL(Connection connection, String databaseName, String schemaName, String tableName) {
         String selectObjectDDLSQL = String.format(
             "select dbms_metadata.get_ddl(%s, %s, %s) AS \"sql\" from dual",
@@ -213,7 +214,7 @@ public class DMMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
-    public TableMeta getTableMeta(String databaseName, String schemaName, String tableName) {
+    public TableMeta getTableMeta(Connection connection, String databaseName, String schemaName) {
         return TableMeta.builder()
                 .columnTypes(DMColumnTypeEnum.getTypes())
                 .charsets(Lists.newArrayList())

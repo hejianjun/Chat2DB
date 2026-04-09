@@ -3,6 +3,7 @@ export default {
   'workspace.cascader.placeholder': 'Select Here',
   'workspace.ai.input.placeholder': 'Enter your plain text statement here',
   'workspace.title.savedConsole': 'Saved console',
+  'workspace.title.aiChat': 'AI Chat',
   'workspace.menu.ViewDDL': 'View DDL',
   'workspace.menu.deleteTable': 'Delete Table',
   'workspace.menu.openTable': 'Open Table',
@@ -13,8 +14,10 @@ export default {
   'workspace.menu.editTableData': 'Edit Table Data',
   'workspace.menu.queryConsole': 'Query console',
   'workspace.menu.viewAllTable': 'View all table',
+  'workspace.menu.viewERDiagram': 'View ER Diagram', // 添加查看 ER 图的翻译
   'workspace.menu.createDatabase': 'Create database',
   'workspace.menu.createSchema': 'Create schema',
+  'workspace.menu.deleteVirtualKey': 'Delete Virtual Key',
   'workspace.menu.deleteTablePlaceHolder': 'Please enter the name of the table you want to delete',
   'workspace.tips.affirmDeleteTable':
     'The table name you entered is not the same as the table name you want to delete, please confirm again',
@@ -34,4 +37,6 @@ export default {
   'workspace.tips.noConnection': 'You have not created a connection yet',
   'workspace.tips.maxConsole': 'You can only open up to 20 consoles',
   'workspace.tips.openExecutiveLogging': 'Open this executive logging',
+  'workspace.tips.noSqlContent': 'No SQL content in current console',
+  'workspace.tips.generateTitleFailed': 'Failed to generate title by AI, please try again',
 };

@@ -1,9 +1,21 @@
 version: '3'
 services:
   chat2db:
-    image: chat2db/chat2db:latest
+    image: g-erqx7877-docker.pkg.coding.net/chat2db/hejianjun/chat2db:${CHAT_VERSION:-latest}
     container_name: chat2db-latest
     volumes:
-      - ~/.chat2db-docker:/root/.chat2db
+      - /home/chat2db:/root/.chat2db
     ports:
       - "10824:10824"
+    networks:
+      - chat2db-network
+    restart: unless-stopped
+    extra_hosts:
+      - "hadoop1:10.99.101.1"
+      - "hadoop2:10.99.101.2"
+      - "hadoop3:10.99.101.3"
+      - "hadoop4:10.99.101.4"
+      - "hadoop5:10.99.101.5"
+networks:
+  chat2db-network:
+    driver: bridge

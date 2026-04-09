@@ -49,7 +49,7 @@ public class TaskController {
             log.error("task is null");
             throw new RuntimeException("task is null");
         }
-        if(ContextUtils.getUserId() != task.getData().getUserId()){
+        if(!ContextUtils.getUserId().equals(task.getData().getUserId())){
             log.error("task is not belong to user");
             throw new RuntimeException("task is not belong to user");
         }

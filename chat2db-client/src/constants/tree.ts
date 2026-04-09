@@ -21,6 +21,8 @@ export enum TreeNodeType {
   PROCEDURE = 'procedure', // procedure
   TRIGGERS = 'triggers',  // trigger组
   TRIGGER = 'trigger',  // trigger
+  V_KEYS = 'vKeys',
+  V_KEY = 'vKey',
 }
 
 // 树右键支持的功能
@@ -45,4 +47,7 @@ export enum OperationColumn {
   CreateSchema = 'createSchema', // 新建schema
   CreateDatabase = 'createDatabase', // 新建database
   ViewAllTable = 'viewAllTable', // 查看所有的表
+  ViewERDiagram = 'viewERDiagram', // 查看 ER 图
+  DeleteVirtualKey = 'deleteVirtualKey', // 删除虚拟外键
+  TruncateTable = 'truncateTable', // 截断表
 }

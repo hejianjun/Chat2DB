@@ -53,6 +53,12 @@ public class PageQueryParam implements Serializable {
      */
     private List<OrderBy> orderByList;
 
+
+    /**
+     *  最后id
+     */
+    private Integer lastDocId;
+
     public PageQueryParam() {
         this.pageNo = 1;
         this.pageSize = 100;

@@ -1,6 +1,8 @@
 package ai.chat2db.server.domain.api.param;
 
 import ai.chat2db.server.tools.base.wrapper.param.PageQueryParam;
+import ai.chat2db.spi.model.BaseModel;
+import ai.chat2db.spi.model.Table;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -16,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TablePageQueryParam extends PageQueryParam {
+public class TablePageQueryParam extends PageQueryParam implements BaseModel<Table> {
     private static final long serialVersionUID = 8054519332890887747L;
     /**
      * 对应数据库存储的来源id
@@ -50,4 +52,11 @@ public class TablePageQueryParam extends PageQueryParam {
 
 
     private String searchKey;
+
+
+    @Override
+    public Class<Table> getClassType() {
+        return Table.class;
+    }
+
 }

@@ -2,10 +2,11 @@ package ai.chat2db.server.common.api.controller.converter;
 
 import java.util.List;
 
+import org.mapstruct.Mapper;
+
 import ai.chat2db.server.common.api.controller.vo.SimpleEnvironmentVO;
 import ai.chat2db.server.domain.api.model.Environment;
 import lombok.extern.slf4j.Slf4j;
-import org.mapstruct.Mapper;
 
 /**
  * converter
@@ -17,6 +18,7 @@ import org.mapstruct.Mapper;
 public abstract class EnvironmentCommonConverter {
 
 
+    public abstract SimpleEnvironmentVO dto2vo(Environment environment);
     /**
      * convert
      *

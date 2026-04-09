@@ -90,3 +90,8 @@ export interface IColumnTypes {
 export interface IDefaultValue {
   defaultValue: string; // 默认值
 }
+
+/** 外键定义接口 */
+export interface IForeignKey {
+
+}

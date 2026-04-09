@@ -26,5 +26,6 @@ public class TableSchemaRequest {
 
     private List<String> schemaList;
 
+    @lombok.Builder.Default
     private Boolean deleteBeforeInsert = false;
 }

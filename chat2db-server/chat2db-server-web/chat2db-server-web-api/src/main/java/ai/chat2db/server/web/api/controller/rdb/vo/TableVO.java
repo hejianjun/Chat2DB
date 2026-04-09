@@ -2,8 +2,10 @@ package ai.chat2db.server.web.api.controller.rdb.vo;
 
 import java.util.List;
 
+import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import lombok.Data;
 
 /**
@@ -33,6 +35,16 @@ public class TableVO {
      * 索引
      */
     private List<TableIndex> indexList;
+
+    /**
+     * 外键列表
+     */
+    private List<ForeignKey> foreignKeyList;
+
+    /**
+     * 虚拟外键
+     */
+    private List<VirtualForeignKey> virtualForeignKeyList;
 
     /**
      * 是否已经被固定

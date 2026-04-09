@@ -1,6 +1,8 @@
-import { ITreeNode } from '@/typings';
-import { OperationColumn, WorkspaceTabType, TreeNodeType } from '@/constants';
+import { OperationColumn, TreeNodeType, WorkspaceTabType } from '@/constants';
 import i18n from '@/i18n';
+import sqlServer from '@/service/sql';
+import { ITreeNode } from '@/typings';
+import { message } from 'antd';
 import { v4 as uuid } from 'uuid';
 
 // ----- components -----
@@ -8,21 +10,23 @@ import { dataSourceFormConfigs } from '@/components/ConnectionEdit/config/dataSo
 import { IConnectionConfig } from '@/components/ConnectionEdit/config/types';
 
 // ----- config -----
-import { ITreeConfigItem, treeConfig } from '../treeConfig';
 import { useMemo } from 'react';
+import { ITreeConfigItem, treeConfig } from '../treeConfig';
 
 // ----- store -----
-import { createConsole, addWorkspaceTab } from '@/pages/main/workspace/store/console';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
+import { addWorkspaceTab, createConsole } from '@/pages/main/workspace/store/console';
 
 // ---- functions -----
-import { openView, openFunction, openProcedure, openTrigger } from '../functions/openAsyncSql';
+import { deleteTable } from '../functions/deleteTable';
+import { truncateTable } from '../functions/truncateTable';
+import { openFunction, openProcedure, openTrigger, openView } from '../functions/openAsyncSql';
 import { handelPinTable } from '../functions/pinTable';
 import { viewDDL } from '../functions/viewDDL';
-import { deleteTable } from '../functions/deleteTable';
 
 // ----- utils -----
 import { compatibleDataBaseName } from '@/utils/database';
+import { assign } from 'lodash';
 
 interface IProps {
   treeNodeData: ITreeNode;
@@ -151,6 +155,25 @@ export const useGetRightClickMenu = (props: IProps) => {
           
         },
       },
+      // 添加查看 ER 图
+      [OperationColumn.ViewERDiagram]: {
+        text: i18n('workspace.menu.viewERDiagram'), // 确保在 i18n 中添加对应的翻译
+        icon: '\u2721', // 选择一个合适的图标
+        handle: () => {
+          addWorkspaceTab({
+            id: uuid(),
+            type: WorkspaceTabType.ViewERDiagram,
+            title: `${treeNodeData.extraParams!.databaseName!}-ER`,
+            uniqueData: {
+              dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+              dataSourceName: treeNodeData.extraParams!.dataSourceName!,
+              databaseType: treeNodeData.extraParams!.databaseType!,
+              databaseName: treeNodeData.extraParams?.databaseName,
+              schemaName: treeNodeData.extraParams?.schemaName,
+            },
+          });
+        },
+      },
 
       // 创建表
       [OperationColumn.CreateTable]: {
@@ -181,7 +204,13 @@ export const useGetRightClickMenu = (props: IProps) => {
           deleteTable(treeNodeData,loadData);
         },
       },
-
+      [OperationColumn.TruncateTable]: {
+        text: i18n('workspace.menu.truncateTable'), // 假设i18n函数已定义好对应的语言资源
+        icon: '\ue60c', // 选择一个合适的图标
+        handle: () => {
+          truncateTable(treeNodeData, loadData);
+        },
+      },
       // 查看ddl
       [OperationColumn.ViewDDL]: {
         text: i18n('workspace.menu.ViewDDL'),
@@ -247,7 +276,7 @@ export const useGetRightClickMenu = (props: IProps) => {
         icon: '\ue618',
         doubleClickTrigger: true,
         handle: () => {
-          const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType);
+          const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType,treeNodeData.extraParams?.schemaName);
           addWorkspaceTab({
             id: `${OperationColumn.OpenTable}-${treeNodeData.uuid}`,
             title: treeNodeData.name,
@@ -334,13 +363,22 @@ export const useGetRightClickMenu = (props: IProps) => {
         },
         discard: !currentConnectionDetails?.supportSchema,
       },
+
+      // 删除虚拟外键
+      [OperationColumn.DeleteVirtualKey]: {
+        text: i18n('workspace.menu.deleteVirtualKey'),
+        icon: '\ue6a7',
+        handle: () => {
+          deleteVirtualForeignKey(treeNodeData, loadData);
+        },
+      },
     };
 
     // 根据配置生成右键菜单
     const finalList: IRightClickMenu[] = [];
     excludeSomeOperation().forEach((t, i) => {
       const concrete = operationColumnConfig[t];
-      if (!concrete.discard) {
+      if (!!concrete && !concrete.discard) {
         finalList.push({
           key: i,
           onClick: concrete?.handle,
@@ -457,6 +495,25 @@ export const getRightClickMenu = (props: IProps) => {
         
       },
     },
+    // 添加查看 ER 图
+    [OperationColumn.ViewERDiagram]: {
+      text: i18n('workspace.menu.viewERDiagram'), // 确保在 i18n 中添加对应的翻译
+      icon: '\u2721', // 选择一个合适的图标
+      handle: () => {
+        addWorkspaceTab({
+          id: uuid(),
+          type: WorkspaceTabType.ViewERDiagram,
+          title: `${treeNodeData.extraParams!.databaseName!}-ER图`,
+          uniqueData: {
+            dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+            dataSourceName: treeNodeData.extraParams!.dataSourceName!,
+            databaseType: treeNodeData.extraParams!.databaseType!,
+            databaseName: treeNodeData.extraParams?.databaseName,
+            schemaName: treeNodeData.extraParams?.schemaName,
+          },
+        });
+      },
+    },
 
     // 创建表
     [OperationColumn.CreateTable]: {
@@ -484,7 +541,7 @@ export const getRightClickMenu = (props: IProps) => {
       text: i18n('workspace.menu.deleteTable'),
       icon: '\ue6a7',
       handle: () => {
-        deleteTable(treeNodeData);
+        deleteTable(treeNodeData,loadData);
       },
     },
 
@@ -542,7 +599,8 @@ export const getRightClickMenu = (props: IProps) => {
       icon: '\ue618',
       doubleClickTrigger: true,
       handle: () => {
-        const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType);
+        console.log(treeNodeData.extraParams);
+        const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType,treeNodeData.extraParams?.schemaName);
         addWorkspaceTab({
           id: `${OperationColumn.OpenTable}-${treeNodeData.uuid}`,
           title: treeNodeData.name,
@@ -629,13 +687,22 @@ export const getRightClickMenu = (props: IProps) => {
       },
       discard: !currentConnectionDetails?.supportSchema,
     },
+
+    // 删除虚拟外键
+    [OperationColumn.DeleteVirtualKey]: {
+      text: i18n('workspace.menu.deleteVirtualKey'),
+      icon: '\ue6a7',
+      handle: () => {
+        deleteVirtualForeignKey(treeNodeData, loadData);
+      },
+    },
   };
 
   // 根据配置生成右键菜单
   const finalList: IRightClickMenu[] = [];
   excludeSomeOperation().forEach((t,i) => {
     const concrete = operationColumnConfig[t];
-    if (!concrete.discard) {
+    if (!!concrete && !(concrete.discard)) {
       finalList.push({
         key: i,
         onClick: concrete?.handle,
@@ -649,4 +716,32 @@ export const getRightClickMenu = (props: IProps) => {
     }
   });
   return finalList;
+};
+
+const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void) => {
+  const { dataSourceId, databaseName, schemaName, tableName } = treeNode.extraParams!;
+  // 确保 databaseName 存在，如果不存在则提供默认值或抛出错误
+  if (!databaseName) {
+    message.error('数据库名称不能为空');
+    return;
+  }
+  if (!tableName) {
+    message.error('表名不能为空');
+    return;
+  }
+  try {
+    await sqlServer.deleteVirtualForeignKey({
+      dataSourceId,
+      databaseName,
+      schemaName,
+      tableName,
+      keyName: treeNode.name,
+    });
+    
+    message.success('删除虚拟外键成功');
+    loadData(); // 刷新树节点
+  } catch (error) {
+    message.error('删除虚拟外键失败');
+    console.error('删除虚拟外键失败:', error);
+  }
 };

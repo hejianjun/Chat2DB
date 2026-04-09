@@ -1,14 +1,7 @@
 
 package ai.chat2db.spi.sql;
 
-import ai.chat2db.server.tools.common.exception.ConnectionException;
-import ai.chat2db.spi.config.DriverConfig;
-import ai.chat2db.spi.model.DriverEntry;
-import ai.chat2db.spi.util.JdbcJarUtils;
-import com.alibaba.fastjson2.JSON;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static ai.chat2db.spi.util.JdbcJarUtils.*;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -23,12 +16,23 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static ai.chat2db.spi.util.JdbcJarUtils.getFullPath;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import com.alibaba.fastjson2.JSON;
+
+import ai.chat2db.server.tools.common.exception.ConnectionException;
+import ai.chat2db.spi.config.DriverConfig;
+import ai.chat2db.spi.model.DriverEntry;
+import ai.chat2db.spi.util.JdbcJarUtils;
 
 /**
  * @author jipengfei
  * @version : IsolationDriverManager.java
  */
+@Component
 public class IDriverManager {
     private static final Logger log = LoggerFactory.getLogger(IDriverManager.class);
     private static final Map<String, ClassLoader> CLASS_LOADER_MAP = new ConcurrentHashMap();
@@ -55,7 +59,7 @@ public class IDriverManager {
     }
 
     public static Connection getConnection(String url, String user, String password, DriverConfig driver,
-                                           Map<String, Object> properties)
+            Map<String, Object> properties)
             throws SQLException {
         Properties info = new Properties();
         if (StringUtils.isNotEmpty(user)) {
@@ -89,15 +93,16 @@ public class IDriverManager {
         try {
             connection = driverEntry.getDriver().connect(url, info);
             if (Objects.isNull(connection)) {
-                throw new SQLException(String.format("driver.connect return null , No suitable driver found for url %s", url), SQL_STATE_CODE);
-
+                throw new SQLException(
+                        String.format("driver.connect return null , No suitable driver found for url %s", url),
+                        SQL_STATE_CODE);
             }
             return connection;
-        } catch (SQLException sqlException) {
+        } catch (Exception sqlException) {
             Connection con = tryConnectionAgain(driverEntry, url, info);
-
             if (Objects.isNull(con)) {
-                throw new SQLException(String.format("Cannot create connection (%s)", sqlException.getMessage()), SQL_STATE_CODE,
+                throw new SQLException(String.format("Cannot create connection (%s)", sqlException.getMessage()),
+                        SQL_STATE_CODE,
                         sqlException);
             }
 
@@ -122,14 +127,27 @@ public class IDriverManager {
         }
     }
 
-
     private static Connection tryConnectionAgain(DriverEntry driverEntry, String url,
-                                                 Properties info) throws SQLException {
+            Properties info) throws SQLException {
         if (url.contains("mysql")) {
             if (!info.containsKey("useSSL")) {
                 info.put("useSSL", "false");
             }
             return driverEntry.getDriver().connect(url, info);
+        } else if (url.contains("phoenix")) {
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            try {
+                // 设置临时的classloader
+                Thread.currentThread().setContextClassLoader(getClassLoader(driverEntry.getDriverConfig()));
+                info.put("phoenix.schema.isNamespaceMappingEnabled","true");
+                return driverEntry.getDriver().connect(url, info);
+            } catch (Exception e) {
+                throw new SQLException(String.format("Cannot create connection (%s)", e.getMessage()), SQL_STATE_CODE,
+                        e);
+            } finally {
+                // 还原
+                Thread.currentThread().setContextClassLoader(contextClassLoader);
+            }
         }
         return null;
     }
@@ -153,7 +171,8 @@ public class IDriverManager {
 
     }
 
-    public static ClassLoader getClassLoader(DriverConfig driverConfig) throws MalformedURLException, ClassNotFoundException {
+    public static ClassLoader getClassLoader(DriverConfig driverConfig)
+            throws MalformedURLException, ClassNotFoundException {
         String jarPath = driverConfig.getJdbcDriver();
         if (CLASS_LOADER_MAP.containsKey(jarPath)) {
             return CLASS_LOADER_MAP.get(jarPath);
@@ -168,21 +187,28 @@ public class IDriverManager {
                     File driverFile = new File(getFullPath(jarPaths[i]));
                     urls[i] = driverFile.toURI().toURL();
                 }
-                //urls[jarPaths.length] = new File(JdbcJarUtils.getFullPath("HikariCP-4.0.3.jar")).toURI().toURL();
-
-                URLClassLoader cl = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+                // urls[jarPaths.length] = new
+                // File(JdbcJarUtils.getFullPath("HikariCP-4.0.3.jar")).toURI().toURL();
+                ClassLoader bootLoader = Thread.currentThread().getContextClassLoader();
+                if (StringUtils.contains(ClassLoader.class.getName(),"springframework")) {
+                    log.error("BootLoader class:{}", bootLoader.getClass().getName());
+                    bootLoader = ClassLoader.getSystemClassLoader();
+                }
+                log.info("BootLoader class:{}", bootLoader.getClass().getName());
+                URLClassLoader cl = new URLClassLoader(urls, bootLoader);
                 log.info("ClassLoader class:{}", cl.hashCode());
                 log.info("ClassLoader URLs:{}", JSON.toJSONString(cl.getURLs()));
 
                 try {
                     cl.loadClass(driverConfig.getJdbcDriverClass());
                 } catch (Exception e) {
-                    //如果报错删除目录重试一次
+                    // 如果报错删除目录重试一次
                     for (int i = 0; i < jarPaths.length; i++) {
                         File driverFile = new File(JdbcJarUtils.getNewFullPath(jarPaths[i]));
                         urls[i] = driverFile.toURI().toURL();
                     }
-                    //urls[jarPaths.length] = new File(JdbcJarUtils.getFullPath("HikariCP-4.0.3.jar")).toURI().toURL();
+                    // urls[jarPaths.length] = new
+                    // File(JdbcJarUtils.getFullPath("HikariCP-4.0.3.jar")).toURI().toURL();
                     cl = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
                     cl.loadClass(driverConfig.getJdbcDriverClass());
                 }

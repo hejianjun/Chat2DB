@@ -51,7 +51,7 @@ public class SqliteMetaData extends DefaultMetaService implements MetaData {
         return new SqliteBuilder();
     }
     @Override
-    public TableMeta getTableMeta(String databaseName, String schemaName, String tableName) {
+    public TableMeta getTableMeta(Connection connection, String databaseName, String schemaName) {
         return TableMeta.builder()
                 .columnTypes(SqliteColumnTypeEnum.getTypes())
                 .charsets(null)

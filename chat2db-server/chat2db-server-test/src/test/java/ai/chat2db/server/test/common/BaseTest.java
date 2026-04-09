@@ -2,7 +2,7 @@ package ai.chat2db.server.test.common;
 
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
-import ai.chat2db.server.start.Application;
+import ai.chat2db.server.start.Chat2dbLiteApplication;
 
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.MethodOrderer;
@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  *
  * @author Jiaju Zhuang
  **/
-@SpringBootTest(classes = {Application.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = {Chat2dbLiteApplication.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Slf4j
 @TestMethodOrder(value = MethodOrderer.OrderAnnotation.class)
 public abstract class BaseTest {

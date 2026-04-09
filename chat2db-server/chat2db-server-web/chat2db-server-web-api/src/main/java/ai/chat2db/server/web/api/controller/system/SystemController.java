@@ -15,7 +15,6 @@ import ai.chat2db.server.tools.common.enums.ModeEnum;
 import ai.chat2db.server.tools.common.model.ConfigJson;
 import ai.chat2db.server.tools.common.util.ConfigUtils;
 import ai.chat2db.server.tools.common.util.EasyEnumUtils;
-import ai.chat2db.server.web.api.controller.ai.chat2db.client.Chat2dbAIClient;
 import ai.chat2db.server.web.api.controller.system.util.SystemUtils;
 import ai.chat2db.server.web.api.controller.system.vo.AppVersionVO;
 import ai.chat2db.server.web.api.controller.system.vo.SystemVO;
@@ -77,10 +76,6 @@ public class SystemController {
             return DataResult.of(null);
         }
         String user = "";
-        DataResult<Config> dataResult = configService.find(Chat2dbAIClient.CHAT2DB_OPENAI_KEY);
-        if (dataResult.getData() != null) {
-            user = dataResult.getData().getContent();
-        }
         AppVersionVO appVersionVO = SystemUtils.getLatestVersion(currentVersion, "manual", user);
         if (appVersionVO == null) {
             appVersionVO = new AppVersionVO();

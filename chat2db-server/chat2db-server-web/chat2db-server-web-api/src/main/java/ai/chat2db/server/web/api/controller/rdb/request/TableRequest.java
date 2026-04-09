@@ -1,7 +1,9 @@
 package ai.chat2db.server.web.api.controller.rdb.request;
 
+import java.util.Collections;
 import java.util.List;
 
+import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -39,6 +41,11 @@ public class TableRequest {
      * 索引
      */
     private List<TableIndex> indexList;
+
+    /**
+     * 外键列表
+     */
+    private List<ForeignKey> foreignKeyList;
 
 
     /**

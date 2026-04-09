@@ -190,7 +190,7 @@ public class KingBaseMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
-    public TableMeta getTableMeta(String databaseName, String schemaName, String tableName) {
+    public TableMeta getTableMeta(Connection connection, String databaseName, String schemaName) {
         return TableMeta.builder()
                 .columnTypes(KingBaseColumnTypeEnum.getTypes())
                 //.charsets(PostgreSQLCharsetEnum.getCharsets())

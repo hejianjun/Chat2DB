@@ -40,6 +40,12 @@ public class PageQueryRequest implements Serializable {
         message = "分页大小必须在1-" + EasyToolsConstant.MAX_PAGE_SIZE + "之间")
     private Integer pageSize;
 
+
+    /**
+     *  最后id
+     */
+    private Integer lastDocId;
+
     public PageQueryRequest() {
         this.pageNo = 1;
         this.pageSize = 10;

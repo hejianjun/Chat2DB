@@ -6,6 +6,14 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.CollectionUtils;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
 import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.param.DlExecuteParam;
 import ai.chat2db.server.domain.api.param.OrderByParam;
@@ -17,24 +25,18 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.common.util.ConfigUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
-import ai.chat2db.server.web.api.controller.ai.chat2db.client.Chat2dbAIClient;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
-import ai.chat2db.server.web.api.controller.rdb.request.*;
+import ai.chat2db.server.web.api.controller.rdb.request.DdlCountRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DmlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DmlTableRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.OrderByRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.SelectResultUpdateRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ExecuteResultVO;
-import ai.chat2db.server.web.api.http.GatewayClientService;
-import ai.chat2db.server.web.api.http.request.SqlExecuteHistoryCreateRequest;
 import ai.chat2db.server.web.api.util.ApplicationContextUtil;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.model.ExecuteResult;
+import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.sql.Chat2DBContext;
-import com.google.common.collect.Lists;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.util.CollectionUtils;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * mysql数据运维类
@@ -54,16 +56,13 @@ public class RdbDmlController {
     @Autowired
     private DlTemplateService dlTemplateService;
 
-    @Autowired
-    private GatewayClientService gatewayClientService;
-
-    public static ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     /**
-     * 增删改查等数据运维
+     * 执行SQL语句，返回所有执行结果
+     * 适用于执行多条SQL语句，需要查看所有执行结果的场景
      *
-     * @param request
-     * @return
+     * @param request SQL执行请求
+     * @return 所有SQL语句的执行结果列表
      */
     @RequestMapping(value = "/execute", method = {RequestMethod.POST, RequestMethod.PUT})
     public ListResult<ExecuteResultVO> manage(@RequestBody DmlRequest request) {
@@ -74,19 +73,6 @@ public class RdbDmlController {
     }
 
 
-    /**
-     * query chat2db apikey
-     *
-     * @return
-     */
-    private String getClientId() {
-        ConfigService configService = ApplicationContextUtil.getBean(ConfigService.class);
-        Config keyConfig = configService.find(Chat2dbAIClient.CHAT2DB_OPENAI_KEY).getData();
-        if (Objects.isNull(keyConfig) || StringUtils.isBlank(keyConfig.getContent())) {
-            return ConfigUtils.getClientId();
-        }
-        return keyConfig.getContent();
-    }
 
     /**
      * 查询表结构信息
@@ -99,8 +85,30 @@ public class RdbDmlController {
         DlExecuteParam param = rdbWebConverter.request2param(request);
         // 解析sql
         String type = Chat2DBContext.getConnectInfo().getDbType();
-        if (DataSourceTypeEnum.MONGODB.getCode().equals(type)) {
+        if (DataSourceTypeEnum.REDIS.getCode().equals(type)) {
+            MetaData metaData = Chat2DBContext.getMetaData();
+            List<Table> tables = metaData.tables(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), request.getTableName());
+            for (Table table : tables) {
+                if ("string".equals(table.getType())) {
+                    param.setSql("GET " + request.getTableName());
+                } else if ("hash".equals(table.getType())) {
+                    param.setSql("HGETALL " + request.getTableName());
+                } else if ("list".equals(table.getType())) {
+                    param.setSql("LRANGE " + request.getTableName() + " 0 -1");
+                } else if ("set".equals(table.getType())){
+                    param.setSql("SMEMBERS " + request.getTableName());
+                } else if ("zset".equals(table.getType())){
+                    param.setSql("ZRANGE " + request.getTableName() + " 0 -1");
+                } else if ("stream".equals(table.getType())){
+                    param.setSql("XRANGE " + request.getTableName() + " 0 -1");
+                }
+            }
+        } else if (DataSourceTypeEnum.MONGODB.getCode().equals(type)) {
             param.setSql("db." + request.getTableName() + ".find()");
+        } else if (DataSourceTypeEnum.PHOENIX.getCode().equals(type)) {
+            MetaData metaData = Chat2DBContext.getMetaData();
+            // 拼接`tableName`，避免关键字被占用问题
+            param.setSql("select * from " + metaData.getMetaDataName(request.getSchemaName(),request.getTableName()));
         } else {
             MetaData metaData = Chat2DBContext.getMetaData();
             // 拼接`tableName`，避免关键字被占用问题
@@ -144,10 +152,12 @@ public class RdbDmlController {
     }
 
     /**
-     * 增删改查等数据运维
+     * 执行SQL语句，返回单个执行结果
+     * 成功时返回第一个成功结果，失败时返回第一个失败结果
+     * 适用于执行DDL语句或单条SQL语句的场景
      *
-     * @param request
-     * @return
+     * @param request SQL执行请求
+     * @return 单个执行结果（成功时返回第一个，失败时返回第一个失败）
      */
     @RequestMapping(value = "/execute_ddl", method = {RequestMethod.POST, RequestMethod.PUT})
     public DataResult<ExecuteResultVO> executeDDL(@RequestBody DmlRequest request) {

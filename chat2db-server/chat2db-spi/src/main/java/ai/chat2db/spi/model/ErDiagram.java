@@ -25,7 +25,7 @@ public class ErDiagram {
     @AllArgsConstructor
     public static class Node {
         private String id;
-        private String label;
+        private String name;
     }
 
     @Data
@@ -36,7 +36,7 @@ public class ErDiagram {
         private String id;
         private String source;
         private String target;
-        private String label;
+        private String description;
     }
     
 }

@@ -1,6 +1,6 @@
 {
   "dbType": "REDIS",
-  "supportDatabase": false,
+  "supportDatabase": true,
   "supportSchema": false,
   "driverConfigList": [
     {
@@ -8,9 +8,9 @@
       "custom": false,
       "defaultDriver": true,
       "downloadJdbcDriverUrls": [
-        "https://oss.sqlgpt.cn/lib/redis-jdbc-driver-1.3.jar"
+        "https://github.com/DataGrip/redis-jdbc-driver/releases/download/v1.5/redis-jdbc-driver-1.5.jar"
       ],
-      "jdbcDriver": "redis-jdbc-driver-1.3.jar",
+      "jdbcDriver": "redis-jdbc-driver-1.5.jar",
       "jdbcDriverClass": "jdbc.RedisDriver"
     }
   ],

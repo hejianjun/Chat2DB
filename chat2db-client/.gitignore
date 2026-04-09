@@ -10,8 +10,10 @@
 /dist
 .swc
 ./yarn-error.log
+/.yarn/*
 
 
 /release
 /static
 /versions
+/.yarn

@@ -44,7 +44,7 @@ export function handleDatabaseAndSchema(databaseAndSchema: IWorkspaceModelType['
  * @param databaseType
  * @returns
  */
-export function compatibleDataBaseName(databaseName: string, databaseType: DatabaseTypeCode) {
+export function compatibleDataBaseName(databaseName: string, databaseType: DatabaseTypeCode, schemaName: string = '') {
   
   //""  oracele  sqlite postgrsql  h2 dm
   // ` MYSQL clickhouse MariaDB
@@ -65,6 +65,8 @@ export function compatibleDataBaseName(databaseName: string, databaseType: Datab
     return `[${databaseName}]`;
   } else if ([DatabaseTypeCode.MYSQL, DatabaseTypeCode.CLICKHOUSE, DatabaseTypeCode.MARIADB].includes(databaseType)) {
     return `\`${databaseName}\``;
+  } else if ([DatabaseTypeCode.PHOENIX].includes(databaseType)) {
+    return `${schemaName}.${databaseName}`;
   } else {
     return `${databaseName}`;
   }

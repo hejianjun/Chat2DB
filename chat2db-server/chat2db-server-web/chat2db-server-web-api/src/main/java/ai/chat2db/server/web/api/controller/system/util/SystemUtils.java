@@ -79,13 +79,10 @@ public class SystemUtils {
     private static final String LATEST_VERSION_URL = "http://test.sqlgpt.cn/gateway/api/client/version/check/v3?version=%s&type=%s&userId=%s";
 
     public static AppVersionVO getLatestVersion(String version, String type, String userId) {
-        String url = String.format(LATEST_VERSION_URL, version, type, userId);
-        DataResult<AppVersionVO> result = Forest.get(url)
-                .connectTimeout(Duration.ofMillis(5000))
-                .readTimeout(Duration.ofMillis(10000))
-                .execute(new TypeReference<>() {
-                });
-        return result.getData();
+        AppVersionVO appVersionVO = new AppVersionVO();
+        appVersionVO.setVersion(version);
+        appVersionVO.setType(type);
+        return appVersionVO;
     }
 
 }

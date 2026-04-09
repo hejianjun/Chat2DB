@@ -9,6 +9,8 @@ import { databaseMap } from '@/constants/database';
 interface IProps {
   className?: string;
   curConnectionId?: number;
+  curDatabaseName?: string;
+  curSchemaName?: string;
   onChange?: (value: { dataSourceId: number; databaseName: string; schemaName: string }) => void;
 }
 
@@ -22,10 +24,10 @@ function CascaderDB(props: IProps) {
   const [curDataSourceId, setCurDataSourceId] = useState<number | undefined>(props.curConnectionId);
 
   const [databaseOptions, setDatabaseOptions] = useState<IOption[]>([]);
-  const [curDatabaseName, setCurDatabaseName] = useState<string>('');
+  const [curDatabaseName, setCurDatabaseName] = useState<string| undefined>(props.curDatabaseName || '');
 
   const [schemaOptions, setSchemaOptions] = useState<IOption[]>([]);
-  const [curSchemeName, setCurSchemeName] = useState<string>('');
+  const [curSchemeName, setCurSchemeName] = useState<string| undefined>(props.curSchemaName || '');
 
   useEffect(() => {
     loadDataSource();

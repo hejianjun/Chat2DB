@@ -2,6 +2,7 @@ import i18n from '@/i18n';
 import Output from '@/components/Output';
 import GlobalExtendComponents from './GlobalExtendComponents';
 import SaveList from '../SaveList';
+import AiChat from '@/components/AiChat';
 import ViewDDL from '@/components/ViewDDL';
 
 interface IToolbar {
@@ -14,7 +15,8 @@ interface IToolbar {
 export enum GlobalComponents {
   view_ddl = 'viewDDL',
   executive_log = 'executiveLog',
-  save_list = 'saveList'
+  save_list = 'saveList',
+  ai = 'ai'
 }
 
 export const globalComponents: {
@@ -22,7 +24,8 @@ export const globalComponents: {
 } = {
   [GlobalComponents.view_ddl]: ViewDDL,
   [GlobalComponents.executive_log]: Output,
-  [GlobalComponents.save_list]: SaveList
+  [GlobalComponents.save_list]: SaveList,
+  [GlobalComponents.ai]: AiChat
 }
 
 export const extendConfig: IToolbar[] = [
@@ -43,5 +46,11 @@ export const extendConfig: IToolbar[] = [
     title: i18n('workspace.title.savedConsole'),
     icon: '\ue619',
     components: globalComponents.saveList,
+  },
+  {
+    code: 'ai',
+    title: i18n('workspace.title.aiChat'),
+    icon: '\uec5f',
+    components: globalComponents.ai,
   },
 ];

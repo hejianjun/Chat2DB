@@ -4,8 +4,8 @@ import java.util.List;
 
 import ai.chat2db.server.domain.api.model.User;
 import ai.chat2db.server.domain.api.param.user.UserCreateParam;
-import ai.chat2db.server.domain.api.param.user.UserSelector;
 import ai.chat2db.server.domain.api.param.user.UserPageQueryParam;
+import ai.chat2db.server.domain.api.param.user.UserSelector;
 import ai.chat2db.server.domain.api.param.user.UserUpdateParam;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -62,7 +62,7 @@ public interface UserService {
      * @param id
      * @return
      */
-   ActionResult delete(Long id);
+    ActionResult delete(Long id);
 
     /**
      * 创建一个用户

@@ -40,7 +40,6 @@ const SQLExecute = memo<IProps>((props) => {
             defaultValue={initDDL}
             boundInfo={boundInfo}
             setBoundInfo={setBoundInfo}
-            hasAiChat={true}
             hasAi2Lang={true}
             isActive={activeConsoleId === boundInfo.consoleId}
             onExecuteSQL={(sql) => {

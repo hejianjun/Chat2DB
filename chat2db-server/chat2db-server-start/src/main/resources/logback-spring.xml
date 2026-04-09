@@ -16,6 +16,7 @@
         <file>${LOG_FILE}</file>
         <encoder>
             <pattern>${EASY_FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset> <!-- 添加这一行 -->
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
@@ -28,7 +29,7 @@
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${EASY_CONSOLE_LOG_PATTERN}</pattern>
-            <charset>utf8</charset>
+            <charset>UTF-8</charset> <!-- 添加这一行 -->
         </encoder>
     </appender>
 
