@@ -11,6 +11,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateMachine;
 import org.springframework.statemachine.config.StateMachineFactory;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -91,7 +92,7 @@ public class ChatController {
         stateMachine.start();
 
         ChatEvent initialEvent = determineInitialEvent(queryRequest);
-        stateMachine.sendEvent(initialEvent);
+        stateMachine.sendEvent(MessageBuilder.withPayload(initialEvent).build());
 
         return sseEmitter;
     }
@@ -110,7 +111,7 @@ public class ChatController {
 
         StateMachine<ChatState, ChatEvent> sm = activeSessions.get(sessionId);
         if (sm != null) {
-            sm.sendEvent(ChatEvent.CANCEL);
+            sm.sendEvent(MessageBuilder.withPayload(ChatEvent.CANCEL).build());
         }
 
         cleanupSession(sessionId);

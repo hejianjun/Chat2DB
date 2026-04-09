@@ -146,18 +146,6 @@ public class ChartServiceImpl implements ChartService {
         return ActionResult.isSuccess();
     }
 
-    @Override
-    public ListResult<Chart> queryByIds(List<Long> ids) {
-        if (CollectionUtils.isEmpty(ids)) {
-            return ListResult.empty();
-        }
-        List<ChartDO> chartDOS = getMapper().selectBatchIds(ids);
-        List<Chart> charts = chartConverter.do2model(chartDOS);
-        List<Chart> result = charts.stream().filter(o -> YesOrNoEnum.NO.getLetter().equals(o.getDeleted())).toList();
-        setDataSourceInfo(result);
-        return ListResult.of(result);
-    }
-
     /**
      * 回填数据源信息
      *
@@ -165,7 +153,7 @@ public class ChartServiceImpl implements ChartService {
      */
     private void setDataSourceInfo(List<Chart> result) {
         List<Long> dataSourceIds = result.stream().map(Chart::getDataSourceId).toList();
-        ListResult<DataSource> dataSourceListResult = dataSourceService.queryByIds(dataSourceIds);
+        ListResult<DataSource> dataSourceListResult = dataSourceService.listQuery(dataSourceIds, null);
         Map<Long, DataSource> dataSourceMap = dataSourceListResult.getData().stream().collect(
             Collectors.toMap(DataSource::getId, Function.identity(), (a, b) -> a));
         result.forEach(o -> {

@@ -16,7 +16,7 @@ public class EasyBooleanUtils {
      * @return
      */
     public static boolean equals(Boolean b1, Boolean b2, Boolean defaultValue) {
-        if (b1.equals(b2)) {
+        if (b1 != null && b1.equals(b2)) {
             return true;
         }
         if (b1 == null) {
@@ -25,7 +25,7 @@ public class EasyBooleanUtils {
         if (b2 == null) {
             b2 = defaultValue;
         }
-        return b1.equals(b2);
+        return b1 != null && b1.equals(b2);
     }
 
 }

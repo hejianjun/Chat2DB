@@ -72,7 +72,7 @@ public class EasyControllerExceptionHandler {
     /**
      * 默认转换器
      */
-    public static ExceptionConvertor DEFAULT_EXCEPTION_CONVERTOR = new DefaultExceptionConvertor();
+    public static final ExceptionConvertor DEFAULT_EXCEPTION_CONVERTOR = new DefaultExceptionConvertor();
 
     /**
      * 业务异常

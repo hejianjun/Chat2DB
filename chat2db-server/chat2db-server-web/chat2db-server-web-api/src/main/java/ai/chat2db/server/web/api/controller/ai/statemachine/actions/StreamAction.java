@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 import java.io.IOException;
 import java.util.Objects;
 
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -34,7 +35,8 @@ public class StreamAction extends BaseChatAction {
         String prompt = ctx.getBuiltPrompt();
         if (prompt.length() / TOKEN_CONVERT_CHAR_LENGTH > MAX_PROMPT_LENGTH) {
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
-            context.getStateMachine().sendEvent(ChatEvent.AI_CALL_FAILED);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+                .subscribe();
             return;
         }
 
@@ -71,13 +73,14 @@ public class StreamAction extends BaseChatAction {
                 .doOnError(error -> {
                     log.error("Stream error", error);
                     if (!ctx.isCancelled()) {
-                        sendError(ctx.getSseEmitter(), "AI调用失败: " + error.getMessage());
+                        sendError(ctx.getSseEmitter(), "AI 调用失败：" + error.getMessage());
                     }
                     try {
                         ctx.getSseEmitter().completeWithError(error);
                     } catch (Exception ignored) {
                     }
-                    context.getStateMachine().sendEvent(ChatEvent.AI_CALL_FAILED);
+                    context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+                        .subscribe();
                 })
                 .doOnComplete(() -> {
                     try {
@@ -89,14 +92,16 @@ public class StreamAction extends BaseChatAction {
                     } finally {
                         ctx.getSseEmitter().complete();
                     }
-                    context.getStateMachine().sendEvent(ChatEvent.STREAM_FINISHED);
+                    context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.STREAM_FINISHED).build())
+                        .subscribe();
                 })
                 .subscribe();
 
         } catch (Exception e) {
             log.error("Start streaming failed", e);
-            sendError(ctx.getSseEmitter(), "启动AI流式调用失败: " + e.getMessage());
-            context.getStateMachine().sendEvent(ChatEvent.AI_CALL_FAILED);
+            sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+                .subscribe();
         }
     }
 }

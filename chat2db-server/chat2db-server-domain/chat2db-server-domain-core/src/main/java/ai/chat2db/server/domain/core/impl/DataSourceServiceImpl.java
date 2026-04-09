@@ -228,11 +228,6 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     @Override
-    public ListResult<DataSource> queryByIds(List<Long> ids) {
-        return listQuery(ids, null);
-    }
-
-    @Override
     public ListResult<DataSource> listQuery(List<Long> idList, DataSourceSelector selector) {
         if (CollectionUtils.isEmpty(idList)) {
             return ListResult.empty();

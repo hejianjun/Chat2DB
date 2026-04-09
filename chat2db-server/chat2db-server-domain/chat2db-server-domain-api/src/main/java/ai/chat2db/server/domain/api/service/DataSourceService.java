@@ -97,17 +97,8 @@ public interface DataSourceService {
     /**
      * 通过 ID 列表查询数据源
      *
-     * @param ids
-     * @return
-     * @deprecated Use {@link #listQuery(List, DataSourceSelector)}
-     */
-    @Deprecated
-    ListResult<DataSource> queryByIds(List<Long> ids);
-
-    /**
-     * 通过ID列表查询数据源
-     *
      * @param idList
+     * @param selector
      * @return
      */
     ListResult<DataSource> listQuery(List<Long> idList, DataSourceSelector selector);

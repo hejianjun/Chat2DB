@@ -5,6 +5,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -119,7 +120,7 @@ public class DesUtil {
     public void getKey(String secretKey) {
         try {
             SecureRandom secureRandom = SecureRandom.getInstance(SHA1PRNG);
-            secureRandom.setSeed(secretKey.getBytes());
+            secureRandom.setSeed(secretKey.getBytes(StandardCharsets.UTF_8));
             KeyGenerator generator = null;
             try {
                 generator = KeyGenerator.getInstance(DES);

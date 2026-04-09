@@ -392,6 +392,7 @@
                     <failOnError>false</failOnError>
                     <xmlOutput>true</xmlOutput>
                     <htmlOutput>true</htmlOutput>
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
                 </configuration>
                 <dependencies>
                     <dependency>

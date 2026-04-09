@@ -68,14 +68,6 @@ public interface ChartService {
     ListResult<Chart> listQuery(@NotNull ChartListQueryParam param);
 
     /**
-     * 通过ID查询图表列表
-     *
-     * @param ids
-     * @return
-     */
-    ListResult<Chart> queryByIds(@NotEmpty List<Long> ids);
-
-    /**
      * 删除
      *
      * @param id

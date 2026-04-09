@@ -6,6 +6,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
@@ -46,11 +47,13 @@ public class AutoSelectTablesAction extends BaseChatAction {
                 sendTablesSelected(ctx.getSseEmitter(), tableNames);
             }
 
-            context.getStateMachine().sendEvent(ChatEvent.AUTO_SELECT_DONE);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build())
+                .subscribe();
         } catch (Exception e) {
             log.error("Auto select tables failed", e);
             sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(ChatEvent.AUTO_SELECT_FAILED);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build())
+                .subscribe();
         }
     }
 

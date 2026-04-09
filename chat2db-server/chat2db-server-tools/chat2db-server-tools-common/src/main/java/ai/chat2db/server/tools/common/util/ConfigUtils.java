@@ -17,7 +17,7 @@ import java.util.Optional;
  */
 @Slf4j
 public class ConfigUtils {
-    public static String CONFIG_BASE_PATH = System.getProperty("user.home") + File.separator + ".chat2db";
+    public static final String CONFIG_BASE_PATH = System.getProperty("user.home") + File.separator + ".chat2db";
 
     public static final String APP_PATH = getAppPath();
 

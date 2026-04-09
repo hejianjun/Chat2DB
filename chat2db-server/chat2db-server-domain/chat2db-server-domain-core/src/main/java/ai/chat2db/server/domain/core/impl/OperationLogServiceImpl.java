@@ -79,7 +79,7 @@ public class OperationLogServiceImpl implements OperationLogService {
             return PageResult.empty(param.getPageNo(), param.getPageSize());
         }
         List<Long> dataSourceIds = executedDdlDTOS.stream().map(OperationLog::getDataSourceId).toList();
-        ListResult<DataSource> dataSourceListResult = dataSourceService.queryByIds(dataSourceIds);
+        ListResult<DataSource> dataSourceListResult = dataSourceService.listQuery(dataSourceIds, null);
         Map<Long, DataSource> dataSourceMap = dataSourceListResult.getData().stream().collect(
             Collectors.toMap(DataSource::getId, Function.identity(), (a, b) -> a));
         executedDdlDTOS.stream().forEach(executeDdl -> {

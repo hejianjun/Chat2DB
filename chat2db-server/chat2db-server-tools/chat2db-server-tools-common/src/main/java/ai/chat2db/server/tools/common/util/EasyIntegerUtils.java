@@ -11,7 +11,7 @@ public class EasyIntegerUtils {
      * @return
      */
     public static boolean equals(Integer b1, Integer b2, Integer defaultValue) {
-        if (b1.equals(b2)) {
+        if (b1 != null && b1.equals(b2)) {
             return true;
         }
         if (b1 == null) {
@@ -20,6 +20,6 @@ public class EasyIntegerUtils {
         if (b2 == null) {
             b2 = defaultValue;
         }
-        return b1.equals(b2);
+        return b1 != null && b1.equals(b2);
     }
 }

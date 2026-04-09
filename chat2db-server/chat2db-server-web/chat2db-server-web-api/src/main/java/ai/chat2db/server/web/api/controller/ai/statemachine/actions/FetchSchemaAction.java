@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
@@ -42,17 +43,17 @@ public class FetchSchemaAction extends BaseChatAction {
                 sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
             }
 
-            context.getStateMachine().sendEvent(ChatEvent.SCHEMA_FETCHED);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build());
         } catch (Exception e) {
             log.error("Fetch schema failed", e);
             sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(ChatEvent.FETCH_SCHEMA_FAILED);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build());
         }
     }
 
     private String fetchSchemaDdl(ChatContext ctx) {
         ChatQueryRequest request = ctx.getRequest();
-        
+
         if (isTextGeneration(request)) {
             return "";
         } else if (hasTableNames(request)) {

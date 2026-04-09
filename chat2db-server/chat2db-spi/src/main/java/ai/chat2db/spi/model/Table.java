@@ -118,7 +118,6 @@ public class Table implements IndexModel {
     private Long version;
 
     @Override
-    @Deprecated
     public String getTableName() {
         return this.name;
     }

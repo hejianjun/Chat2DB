@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
@@ -52,11 +53,13 @@ public class BuildPromptAction extends BaseChatAction {
 
             ctx.setBuiltPrompt(builtPrompt);
 
-            context.getStateMachine().sendEvent(ChatEvent.PROMPT_BUILT);
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build())
+                .subscribe();
         } catch (Exception e) {
             log.error("Build prompt failed", e);
-            sendError(ctx.getSseEmitter(), "构建提示失败: " + e.getMessage());
-            context.getStateMachine().sendEvent(ChatEvent.PROMPT_BUILD_FAILED);
+            sendError(ctx.getSseEmitter(), "构建提示失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build())
+                .subscribe();
         }
     }
 

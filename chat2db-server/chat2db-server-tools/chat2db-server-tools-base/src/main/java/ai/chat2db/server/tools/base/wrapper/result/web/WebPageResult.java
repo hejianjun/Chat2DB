@@ -153,16 +153,10 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
 
     /**
      * 判断是否还有下一页
-     * 根据分页大小来计算 防止total为空
+     * 根据分页大小来计算 防止 total 为空
      *
      * @return 是否还有下一页
-     * @deprecated 使用 {@link #getHasNextPage()} ()}
      */
-    @Deprecated
-    public boolean hasNextPage() {
-        return getHasNextPage();
-    }
-
     public Boolean getHasNextPage() {
         if (data == null) {
             return Boolean.FALSE;
@@ -278,7 +272,8 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
      * @param <T>
      */
     @Data
-    public static class Page<T> {
+    public static class Page<T> implements Serializable {
+        private static final long serialVersionUID = 1L;
         /**
          * 数据信息
          */

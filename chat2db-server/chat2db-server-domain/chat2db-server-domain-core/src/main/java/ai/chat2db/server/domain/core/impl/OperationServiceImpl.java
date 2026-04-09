@@ -176,7 +176,7 @@ public class OperationServiceImpl implements OperationService {
         if (CollectionUtils.isEmpty(dataSourceIds)) {
             return Maps.newHashMap();
         }
-        ListResult<DataSource> dataSourceListResult = dataSourceService.queryByIds(dataSourceIds);
+        ListResult<DataSource> dataSourceListResult = dataSourceService.listQuery(dataSourceIds, null);
         Map<Long, DataSource> dataSourceMap = dataSourceListResult.getData().stream().collect(
             Collectors.toMap(DataSource::getId, Function.identity(), (a, b) -> a));
         return dataSourceMap;

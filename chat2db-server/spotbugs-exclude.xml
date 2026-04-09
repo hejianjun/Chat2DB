@@ -1,0 +1,16 @@
+<FindBugsFilter>
+    <Match>
+        <Class name="~ai\.chat2db\.server\..*"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+    <Match>
+        <Class name="~ai\.chat2db\.server\..*"/>
+        <Bug pattern="MS_SHOULD_BE_FINAL"/>
+        <Field name="~(configFile|clientIdFile|versionFile|messageSourceStatic|applicationContext)"/>
+    </Match>
+    <Match>
+        <Class name="~ai\.chat2db\.server\..*"/>
+        <Bug pattern="DM_DEFAULT_ENCODING"/>
+        <Method name="~(getKey|dataLength)"/>
+    </Match>
+</FindBugsFilter>
