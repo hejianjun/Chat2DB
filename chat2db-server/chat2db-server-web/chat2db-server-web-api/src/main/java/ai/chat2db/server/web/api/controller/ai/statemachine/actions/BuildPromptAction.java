@@ -53,13 +53,11 @@ public class BuildPromptAction extends BaseChatAction {
 
             ctx.setBuiltPrompt(builtPrompt);
 
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build())
-                .subscribe();
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build());
         } catch (Exception e) {
             log.error("Build prompt failed", e);
             sendError(ctx.getSseEmitter(), "构建提示失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build())
-                .subscribe();
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build());
         }
     }
 

@@ -47,13 +47,11 @@ public class AutoSelectTablesAction extends BaseChatAction {
                 sendTablesSelected(ctx.getSseEmitter(), tableNames);
             }
 
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build())
-                .subscribe();
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build());
         } catch (Exception e) {
             log.error("Auto select tables failed", e);
             sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build())
-                .subscribe();
+            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build());
         }
     }
 
