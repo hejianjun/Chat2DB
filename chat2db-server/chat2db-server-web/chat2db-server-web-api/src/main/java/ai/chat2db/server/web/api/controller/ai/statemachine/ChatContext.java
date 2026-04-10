@@ -14,10 +14,9 @@ import lombok.Data;
 @Data
 @Builder
 public class ChatContext {
-    private String sessionId;
+    private String uid;
     private ChatQueryRequest request;
     private SseEmitter sseEmitter;
-    private String uid;
     private ChatClient chatClient;
     private String builtPrompt;
     private List<String> selectedTables;

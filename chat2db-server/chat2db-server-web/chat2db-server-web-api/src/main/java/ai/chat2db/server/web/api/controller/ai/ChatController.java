@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,7 +38,6 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.util.StrUtil;
-import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
@@ -68,7 +66,7 @@ public class ChatController {
             throw new ParamBusinessException("uid");
         }
 
-        String sessionId = UUID.randomUUID().toString();
+        log.info("[ChatController] Received uid from client: {}", uid);
         SseEmitter sseEmitter = new SseEmitter(CHAT_TIMEOUT);
 
         ChatClient chatClient = aiChatConfig.createChatClient();
@@ -77,17 +75,16 @@ public class ChatController {
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
         ChatContext ctx = ChatContext.builder()
-            .sessionId(sessionId)
+            .uid(uid)
             .request(queryRequest)
             .sseEmitter(sseEmitter)
-            .uid(uid)
             .chatClient(chatClient)
             .cancelled(false)
             .loginUser(loginUser)
             .connectInfo(connectInfo)
             .build();
 
-        setupSseCallbacks(sseEmitter, sessionId, ctx);
+        setupSseCallbacks(sseEmitter, uid, ctx);
 
         sseEmitter.send(SseEmitter.event()
             .id(uid)
@@ -95,11 +92,13 @@ public class ChatController {
             .data(LocalDateTime.now().toString())
             .reconnectTime(3000));
 
-        StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(sessionId);
+        StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(uid);
         stateMachine.getExtendedState().getVariables().put("chatContext", ctx);
 
-        activeSessions.put(sessionId, stateMachine);
-        activeContexts.put(sessionId, ctx);
+        activeSessions.put(uid, stateMachine);
+        activeContexts.put(uid, ctx);
+        log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}", 
+            uid, activeSessions.size(), activeContexts.size());
 
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
@@ -127,24 +126,33 @@ public class ChatController {
         Chat2DBContext.removeContext();
     }
 
-    @DeleteMapping("/chat/{sessionId}")
+    @DeleteMapping("/chat/{uid}")
     @CrossOrigin
-    public ResponseEntity<Void> cancelChat(@PathVariable String sessionId) {
-        ChatContext ctx = activeContexts.get(sessionId);
+    public ResponseEntity<Void> cancelChat(@PathVariable String uid) {
+        log.info("[ChatController] Cancel request received for uid: {}", uid);
+        log.info("[ChatController] activeSessions keys: {}", activeSessions.keySet());
+        log.info("[ChatController] activeContexts keys: {}", activeContexts.keySet());
+        ChatContext ctx = activeContexts.get(uid);
         if (ctx != null) {
+            log.info("[ChatController] Found context for uid: {}, cancelling...", uid);
             ctx.setCancelled(true);
             try {
                 ctx.getSseEmitter().complete();
             } catch (Exception ignored) {
             }
+        } else {
+            log.warn("[ChatController] No context found for uid: {}", uid);
         }
 
-        StateMachine<ChatState, ChatEvent> sm = activeSessions.get(sessionId);
+        StateMachine<ChatState, ChatEvent> sm = activeSessions.get(uid);
         if (sm != null) {
+            log.info("[ChatController] Found state machine for uid: {}, sending CANCEL event", uid);
             sm.sendEvent(MessageBuilder.withPayload(ChatEvent.CANCEL).build());
+        } else {
+            log.warn("[ChatController] No state machine found for uid: {}", uid);
         }
 
-        cleanupSession(sessionId);
+        cleanupSession(uid);
         return ResponseEntity.ok().build();
     }
 
@@ -157,27 +165,27 @@ public class ChatController {
         return (hasTables || skipAutoSelect) ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
     }
 
-    private void setupSseCallbacks(SseEmitter sseEmitter, String sessionId, ChatContext ctx) {
+    private void setupSseCallbacks(SseEmitter sseEmitter, String uid, ChatContext ctx) {
         sseEmitter.onCompletion(() -> {
-            log.info("SSE completed for session: {}", sessionId);
-            cleanupSession(sessionId);
+            log.info("SSE completed for uid: {}", uid);
+            cleanupSession(uid);
         });
 
         sseEmitter.onTimeout(() -> {
-            log.info("SSE timeout for session: {}", sessionId);
+            log.info("SSE timeout for uid: {}", uid);
             ctx.setCancelled(true);
-            cleanupSession(sessionId);
+            cleanupSession(uid);
         });
 
         sseEmitter.onError(throwable -> {
-            log.error("SSE error for session: {}, error: {}", sessionId, throwable.getMessage());
+            log.error("SSE error for uid: {}, error: {}", uid, throwable.getMessage());
             ctx.setCancelled(true);
-            cleanupSession(sessionId);
+            cleanupSession(uid);
         });
     }
 
-    private void cleanupSession(String sessionId) {
-        activeSessions.remove(sessionId);
-        activeContexts.remove(sessionId);
+    private void cleanupSession(String uid) {
+        activeSessions.remove(uid);
+        activeContexts.remove(uid);
     }
 }
