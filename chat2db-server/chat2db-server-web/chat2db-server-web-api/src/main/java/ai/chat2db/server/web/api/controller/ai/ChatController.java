@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.collections4.CollectionUtils;
@@ -23,7 +24,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.common.exception.ParamBusinessException;
+import ai.chat2db.server.tools.common.model.Context;
+import ai.chat2db.server.tools.common.model.LoginUser;
+import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.config.AiChatConfig;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
@@ -31,6 +36,8 @@ import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
+import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.util.StrUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -83,18 +90,39 @@ public class ChatController {
             .data(LocalDateTime.now().toString())
             .reconnectTime(3000));
 
+        LoginUser loginUser = ContextUtils.getLoginUser();
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+
         StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(sessionId);
         stateMachine.getExtendedState().getVariables().put("chatContext", ctx);
 
         activeSessions.put(sessionId, stateMachine);
         activeContexts.put(sessionId, ctx);
 
-        stateMachine.start();
-
-        ChatEvent initialEvent = determineInitialEvent(queryRequest);
-        stateMachine.sendEvent(MessageBuilder.withPayload(initialEvent).build());
+        CompletableFuture.runAsync(() -> {
+            buildContext(loginUser, connectInfo);
+            stateMachine.start();
+            ChatEvent initialEvent = determineInitialEvent(queryRequest);
+            stateMachine.sendEvent(MessageBuilder.withPayload(initialEvent).build());
+        }).whenComplete((aVoid, throwable) -> {
+            removeContext();
+        });
 
         return sseEmitter;
+    }
+
+    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+        ContextUtils.setContext(Context.builder()
+                .loginUser(loginUser)
+                .build());
+        Dbutils.setSession();
+        Chat2DBContext.putContext(connectInfo);
+    }
+
+    private void removeContext() {
+        Dbutils.removeSession();
+        ContextUtils.removeContext();
+        Chat2DBContext.removeContext();
     }
 
     @DeleteMapping("/chat/{sessionId}")
