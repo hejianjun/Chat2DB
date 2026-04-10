@@ -44,7 +44,7 @@ public class StreamAction extends BaseChatAction {
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-            ).subscribe();
+            );
             return;
         }
 
@@ -89,7 +89,7 @@ public class StreamAction extends BaseChatAction {
                         }
                         context.getStateMachine().sendEvent(
                                 MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-                        ).subscribe();
+                        );
                     })
                     .doOnComplete(() -> {
                         try {
@@ -103,16 +103,16 @@ public class StreamAction extends BaseChatAction {
                         }
                         context.getStateMachine().sendEvent(
                                 MessageBuilder.withPayload(ChatEvent.STREAM_FINISHED).build()
-                        ).subscribe();
-                    })
-                    .subscribe();
+                        );
+                    });
+
 
         } catch (Exception e) {
             log.error("Start streaming failed", e);
             sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-            ).subscribe();
+            );
         }
     }
 }
