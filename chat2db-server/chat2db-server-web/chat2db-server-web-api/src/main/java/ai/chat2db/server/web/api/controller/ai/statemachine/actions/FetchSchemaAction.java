@@ -28,8 +28,11 @@ public class FetchSchemaAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
+        log.info("[FetchSchemaAction] execute called");
         ChatContext ctx = getChatContext(context);
+        log.info("[FetchSchemaAction] uid: {}, cancelled: {}", ctx.getUid(), ctx.isCancelled());
         if (ctx.isCancelled()) {
+            log.info("[FetchSchemaAction] cancelled, returning");
             return;
         }
 
@@ -39,18 +42,22 @@ public class FetchSchemaAction extends BaseChatAction {
         CompletableFuture.runAsync(() -> {
             buildContext(ctx);
             try {
+                log.info("[FetchSchemaAction] Starting schema fetch for uid: {}, tableNames: {}", 
+                    ctx.getUid(), ctx.getRequest().getTableNames());
                 String schemaDdl = fetchSchemaDdl(ctx);
+                log.info("[FetchSchemaAction] Schema DDL length: {}", schemaDdl != null ? schemaDdl.length() : 0);
                 ctx.setSchemaDdl(schemaDdl);
 
                 if (CollectionUtils.isNotEmpty(ctx.getRequest().getTableNames())) {
                     sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
                 }
 
+                log.info("[FetchSchemaAction] Sending SCHEMA_FETCHED event for uid: {}", ctx.getUid());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
                 );
             } catch (Exception e) {
-                log.error("Fetch schema failed", e);
+                log.error("[FetchSchemaAction] Fetch schema failed for uid: {}", ctx.getUid(), e);
                 sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()

@@ -6,12 +6,16 @@ import org.springframework.statemachine.config.EnableStateMachineFactory;
 import org.springframework.statemachine.config.StateMachineConfigurerAdapter;
 import org.springframework.statemachine.config.builders.StateMachineStateConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineTransitionConfigurer;
+import org.springframework.statemachine.listener.StateMachineListenerAdapter;
+import org.springframework.statemachine.StateMachine;
 
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.SelectTablesAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.BuildPromptAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.FetchSchemaAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.StreamAction;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Configuration
 @EnableStateMachineFactory
 public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatState, ChatEvent> {
@@ -92,5 +96,42 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .withExternal()
                 .source(ChatState.STREAMING).target(ChatState.FAILED)
                 .event(ChatEvent.CANCEL);
+    }
+
+    @Override
+    public void configure(org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer<ChatState, ChatEvent> config) throws Exception {
+        config.withConfiguration()
+            .listener(new StateMachineListenerAdapter<ChatState, ChatEvent>() {
+                @Override
+                public void stateChanged(org.springframework.statemachine.state.State<ChatState, ChatEvent> from, org.springframework.statemachine.state.State<ChatState, ChatEvent> to) {
+                    log.info("[StateMachine] State changed: {} -> {}", 
+                        from != null ? from.getId() : "null", 
+                        to != null ? to.getId() : "null");
+                }
+
+                @Override
+                public void stateMachineStarted(StateMachine<ChatState, ChatEvent> stateMachine) {
+                    log.info("[StateMachine] StateMachine started with id: {}, initial state: {}", 
+                        stateMachine.getId(), 
+                        stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
+                }
+
+                @Override
+                public void stateMachineStopped(StateMachine<ChatState, ChatEvent> stateMachine) {
+                    log.info("[StateMachine] StateMachine stopped with id: {}, final state: {}", 
+                        stateMachine.getId(), 
+                        stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
+                }
+
+                @Override
+                public void stateEntered(org.springframework.statemachine.state.State<ChatState, ChatEvent> state) {
+                    log.info("[StateMachine] State entered: {}", state.getId());
+                }
+
+                @Override
+                public void stateExited(org.springframework.statemachine.state.State<ChatState, ChatEvent> state) {
+                    log.info("[StateMachine] State exited: {}", state.getId());
+                }
+            });
     }
 }

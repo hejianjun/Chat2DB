@@ -60,6 +60,10 @@ export default memo<IProps>(() => {
 
   const currentSession = currentSessionId ? sessions.get(currentSessionId) : null;
 
+  console.log('[AiChat] currentSessionId:', currentSessionId);
+  console.log('[AiChat] sessions:', sessions);
+  console.log('[AiChat] currentSession:', currentSession);
+
   const { currentWorkspaceGlobalExtend, currentConnectionDetails } = useWorkspaceStore((state) => ({
     currentWorkspaceGlobalExtend: state.currentWorkspaceGlobalExtend,
     currentConnectionDetails: state.currentConnectionDetails,
@@ -81,6 +85,7 @@ export default memo<IProps>(() => {
 
   const sendAiChat = useCallback(
     (messageText: string, promptType: string = 'NL_2_SQL') => {
+      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, boundInfo });
       if (!messageText.trim()) {
         message.warning('请输入问题');
         return;
@@ -92,6 +97,7 @@ export default memo<IProps>(() => {
       }
 
       const sessionId = uuidv4();
+      console.log('[AiChat] Created sessionId:', sessionId);
       sessionIdRef.current = sessionId;
       createSession(sessionId);
 
@@ -125,23 +131,32 @@ export default memo<IProps>(() => {
         url: `/api/ai/chat?${params}`,
         uid: sessionId,
         onOpen: () => {
+          console.log('[AiChat] SSE connection opened');
           updateState(sessionId, 'IDLE');
         },
         onStateChange: (state, _msg) => {
+          console.log('[AiChat] State changed:', state, _msg);
           updateState(sessionId, state);
         },
         onMessage: (content) => {
+          console.log('[AiChat] Message content received:', content);
           appendContent(sessionId, content);
         },
         onTablesSelected: (tables) => {
+          console.log('[AiChat] Tables selected:', tables);
           setSelectedTables(sessionId, tables);
         },
         onSchemaFetched: (ddl) => {
+          console.log('[AiChat] Schema fetched, ddl length:', ddl?.length);
           setSchemaInfo(sessionId, ddl);
         },
         onDone: () => {
+          console.log('[AiChat] onDone callback, sessionId:', sessionId);
           updateState(sessionId, 'COMPLETED');
-          const session = sessions.get(sessionId);
+          const currentSessions = useAiChatStore.getState().sessions;
+          console.log('[AiChat] sessions in onDone:', currentSessions);
+          const session = currentSessions.get(sessionId);
+          console.log('[AiChat] session in onDone:', session);
           if (session?.currentContent) {
             addMessage(sessionId, {
               id: uuidv4(),
@@ -152,6 +167,7 @@ export default memo<IProps>(() => {
           closeEventSource.current = undefined;
         },
         onError: (error) => {
+          console.error('[AiChat] SSE error:', error);
           setError(sessionId, error);
           message.error(error);
           closeEventSource.current = undefined;

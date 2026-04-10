@@ -39,8 +39,11 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
+        log.info("[SelectTablesAction] execute called");
         ChatContext ctx = getChatContext(context);
+        log.info("[SelectTablesAction] uid: {}, cancelled: {}", ctx.getUid(), ctx.isCancelled());
         if (ctx.isCancelled()) {
+            log.info("[SelectTablesAction] cancelled, returning");
             return;
         }
 
@@ -50,7 +53,9 @@ public class SelectTablesAction extends BaseChatAction {
         CompletableFuture.runAsync(() -> {
             buildContext(ctx);
             try {
+                log.info("[SelectTablesAction] Starting table selection for uid: {}", ctx.getUid());
                 List<String> tableNames = selectTables(ctx);
+                log.info("[SelectTablesAction] Selected tables: {}", tableNames);
 
                 if (CollectionUtils.isNotEmpty(tableNames)) {
                     ctx.getRequest().setTableNames(tableNames);
@@ -58,11 +63,12 @@ public class SelectTablesAction extends BaseChatAction {
                     sendTablesSelected(ctx.getSseEmitter(), tableNames);
                 }
 
+                log.info("[SelectTablesAction] Sending AUTO_SELECT_DONE event for uid: {}", ctx.getUid());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
                 );
             } catch (Exception e) {
-                log.error("Auto select tables failed", e);
+                log.error("[SelectTablesAction] Auto select tables failed for uid: {}", ctx.getUid(), e);
                 sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()

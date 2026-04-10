@@ -1,9 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -12,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.alibaba.fastjson2.JSONObject;
-import com.unfbx.chatgpt.entity.chat.Message;
 
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptValidator;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
@@ -34,14 +31,19 @@ public class StreamAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
+        log.info("[StreamAction] execute called");
         ChatContext ctx = getChatContext(context);
+        log.info("[StreamAction] uid: {}, cancelled: {}", ctx.getUid(), ctx.isCancelled());
         if (ctx.isCancelled()) {
+            log.info("[StreamAction] cancelled, returning");
             return;
         }
 
         String prompt = ctx.getBuiltPrompt();
+        log.info("[StreamAction] Prompt length: {}", prompt != null ? prompt.length() : 0);
 
         if (!promptValidator.isValidLength(prompt)) {
+            log.warn("[StreamAction] Prompt exceeds max length for uid: {}", ctx.getUid());
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
@@ -51,6 +53,7 @@ public class StreamAction extends BaseChatAction {
 
         try {
             sendStateEvent(ctx.getSseEmitter(), ChatState.STREAMING, "AI 正在生成...");
+            log.info("[StreamAction] Starting AI stream for uid: {}", ctx.getUid());
 
             Flux<String> flux = ctx.getChatClient().prompt()
                     .user(prompt)
@@ -59,13 +62,10 @@ public class StreamAction extends BaseChatAction {
             flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(content -> {
                         if (ctx.isCancelled()) {
+                            log.info("[StreamAction] Stream cancelled by user for uid: {}", ctx.getUid());
                             throw new RuntimeException("Cancelled by user");
                         }
                         try {
-                            Message message = Message.builder()
-                                    .content(content)
-                                    .role(Message.Role.ASSISTANT)
-                                    .build();
                             JSONObject data = new JSONObject();
                             data.put("content", content);
                             ctx.getSseEmitter().send(SseEmitter.event()
@@ -74,11 +74,12 @@ public class StreamAction extends BaseChatAction {
                                     .data(data.toJSONString())
                                     .reconnectTime(3000));
                         } catch (IOException e) {
+                            log.error("[StreamAction] Failed to send SSE message for uid: {}", ctx.getUid(), e);
                             throw new RuntimeException(e);
                         }
                     })
                     .doOnError(error -> {
-                        log.error("Stream error", error);
+                        log.error("[StreamAction] Stream error for uid: {}", ctx.getUid(), error);
                         if (!ctx.isCancelled()) {
                             sendError(ctx.getSseEmitter(), "AI 调用失败：" + error.getMessage());
                         }
@@ -91,6 +92,7 @@ public class StreamAction extends BaseChatAction {
                         );
                     })
                     .doOnComplete(() -> {
+                        log.info("[StreamAction] Stream completed for uid: {}", ctx.getUid());
                         try {
                             ctx.getSseEmitter().send(SseEmitter.event()
                                     .id("[DONE]")
@@ -107,8 +109,8 @@ public class StreamAction extends BaseChatAction {
                     .subscribe();
 
         } catch (Exception e) {
+            log.error("[StreamAction] Start streaming failed for uid: {}", ctx.getUid(), e);
             CompletableFuture.runAsync(() -> {
-                log.error("Start streaming failed", e);
                 sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()

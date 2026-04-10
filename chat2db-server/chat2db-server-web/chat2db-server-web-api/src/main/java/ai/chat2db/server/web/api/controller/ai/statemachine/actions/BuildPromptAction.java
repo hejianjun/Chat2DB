@@ -33,8 +33,11 @@ public class BuildPromptAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
+        log.info("[BuildPromptAction] execute called");
         ChatContext chatContext = getChatContext(context);
+        log.info("[BuildPromptAction] uid: {}, cancelled: {}", chatContext.getUid(), chatContext.isCancelled());
         if (chatContext.isCancelled()) {
+            log.info("[BuildPromptAction] cancelled, returning");
             return;
         }
 
@@ -46,6 +49,8 @@ public class BuildPromptAction extends BaseChatAction {
             try {
                 ChatQueryRequest request = chatContext.getRequest();
                 String schemaDdl = chatContext.getSchemaDdl();
+                log.info("[BuildPromptAction] Building prompt for uid: {}, promptType: {}, message: {}", 
+                    chatContext.getUid(), request.getPromptType(), request.getMessage());
 
                 PromptType promptType = determinePromptType(request);
 
@@ -59,13 +64,15 @@ public class BuildPromptAction extends BaseChatAction {
                         .build();
 
                 String builtPrompt = promptBuilder.context(promptContext).build();
+                log.info("[BuildPromptAction] Built prompt length: {}", builtPrompt != null ? builtPrompt.length() : 0);
                 chatContext.setBuiltPrompt(builtPrompt);
 
+                log.info("[BuildPromptAction] Sending PROMPT_BUILT event for uid: {}", chatContext.getUid());
                 context.getStateMachine().sendEvent(
                         MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
                 );
             } catch (Exception e) {
-                log.error("Build prompt failed", e);
+                log.error("[BuildPromptAction] Build prompt failed for uid: {}", chatContext.getUid(), e);
                 sendError(chatContext.getSseEmitter(),
                         "构建提示失败：" + e.getMessage());
                 context.getStateMachine().sendEvent(

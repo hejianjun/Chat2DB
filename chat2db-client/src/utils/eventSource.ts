@@ -13,6 +13,21 @@ interface EventSourceOptions {
   onSchemaFetched?: (ddl: string) => void;
 }
 
+const getSSEBaseUrl = (): string => {
+  const storedBaseURL = localStorage.getItem('_BaseURL');
+  if (storedBaseURL) {
+    return storedBaseURL;
+  }
+  if (location.href.indexOf('dist/index.html') > -1) {
+    return `http://127.0.0.1:${__APP_PORT__ || '10824'}`;
+  }
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    return 'http://127.0.0.1:10821';
+  }
+  return location.origin;
+};
+
 const connectToEventSource = (options: EventSourceOptions): (() => void) => {
   const {
     url,
@@ -31,20 +46,26 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
   }
 
   const DBHUB = localStorage.getItem('DBHUB');
-  const eventSource = new EventSourcePolyfill(`${window._BaseURL}${url}`, {
+  const sseBaseUrl = getSSEBaseUrl();
+  console.log('[SSE] Connecting to:', `${sseBaseUrl}${url}`, 'uid:', uid);
+  const eventSource = new EventSourcePolyfill(`${sseBaseUrl}${url}`, {
     headers: {
       uid,
       DBHUB: DBHUB || '',
     },
+    heartbeatTimeout: 12000000,
   });
 
   eventSource.addEventListener('open', () => {
+    console.log('[SSE] Connection opened');
     onOpen?.();
   });
 
   eventSource.addEventListener('message', (event: MessageEvent) => {
+    console.log('[SSE] Message received:', event.data);
     const data = event.data;
     if (data === '[DONE]') {
+      console.log('[SSE] Stream completed');
       onDone?.();
       return;
     }
@@ -59,6 +80,7 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
   });
 
   eventSource.addEventListener('state', (event: MessageEvent) => {
+    console.log('[SSE] State event:', event.data);
     try {
       const { state, message } = JSON.parse(event.data);
       onStateChange?.(state as ChatStateType, message);
@@ -67,7 +89,8 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     }
   });
 
-  eventSource.addEventListener('error', () => {
+  eventSource.addEventListener('error', (e) => {
+    console.error('[SSE] Error:', e);
     onError?.('Connection error');
     eventSource.close();
   });
@@ -97,7 +120,8 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
 
 const cancelChatSession = async (sessionId: string): Promise<void> => {
   const DBHUB = localStorage.getItem('DBHUB');
-  await fetch(`${window._BaseURL}/api/ai/chat/${sessionId}`, {
+  const sseBaseUrl = getSSEBaseUrl();
+  await fetch(`${sseBaseUrl}/api/ai/chat/${sessionId}`, {
     method: 'DELETE',
     headers: {
       DBHUB: DBHUB || '',
