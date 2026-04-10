@@ -1,12 +1,8 @@
 package ai.chat2db.server.web.api.controller.ai.prompt;
 
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
-import ai.chat2db.server.web.api.controller.ai.prompt.config.PromptTemplateProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.Yaml;
@@ -22,61 +18,26 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@EnableConfigurationProperties(PromptTemplateProperties.class)
 public class PromptTemplateRegistry {
+
+    private static final String CONFIG_FILE = "prompt-templates.yml";
 
     private final Map<PromptType, PromptTemplate> templates = new EnumMap<>(PromptType.class);
 
-    @Autowired
-    private PromptTemplateProperties properties;
-
     @PostConstruct
     public void init() {
-        // 先尝试从配置属性加载
-        if (properties != null && properties.getTemplates() != null && !properties.getTemplates().isEmpty()) {
-            loadFromProperties();
-        } else {
-            // 如果配置属性为空，从 YAML 文件加载
-            loadFromYamlFile();
-        }
-
-        // 确保所有类型都有模板，没有则使用默认模板
+        loadFromYamlFile();
         ensureAllTypesHaveTemplate();
-    }
-
-    /**
-     * 从 Spring 配置属性加载
-     */
-    private void loadFromProperties() {
-        log.info("Loading prompt templates from configuration properties");
-        for (Map.Entry<String, PromptTemplateProperties.PromptTemplateConfig> entry : properties.getTemplates().entrySet()) {
-            try {
-                PromptType type = PromptType.valueOf(entry.getKey().toUpperCase());
-                PromptTemplateProperties.PromptTemplateConfig config = entry.getValue();
-                
-                PromptTemplate template = PromptTemplate.builder()
-                        .name(config.getName())
-                        .promptType(type)
-                        .description(config.getDescription())
-                        .template(config.getTemplate())
-                        .build();
-                
-                templates.put(type, template);
-                log.debug("Loaded template: {}", type.getCode());
-            } catch (IllegalArgumentException e) {
-                log.warn("Unknown prompt type: {}", entry.getKey());
-            }
-        }
     }
 
     /**
      * 从 YAML 文件加载
      */
     private void loadFromYamlFile() {
-        log.info("Loading prompt templates from YAML file: prompt-templates.yml");
-        ClassPathResource resource = new ClassPathResource("prompt-templates.yml");
+        log.info("Loading prompt templates from: {}", CONFIG_FILE);
+        ClassPathResource resource = new ClassPathResource(CONFIG_FILE);
         if (!resource.exists()) {
-            log.warn("Prompt templates config file not found, using defaults");
+            log.warn("Prompt templates config file not found: {}, using defaults", CONFIG_FILE);
             return;
         }
 
@@ -110,6 +71,8 @@ public class PromptTemplateRegistry {
                     log.warn("Unknown prompt type: {}", entry.getKey());
                 }
             }
+            
+            log.info("Loaded {} prompt templates", templates.size());
         } catch (IOException e) {
             log.error("Failed to load prompt templates from YAML file", e);
         }
