@@ -2,13 +2,12 @@ package ai.chat2db.server.web.api.controller.ai.statemachine;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.statemachine.action.Action;
 import org.springframework.statemachine.config.EnableStateMachineFactory;
 import org.springframework.statemachine.config.StateMachineConfigurerAdapter;
 import org.springframework.statemachine.config.builders.StateMachineStateConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineTransitionConfigurer;
 
-import ai.chat2db.server.web.api.controller.ai.statemachine.actions.AutoSelectTablesAction;
+import ai.chat2db.server.web.api.controller.ai.statemachine.actions.SelectTablesAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.BuildPromptAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.FetchSchemaAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.StreamAction;
@@ -18,7 +17,7 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.actions.StreamAction
 public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatState, ChatEvent> {
 
     @Autowired
-    private AutoSelectTablesAction autoSelectTablesAction;
+    private SelectTablesAction selectTablesAction;
 
     @Autowired
     private FetchSchemaAction fetchSchemaAction;
@@ -53,7 +52,7 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .withExternal()
                 .source(ChatState.IDLE).target(ChatState.AUTO_SELECTING_TABLES)
                 .event(ChatEvent.TABLES_NOT_PROVIDED)
-                .action(autoSelectTablesAction)
+                .action(selectTablesAction)
             .and()
             .withExternal()
                 .source(ChatState.AUTO_SELECTING_TABLES).target(ChatState.FETCHING_TABLE_SCHEMA)

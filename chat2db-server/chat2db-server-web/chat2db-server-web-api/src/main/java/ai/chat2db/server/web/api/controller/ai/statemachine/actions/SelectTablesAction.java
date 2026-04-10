@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Component
 @Slf4j
-public class AutoSelectTablesAction extends BaseChatAction {
+public class SelectTablesAction extends BaseChatAction {
 
     @Autowired
     private PromptBuilder promptBuilder;

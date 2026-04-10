@@ -14,9 +14,11 @@ import ai.chat2db.server.domain.api.param.SchemaQueryParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.service.DatabaseService;
-import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.core.cache.CacheManage;
+import ai.chat2db.server.domain.repository.Dbutils;
+import ai.chat2db.server.domain.repository.entity.DataSourceDO;
+import ai.chat2db.server.domain.repository.mapper.DataSourceMapper;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -56,8 +58,9 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Autowired
     private TableService tableService;
 
-    @Autowired
-    private DataSourceService dataSourceService;
+    private DataSourceMapper getDataSourceMapper() {
+        return Dbutils.getMapper(DataSourceMapper.class);
+    }
 
     @Override
     public ListResult<Database> queryAll(DatabaseQueryAllParam param) {
@@ -304,11 +307,10 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Override
     public String queryDatabaseType(Long dataSourceId) {
         try {
-            DataResult<ai.chat2db.server.domain.api.model.DataSource> dataResult =
-                    dataSourceService.queryById(dataSourceId);
-            if (dataResult.getSuccess() && dataResult.getData() != null) {
-                String dataSourceType = dataResult.getData().getType();
-                return StringUtils.isNotBlank(dataSourceType) ? dataSourceType : "MYSQL";
+            DataSourceMapper mapper = getDataSourceMapper();
+            DataSourceDO dataSourceDO = mapper.selectById(dataSourceId);
+            if (dataSourceDO != null && StringUtils.isNotBlank(dataSourceDO.getType())) {
+                return dataSourceDO.getType();
             }
         } catch (Exception e) {
             log.error("query database type error, dataSourceId:{}", dataSourceId, e);
