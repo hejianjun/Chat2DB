@@ -193,14 +193,15 @@ private String fillTemplate(PromptTemplate template, PromptContext context) {
 
 ## 文件清单
 
-### 新增文件（7 个）
-1. `PromptTemplate.java` - 模板值对象
-2. `PromptContext.java` - 构建上下文
-3. `PromptValidator.java` - 验证器
-4. `PromptTemplateRegistry.java` - 模板注册表
-5. `PromptBuilder.java` - 建造者接口
-6. `PromptBuilderImpl.java` - 建造者实现
-7. `prompt-refactoring-plan.md` - 重构计划文档
+### 新增文件（8 个）
+1. `chat2db-server-web-api/.../prompt/PromptTemplate.java` - 模板值对象
+2. `chat2db-server-web-api/.../prompt/PromptContext.java` - 构建上下文
+3. `chat2db-server-web-api/.../prompt/PromptValidator.java` - 验证器
+4. `chat2db-server-web-api/.../prompt/PromptTemplateRegistry.java` - 模板注册表
+5. `chat2db-server-web-api/.../prompt/PromptBuilder.java` - 建造者接口
+6. `chat2db-server-web-api/.../prompt/PromptBuilderImpl.java` - 建造者实现
+7. `chat2db-server-web-api/src/main/resources/prompt-templates.yml` - 模板配置文件
+8. `docs/prompt-refactoring-plan.md` - 重构计划文档
 
 ### 修改文件（6 个）
 1. `DatabaseService.java` - 接口扩展
@@ -287,3 +288,56 @@ mvn clean install -pl chat2db-server-web/chat2db-server-web-api -am
 - 易于扩展：新增模板只需在 Registry 中注册
 - 可测试性强：各组件可独立单元测试
 - 代码简洁：流式 API，易于阅读和维护
+
+---
+
+## Bug 修复
+
+### 问题：SelectTablesAction 提示词缺失表名列表
+
+**现象：** 用户报告在自动选择表时，提示词中的 `{schema}` 占位符为空，导致 AI 无法识别表名。
+
+**原因：** `SelectTablesAction` 在选择表时需要使用所有表的 schema 信息，但此时 `FetchSchemaAction` 还未执行，`ctx.getSchemaDdl()` 返回空值。
+
+**解决方案：** 修改 `SelectTablesAction.buildSelectPrompt()` 方法，直接调用 `DatabaseService.queryDatabaseTables()` 获取所有表的 schema，而不是从 context 中获取。
+
+**修改文件：** `SelectTablesAction.java`
+```java
+// 修改前
+private String buildSelectPrompt(ChatContext ctx) {
+    PromptContext promptContext = PromptContext.builder()
+            .promptType(PromptType.SELECT_TABLES)
+            .message(ctx.getRequest().getMessage())
+            .schemaDdl(ctx.getSchemaDdl())  // ❌ 此时为空
+            .build();
+    return promptBuilder.context(promptContext).build();
+}
+
+// 修改后
+private String buildSelectPrompt(ChatContext ctx) {
+    String schemaDdl = databaseService.queryDatabaseTables(  // ✅ 直接获取
+            ctx.getRequest().getDataSourceId(),
+            ctx.getRequest().getDatabaseName(),
+            ctx.getRequest().getSchemaName()
+    );
+
+    PromptContext promptContext = PromptContext.builder()
+            .promptType(PromptType.SELECT_TABLES)
+            .message(ctx.getRequest().getMessage())
+            .schemaDdl(schemaDdl)
+            .build();
+    return promptBuilder.context(promptContext).build();
+}
+```
+
+**状态机流程：**
+```
+用户未提供表名:
+  IDLE → AUTO_SELECTING_TABLES (SelectTablesAction，获取所有表 schema)
+       → FETCHING_TABLE_SCHEMA (FetchSchemaAction，获取选中表的 schema)
+       → BUILDING_PROMPT → STREAMING
+
+用户提供表名:
+  IDLE → FETCHING_TABLE_SCHEMA (FetchSchemaAction，获取指定表的 schema)
+       → BUILDING_PROMPT → STREAMING
+```

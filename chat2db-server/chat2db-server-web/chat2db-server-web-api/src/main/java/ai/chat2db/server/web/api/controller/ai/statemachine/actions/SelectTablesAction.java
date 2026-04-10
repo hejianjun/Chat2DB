@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
+import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptBuilder;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptContext;
@@ -32,6 +33,9 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Autowired
     private PromptBuilder promptBuilder;
+
+    @Autowired
+    private DatabaseService databaseService;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -82,10 +86,16 @@ public class SelectTablesAction extends BaseChatAction {
     }
 
     private String buildSelectPrompt(ChatContext ctx) {
+        String schemaDdl = databaseService.queryDatabaseTables(
+                ctx.getRequest().getDataSourceId(),
+                ctx.getRequest().getDatabaseName(),
+                ctx.getRequest().getSchemaName()
+        );
+
         PromptContext promptContext = PromptContext.builder()
                 .promptType(PromptType.SELECT_TABLES)
                 .message(ctx.getRequest().getMessage())
-                .schemaDdl(ctx.getSchemaDdl())
+                .schemaDdl(schemaDdl)
                 .build();
 
         return promptBuilder.context(promptContext).build();
