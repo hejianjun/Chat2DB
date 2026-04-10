@@ -8,9 +8,15 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.alibaba.fastjson2.JSONObject;
 
+import ai.chat2db.server.domain.repository.Dbutils;
+import ai.chat2db.server.tools.common.model.Context;
+import ai.chat2db.server.tools.common.model.LoginUser;
+import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
+import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -19,6 +25,26 @@ public abstract class BaseChatAction implements Action<ChatState, ChatEvent> {
 
     protected ChatContext getChatContext(StateContext<ChatState, ChatEvent> context) {
         return (ChatContext) context.getExtendedState().getVariables().get("chatContext");
+    }
+
+    protected void buildContext(ChatContext ctx) {
+        LoginUser loginUser = ctx.getLoginUser();
+        ConnectInfo connectInfo = ctx.getConnectInfo();
+        if (loginUser != null) {
+            ContextUtils.setContext(Context.builder()
+                    .loginUser(loginUser)
+                    .build());
+        }
+        if (connectInfo != null) {
+            Dbutils.setSession();
+            Chat2DBContext.putContext(connectInfo);
+        }
+    }
+
+    protected void removeContext() {
+        Dbutils.removeSession();
+        ContextUtils.removeContext();
+        Chat2DBContext.removeContext();
     }
 
     protected void sendStateEvent(SseEmitter emitter, ChatState state, String message) {

@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -39,7 +40,6 @@ public class StreamAction extends BaseChatAction {
 
         String prompt = ctx.getBuiltPrompt();
 
-        // 使用 PromptValidator 验证长度
         if (!promptValidator.isValidLength(prompt)) {
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
             context.getStateMachine().sendEvent(
@@ -56,9 +56,13 @@ public class StreamAction extends BaseChatAction {
                     .stream()
                     .content();
 
+            AtomicBoolean contextBuilt = new AtomicBoolean(false);
+
             flux.publishOn(Schedulers.boundedElastic())
-                    .filter(Objects::nonNull)
                     .doOnNext(content -> {
+                        if (contextBuilt.compareAndSet(false, true)) {
+                            buildContext(ctx);
+                        }
                         if (ctx.isCancelled()) {
                             throw new RuntimeException("Cancelled by user");
                         }
@@ -104,8 +108,9 @@ public class StreamAction extends BaseChatAction {
                         context.getStateMachine().sendEvent(
                                 MessageBuilder.withPayload(ChatEvent.STREAM_FINISHED).build()
                         );
-                    });
-
+                    })
+                    .doFinally(signalType -> removeContext())
+                    .subscribe();
 
         } catch (Exception e) {
             log.error("Start streaming failed", e);

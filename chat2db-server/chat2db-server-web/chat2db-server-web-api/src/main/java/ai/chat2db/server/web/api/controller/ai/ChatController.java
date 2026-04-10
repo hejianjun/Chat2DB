@@ -73,6 +73,9 @@ public class ChatController {
 
         ChatClient chatClient = aiChatConfig.createChatClient();
 
+        LoginUser loginUser = ContextUtils.getLoginUser();
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+
         ChatContext ctx = ChatContext.builder()
             .sessionId(sessionId)
             .request(queryRequest)
@@ -80,6 +83,8 @@ public class ChatController {
             .uid(uid)
             .chatClient(chatClient)
             .cancelled(false)
+            .loginUser(loginUser)
+            .connectInfo(connectInfo)
             .build();
 
         setupSseCallbacks(sseEmitter, sessionId, ctx);
@@ -89,9 +94,6 @@ public class ChatController {
             .name("connect")
             .data(LocalDateTime.now().toString())
             .reconnectTime(3000));
-
-        LoginUser loginUser = ContextUtils.getLoginUser();
-        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
         StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(sessionId);
         stateMachine.getExtendedState().getVariables().put("chatContext", ctx);
@@ -111,7 +113,7 @@ public class ChatController {
         return sseEmitter;
     }
 
-    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+    public static void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
         ContextUtils.setContext(Context.builder()
                 .loginUser(loginUser)
                 .build());
@@ -119,7 +121,7 @@ public class ChatController {
         Chat2DBContext.putContext(connectInfo);
     }
 
-    private void removeContext() {
+    public static void removeContext() {
         Dbutils.removeSession();
         ContextUtils.removeContext();
         Chat2DBContext.removeContext();
