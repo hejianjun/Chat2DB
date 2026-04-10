@@ -48,7 +48,6 @@ public class BuildPromptAction extends BaseChatAction {
                     .schemaDdl(schemaDdl)
                     .dataSourceType(guessDataSourceType(schemaDdl))
                     .targetSqlType(request.getDestSqlType())
-                    .forTableSelection(false)
                     .build();
 
             String builtPrompt = promptBuilder.context(promptContext).build();

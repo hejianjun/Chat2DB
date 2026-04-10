@@ -2,6 +2,10 @@ spring:
   # 默认开发环境
   profiles:
     active: dev
+  # 加载提示词模板配置
+  config:
+    import:
+      - classpath:prompt-templates.yml
   main:
     allow-bean-definition-overriding: true
   messages:
