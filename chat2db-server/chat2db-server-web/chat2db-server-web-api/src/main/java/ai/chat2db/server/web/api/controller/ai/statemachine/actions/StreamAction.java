@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -106,11 +107,13 @@ public class StreamAction extends BaseChatAction {
                     .subscribe();
 
         } catch (Exception e) {
-            log.error("Start streaming failed", e);
-            sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-            );
+            CompletableFuture.runAsync(() -> {
+                log.error("Start streaming failed", e);
+                sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
+                );
+            });
         }
     }
 }
