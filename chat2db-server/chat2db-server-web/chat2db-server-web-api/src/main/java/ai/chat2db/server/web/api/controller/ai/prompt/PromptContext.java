@@ -3,12 +3,16 @@ package ai.chat2db.server.web.api.controller.ai.prompt;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
 /**
  * 提示词构建上下文
  */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class PromptContext {
 
     /**
