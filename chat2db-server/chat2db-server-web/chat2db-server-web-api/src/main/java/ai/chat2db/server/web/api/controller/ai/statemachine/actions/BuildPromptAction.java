@@ -3,7 +3,6 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 import java.util.concurrent.CompletableFuture;
 
 import ai.chat2db.server.domain.api.service.DataSourceService;
-import ai.chat2db.server.domain.api.service.DatabaseService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
