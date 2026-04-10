@@ -1,91 +1,84 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
-import ai.chat2db.server.tools.common.util.EasyEnumUtils;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
+import ai.chat2db.server.web.api.controller.ai.prompt.PromptBuilder;
+import ai.chat2db.server.web.api.controller.ai.prompt.PromptContext;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 构建提示词动作
+ */
 @Component
 @Slf4j
 public class BuildPromptAction extends BaseChatAction {
 
+    @Autowired
+    private PromptBuilder promptBuilder;
+
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
-        ChatContext ctx = getChatContext(context);
-        if (ctx.isCancelled()) {
+        ChatContext chatContext = getChatContext(context);
+        if (chatContext.isCancelled()) {
             return;
         }
 
         try {
-            sendStateEvent(ctx.getSseEmitter(), ChatState.BUILDING_PROMPT, "正在构建提示...");
+            sendStateEvent(chatContext.getSseEmitter(),
+                    ChatState.BUILDING_PROMPT, "正在构建提示...");
 
-            ChatQueryRequest request = ctx.getRequest();
-            String schemaDdl = ctx.getSchemaDdl();
-            String prompt = StringUtils.defaultString(request.getMessage(), "");
-            String ext = StringUtils.isNotBlank(request.getExt()) ? request.getExt() : "";
+            ChatQueryRequest request = chatContext.getRequest();
+            String schemaDdl = chatContext.getSchemaDdl();
 
-            String promptType = StringUtils.isBlank(request.getPromptType())
-                ? PromptType.NL_2_SQL.getCode()
-                : request.getPromptType();
-            PromptType pType = EasyEnumUtils.getEnum(PromptType.class, promptType);
+            PromptType promptType = determinePromptType(request);
 
-            String dataSourceType = "MYSQL";
-            if (request.getDataSourceId() != null && ctx.getSchemaDdl() != null) {
-                dataSourceType = guessDataSourceType(schemaDdl);
-            }
+            PromptContext promptContext = PromptContext.builder()
+                    .promptType(promptType)
+                    .message(request.getMessage())
+                    .ext(request.getExt())
+                    .schemaDdl(schemaDdl)
+                    .dataSourceType(guessDataSourceType(schemaDdl))
+                    .targetSqlType(request.getDestSqlType())
+                    .forTableSelection(false)
+                    .build();
 
-            String builtPrompt;
-            if (PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType())) {
-                builtPrompt = prompt;
-            } else {
-                builtPrompt = buildPromptWithSchema(prompt, ext, pType, dataSourceType, schemaDdl, request);
-            }
+            String builtPrompt = promptBuilder.context(promptContext).build();
+            chatContext.setBuiltPrompt(builtPrompt);
 
-            builtPrompt = builtPrompt.replaceAll("[\r\t]", "").replaceAll("#", "");
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
+            ).subscribe();
 
-            ctx.setBuiltPrompt(builtPrompt);
-
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build());
         } catch (Exception e) {
             log.error("Build prompt failed", e);
-            sendError(ctx.getSseEmitter(), "构建提示失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build());
+            sendError(getChatContext(context).getSseEmitter(),
+                    "构建提示失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build()
+            ).subscribe();
         }
     }
 
-    private String buildPromptWithSchema(String prompt, String ext, PromptType pType,
-            String dataSourceType, String schemaDdl, ChatQueryRequest request) {
-        String schemaProperty;
-        if (StringUtils.isNotEmpty(schemaDdl)) {
-            schemaProperty = String.format(
-                "### 请根据以下table properties和SQL input%s. %s\n#\n### %s SQL tables, with their properties:\n#\n# "
-                    + "%s\n#\n#\n### SQL input: %s",
-                pType.getDescription(), ext, dataSourceType, schemaDdl, prompt);
-        } else {
-            schemaProperty = String.format("### 请根据以下SQL input%s. %s\n#\n### SQL input: %s",
-                pType.getDescription(), ext, prompt);
-        }
-
-        if (pType == PromptType.SQL_2_SQL) {
-            String destSqlType = StringUtils.isNotBlank(request.getDestSqlType())
-                ? request.getDestSqlType()
-                : dataSourceType;
-            schemaProperty = String.format("%s\n#\n### 目标SQL类型: %s", schemaProperty, destSqlType);
-        }
-
-        return schemaProperty;
+    private PromptType determinePromptType(ChatQueryRequest request) {
+        String promptType = StringUtils.isBlank(request.getPromptType())
+                ? PromptType.NL_2_SQL.getCode()
+                : request.getPromptType();
+        return PromptType.valueOf(promptType);
     }
 
     private String guessDataSourceType(String schemaDdl) {
-        if (schemaDdl == null) return "MYSQL";
+        if (StringUtils.isEmpty(schemaDdl)) {
+            return "MYSQL";
+        }
         String upper = schemaDdl.toUpperCase();
         if (upper.contains("MYSQL") || upper.contains("AUTO_INCREMENT")) {
             return "MYSQL";

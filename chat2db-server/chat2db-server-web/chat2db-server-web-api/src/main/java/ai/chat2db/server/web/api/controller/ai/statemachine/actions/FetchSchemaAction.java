@@ -6,25 +6,23 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
-import ai.chat2db.server.web.api.controller.ai.converter.ChatConverter;
+import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
-import ai.chat2db.server.web.api.controller.ai.utils.PromptService;
-import ai.chat2db.server.domain.api.param.TableQueryParam;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 获取表结构动作
+ */
 @Component
 @Slf4j
 public class FetchSchemaAction extends BaseChatAction {
 
     @Autowired
-    private PromptService promptService;
-
-    @Autowired
-    private ChatConverter chatConverter;
+    private DatabaseService databaseService;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -34,7 +32,8 @@ public class FetchSchemaAction extends BaseChatAction {
         }
 
         try {
-            sendStateEvent(ctx.getSseEmitter(), ChatState.FETCHING_TABLE_SCHEMA, "正在获取表结构...");
+            sendStateEvent(ctx.getSseEmitter(),
+                    ChatState.FETCHING_TABLE_SCHEMA, "正在获取表结构...");
 
             String schemaDdl = fetchSchemaDdl(ctx);
             ctx.setSchemaDdl(schemaDdl);
@@ -43,11 +42,16 @@ public class FetchSchemaAction extends BaseChatAction {
                 sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
             }
 
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build());
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
+            ).subscribe();
+
         } catch (Exception e) {
             log.error("Fetch schema failed", e);
             sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build());
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()
+            ).subscribe();
         }
     }
 
@@ -72,11 +76,19 @@ public class FetchSchemaAction extends BaseChatAction {
     }
 
     private String queryTablesWithNames(ChatQueryRequest request) {
-        TableQueryParam queryParam = chatConverter.chat2tableQuery(request);
-        return promptService.buildTableColumn(queryParam, request.getTableNames());
+        return databaseService.buildTableColumn(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName(),
+                request.getTableNames()
+        );
     }
 
     private String queryAllTables(ChatQueryRequest request) {
-        return promptService.queryDatabaseTables(request);
+        return databaseService.queryDatabaseTables(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName()
+        );
     }
 }

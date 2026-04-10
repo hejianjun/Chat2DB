@@ -11,23 +11,34 @@ import ai.chat2db.server.domain.api.param.datasource.DatabaseQueryAllParam;
 import ai.chat2db.server.domain.api.param.MetaDataQueryParam;
 import ai.chat2db.server.domain.api.param.SchemaOperationParam;
 import ai.chat2db.server.domain.api.param.SchemaQueryParam;
+import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.service.DatabaseService;
+import ai.chat2db.server.domain.api.service.DataSourceService;
+import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.core.cache.CacheManage;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
+import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.model.Database;
+import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.MetaSchema;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.Sql;
+import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import cn.hutool.core.thread.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 import static ai.chat2db.server.domain.core.cache.CacheKey.getDataBasesKey;
 import static ai.chat2db.server.domain.core.cache.CacheKey.getDataSourceKey;
@@ -41,6 +52,12 @@ import static ai.chat2db.server.domain.core.cache.CacheKey.getSchemasKey;
 @Slf4j
 @Service
 public class DatabaseServiceImpl implements DatabaseService {
+
+    @Autowired
+    private TableService tableService;
+
+    @Autowired
+    private DataSourceService dataSourceService;
 
     @Override
     public ListResult<Database> queryAll(DatabaseQueryAllParam param) {
@@ -177,4 +194,125 @@ public class DatabaseServiceImpl implements DatabaseService {
         return ActionResult.isSuccess();
     }
 
+    @Override
+    public String queryTableDdl(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+        try {
+            TablePageQueryParam param = new TablePageQueryParam();
+            param.setDataSourceId(dataSourceId);
+            param.setDatabaseName(databaseName);
+            param.setSchemaName(schemaName);
+            param.setTableName(tableName);
+
+            TableSelector tableSelector = new TableSelector();
+            tableSelector.setColumnList(true);
+            tableSelector.setIndexList(false);
+
+            PageResult<Table> tables = tableService.pageQuery(param, tableSelector);
+            if (!CollectionUtils.isEmpty(tables.getData())) {
+                SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
+                return sqlBuilder.buildCreateTableSql(tables.getData().get(0));
+            }
+        } catch (Exception e) {
+            log.error("query table ddl error, tableName:{}", tableName, e);
+        }
+        return "";
+    }
+
+    @Override
+    public String buildTableColumn(Long dataSourceId, String databaseName, String schemaName, List<String> tableNames) {
+        if (CollectionUtils.isEmpty(tableNames)) {
+            log.error("tableNames is empty");
+            return "";
+        }
+        try {
+            return tableNames.stream()
+                    .map(tableName -> queryTableDdl(dataSourceId, databaseName, schemaName, tableName))
+                    .filter(StringUtils::isNotBlank)
+                    .collect(Collectors.joining(";\n"));
+        } catch (Exception e) {
+            log.error("query tables:{} error, do nothing", tableNames);
+        }
+        return "";
+    }
+
+    @Override
+    public String queryDatabaseTables(Long dataSourceId, String databaseName, String schemaName) {
+        try {
+            TablePageQueryParam queryParam = new TablePageQueryParam();
+            queryParam.setDataSourceId(dataSourceId);
+            queryParam.setDatabaseName(databaseName);
+            queryParam.setSchemaName(schemaName);
+            queryParam.queryAll();
+
+            TableSelector tableSelector = TableSelector.builder()
+                    .indexList(false)
+                    .columnList(true)
+                    .foreignKey(true)
+                    .build();
+
+            PageResult<Table> tables = tableService.pageQuery(queryParam, tableSelector);
+            return tables.getData().stream().map(table -> {
+                StringBuilder sb = new StringBuilder(table.getName());
+                String comment = StringUtils.defaultString(table.getComment(), table.getAiComment());
+                List<ForeignKey> foreignKeys = table.getForeignKeyList();
+
+                if (StringUtils.isNotEmpty(comment) || !foreignKeys.isEmpty()) {
+                    sb.append("(").append(comment);
+
+                    if (!foreignKeys.isEmpty()) {
+                        if (StringUtils.isNotEmpty(comment)) {
+                            sb.append(";");
+                        }
+                        String foreignKeysString = foreignKeys.stream()
+                                .map(foreignKey -> foreignKey.getColumn() + "->" +
+                                        foreignKey.getReferencedTable() + ":" +
+                                        foreignKey.getReferencedColumn())
+                                .collect(Collectors.joining(","));
+                        sb.append("foreignKeys:").append(foreignKeysString);
+                    }
+                    sb.append(")");
+                }
+                return sb.toString();
+            }).collect(Collectors.joining(","));
+        } catch (Exception e) {
+            log.error("query table error:{}, do nothing", e.getMessage());
+            return "";
+        }
+    }
+
+    @Override
+    public String queryRedisSchema(Long dataSourceId, String databaseName, String schemaName, List<String> tableNames) {
+        if (CollectionUtils.isEmpty(tableNames)) {
+            SchemaQueryParam param = new SchemaQueryParam();
+            param.setDataSourceId(dataSourceId);
+            param.setDataBaseName(databaseName);
+
+            ListResult<Schema> schemaListResult = querySchema(param);
+            List<String> keyNames = new ArrayList<>();
+            String properties = schemaListResult.getData()
+                    .stream()
+                    .peek(schema -> keyNames.add(schema.getName()))
+                    .map(schema -> schema.getName() + ":*(" + schema.getKeyType() + ")")
+                    .collect(Collectors.joining(","));
+            return properties;
+        }
+        return tableNames.stream()
+                .map(name -> name + ":*")
+                .collect(Collectors.joining(","));
+    }
+
+    @Override
+    public String queryDatabaseType(Long dataSourceId) {
+        try {
+            DataResult<ai.chat2db.server.domain.api.model.DataSource> dataResult =
+                    dataSourceService.queryById(dataSourceId);
+            if (dataResult.getSuccess() && dataResult.getData() != null) {
+                String dataSourceType = dataResult.getData().getType();
+                return StringUtils.isNotBlank(dataSourceType) ? dataSourceType : "MYSQL";
+            }
+        } catch (Exception e) {
+            log.error("query database type error, dataSourceId:{}", dataSourceId, e);
+        }
+        return "MYSQL";
+    }
 }

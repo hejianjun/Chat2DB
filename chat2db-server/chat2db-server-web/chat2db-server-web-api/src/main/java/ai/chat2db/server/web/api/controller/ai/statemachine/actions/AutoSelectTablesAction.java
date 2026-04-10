@@ -13,21 +13,24 @@ import org.springframework.stereotype.Component;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
-import ai.chat2db.server.web.api.config.AiChatConfig;
+import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
+import ai.chat2db.server.web.api.controller.ai.prompt.PromptBuilder;
+import ai.chat2db.server.web.api.controller.ai.prompt.PromptContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
-import ai.chat2db.server.web.api.controller.ai.utils.PromptService;
 import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 自动选择表动作
+ */
 @Component
 @Slf4j
 public class AutoSelectTablesAction extends BaseChatAction {
 
     @Autowired
-    private PromptService promptService;
-
+    private PromptBuilder promptBuilder;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -37,7 +40,8 @@ public class AutoSelectTablesAction extends BaseChatAction {
         }
 
         try {
-            sendStateEvent(ctx.getSseEmitter(), ChatState.AUTO_SELECTING_TABLES, "正在选择相关表...");
+            sendStateEvent(ctx.getSseEmitter(),
+                    ChatState.AUTO_SELECTING_TABLES, "正在选择相关表...");
 
             List<String> tableNames = selectTables(ctx);
 
@@ -47,11 +51,16 @@ public class AutoSelectTablesAction extends BaseChatAction {
                 sendTablesSelected(ctx.getSseEmitter(), tableNames);
             }
 
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build());
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
+            ).subscribe();
+
         } catch (Exception e) {
             log.error("Auto select tables failed", e);
             sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build());
+            context.getStateMachine().sendEvent(
+                    MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()
+            ).subscribe();
         }
     }
 
@@ -59,22 +68,29 @@ public class AutoSelectTablesAction extends BaseChatAction {
         String selectPrompt = buildSelectPrompt(ctx);
 
         ChatResponse chatResponse = ctx.getChatClient().prompt()
-            .user(selectPrompt)
-            .call()
-            .chatResponse();
+                .user(selectPrompt)
+                .call()
+                .chatResponse();
 
         String content = extractContent(chatResponse);
         return parseTableNames(content, ctx.getRequest().getTableNames());
     }
 
     private String buildSelectPrompt(ChatContext ctx) {
-        return promptService.buildAutoPrompt(ctx.getRequest())
-            + "\n\n请只输出 JSON，格式：{\"table_names\":[\"表名 1\",\"表名 2\"]}，不要输出其他文字。";
+        PromptContext promptContext = PromptContext.builder()
+                .promptType(PromptType.SELECT_TABLES)
+                .message(ctx.getRequest().getMessage())
+                .dataSourceType(ctx.getRequest().getDataSourceType())
+                .schemaDdl(ctx.getSchemaDdl())
+                .forTableSelection(true)
+                .build();
+
+        return promptBuilder.context(promptContext).build();
     }
 
     private String extractContent(ChatResponse chatResponse) {
         if (chatResponse == null || chatResponse.getResult() == null
-            || chatResponse.getResult().getOutput() == null) {
+                || chatResponse.getResult().getOutput() == null) {
             return null;
         }
         return chatResponse.getResult().getOutput().getText();
@@ -113,7 +129,7 @@ public class AutoSelectTablesAction extends BaseChatAction {
             return null;
         }
         return existingTableNames.stream()
-            .filter(name -> StringUtils.containsIgnoreCase(content, name))
-            .toList();
+                .filter(name -> StringUtils.containsIgnoreCase(content, name))
+                .toList();
     }
 }
