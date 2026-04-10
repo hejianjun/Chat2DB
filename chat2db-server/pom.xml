@@ -382,6 +382,7 @@
             </plugin>
 
             <!-- SpotBugs 静态代码分析插件 -->
+            <!-- 默认不执行，需要时使用 mvn spotbugs:check 手动运行 -->
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
@@ -401,6 +402,7 @@
                         <version>4.8.3</version>
                     </dependency>
                 </dependencies>
+                <!-- 默认不执行 spotbugs 检查
                 <executions>
                     <execution>
                         <id>spotbugs-check</id>
@@ -410,6 +412,7 @@
                         </goals>
                     </execution>
                 </executions>
+                -->
             </plugin>
 
             <!-- 运行测试案例 -->

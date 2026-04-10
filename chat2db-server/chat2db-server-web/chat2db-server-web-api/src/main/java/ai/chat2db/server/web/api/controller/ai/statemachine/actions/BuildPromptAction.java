@@ -56,7 +56,7 @@ public class BuildPromptAction extends BaseChatAction {
 
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
-            ).subscribe();
+            );
 
         } catch (Exception e) {
             log.error("Build prompt failed", e);
@@ -64,7 +64,7 @@ public class BuildPromptAction extends BaseChatAction {
                     "构建提示失败：" + e.getMessage());
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build()
-            ).subscribe();
+            );
         }
     }
 

@@ -53,14 +53,14 @@ public class AutoSelectTablesAction extends BaseChatAction {
 
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
-            ).subscribe();
+            );
 
         } catch (Exception e) {
             log.error("Auto select tables failed", e);
             sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()
-            ).subscribe();
+            );
         }
     }
 
@@ -80,7 +80,7 @@ public class AutoSelectTablesAction extends BaseChatAction {
         PromptContext promptContext = PromptContext.builder()
                 .promptType(PromptType.SELECT_TABLES)
                 .message(ctx.getRequest().getMessage())
-                .dataSourceType(ctx.getRequest().getDataSourceType())
+                .dataSourceType(ctx.getRequest().getDestSqlType())
                 .schemaDdl(ctx.getSchemaDdl())
                 .forTableSelection(true)
                 .build();

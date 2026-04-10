@@ -44,14 +44,14 @@ public class FetchSchemaAction extends BaseChatAction {
 
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
-            ).subscribe();
+            );
 
         } catch (Exception e) {
             log.error("Fetch schema failed", e);
             sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
             context.getStateMachine().sendEvent(
                     MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()
-            ).subscribe();
+            );
         }
     }
 
