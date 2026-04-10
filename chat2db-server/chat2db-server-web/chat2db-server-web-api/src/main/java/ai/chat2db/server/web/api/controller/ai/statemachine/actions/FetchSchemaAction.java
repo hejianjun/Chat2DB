@@ -1,5 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -31,28 +33,32 @@ public class FetchSchemaAction extends BaseChatAction {
             return;
         }
 
-        try {
-            sendStateEvent(ctx.getSseEmitter(),
-                    ChatState.FETCHING_TABLE_SCHEMA, "正在获取表结构...");
+        sendStateEvent(ctx.getSseEmitter(),
+                ChatState.FETCHING_TABLE_SCHEMA, "正在获取表结构...");
 
-            String schemaDdl = fetchSchemaDdl(ctx);
-            ctx.setSchemaDdl(schemaDdl);
+        CompletableFuture.runAsync(() -> {
+            buildContext(ctx);
+            try {
+                String schemaDdl = fetchSchemaDdl(ctx);
+                ctx.setSchemaDdl(schemaDdl);
 
-            if (CollectionUtils.isNotEmpty(ctx.getRequest().getTableNames())) {
-                sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
+                if (CollectionUtils.isNotEmpty(ctx.getRequest().getTableNames())) {
+                    sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
+                }
+
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
+                );
+            } catch (Exception e) {
+                log.error("Fetch schema failed", e);
+                sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()
+                );
+            } finally {
+                removeContext();
             }
-
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
-            );
-
-        } catch (Exception e) {
-            log.error("Fetch schema failed", e);
-            sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()
-            );
-        }
+        });
     }
 
     private String fetchSchemaDdl(ChatContext ctx) {

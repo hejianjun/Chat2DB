@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -39,29 +40,33 @@ public class SelectTablesAction extends BaseChatAction {
             return;
         }
 
-        try {
-            sendStateEvent(ctx.getSseEmitter(),
-                    ChatState.AUTO_SELECTING_TABLES, "正在选择相关表...");
+        sendStateEvent(ctx.getSseEmitter(),
+                ChatState.AUTO_SELECTING_TABLES, "正在选择相关表...");
 
-            List<String> tableNames = selectTables(ctx);
+        CompletableFuture.runAsync(() -> {
+            buildContext(ctx);
+            try {
+                List<String> tableNames = selectTables(ctx);
 
-            if (CollectionUtils.isNotEmpty(tableNames)) {
-                ctx.getRequest().setTableNames(tableNames);
-                ctx.setSelectedTables(tableNames);
-                sendTablesSelected(ctx.getSseEmitter(), tableNames);
+                if (CollectionUtils.isNotEmpty(tableNames)) {
+                    ctx.getRequest().setTableNames(tableNames);
+                    ctx.setSelectedTables(tableNames);
+                    sendTablesSelected(ctx.getSseEmitter(), tableNames);
+                }
+
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
+                );
+            } catch (Exception e) {
+                log.error("Auto select tables failed", e);
+                sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()
+                );
+            } finally {
+                removeContext();
             }
-
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
-            );
-
-        } catch (Exception e) {
-            log.error("Auto select tables failed", e);
-            sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()
-            );
-        }
+        });
     }
 
     private List<String> selectTables(ChatContext ctx) {

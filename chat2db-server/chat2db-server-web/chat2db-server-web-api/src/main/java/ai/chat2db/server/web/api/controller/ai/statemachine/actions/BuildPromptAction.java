@@ -1,5 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -32,39 +34,43 @@ public class BuildPromptAction extends BaseChatAction {
             return;
         }
 
-        try {
-            sendStateEvent(chatContext.getSseEmitter(),
-                    ChatState.BUILDING_PROMPT, "正在构建提示...");
+        sendStateEvent(chatContext.getSseEmitter(),
+                ChatState.BUILDING_PROMPT, "正在构建提示...");
 
-            ChatQueryRequest request = chatContext.getRequest();
-            String schemaDdl = chatContext.getSchemaDdl();
+        CompletableFuture.runAsync(() -> {
+            buildContext(chatContext);
+            try {
+                ChatQueryRequest request = chatContext.getRequest();
+                String schemaDdl = chatContext.getSchemaDdl();
 
-            PromptType promptType = determinePromptType(request);
+                PromptType promptType = determinePromptType(request);
 
-            PromptContext promptContext = PromptContext.builder()
-                    .promptType(promptType)
-                    .message(request.getMessage())
-                    .ext(request.getExt())
-                    .schemaDdl(schemaDdl)
-                    .dataSourceType(guessDataSourceType(schemaDdl))
-                    .targetSqlType(request.getDestSqlType())
-                    .build();
+                PromptContext promptContext = PromptContext.builder()
+                        .promptType(promptType)
+                        .message(request.getMessage())
+                        .ext(request.getExt())
+                        .schemaDdl(schemaDdl)
+                        .dataSourceType(guessDataSourceType(schemaDdl))
+                        .targetSqlType(request.getDestSqlType())
+                        .build();
 
-            String builtPrompt = promptBuilder.context(promptContext).build();
-            chatContext.setBuiltPrompt(builtPrompt);
+                String builtPrompt = promptBuilder.context(promptContext).build();
+                chatContext.setBuiltPrompt(builtPrompt);
 
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
-            );
-
-        } catch (Exception e) {
-            log.error("Build prompt failed", e);
-            sendError(getChatContext(context).getSseEmitter(),
-                    "构建提示失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build()
-            );
-        }
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
+                );
+            } catch (Exception e) {
+                log.error("Build prompt failed", e);
+                sendError(chatContext.getSseEmitter(),
+                        "构建提示失败：" + e.getMessage());
+                context.getStateMachine().sendEvent(
+                        MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build()
+                );
+            } finally {
+                removeContext();
+            }
+        });
     }
 
     private PromptType determinePromptType(ChatQueryRequest request) {
