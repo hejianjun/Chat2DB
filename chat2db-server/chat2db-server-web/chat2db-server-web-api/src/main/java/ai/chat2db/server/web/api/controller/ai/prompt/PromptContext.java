@@ -44,10 +44,4 @@ public class PromptContext {
      * 目标 SQL 类型（用于 SQL 转换）
      */
     private String targetSqlType;
-
-    /**
-     * 是否用于表选择（如果是，需要附加表选择指令）
-     */
-    @Builder.Default
-    private Boolean forTableSelection = false;
 }

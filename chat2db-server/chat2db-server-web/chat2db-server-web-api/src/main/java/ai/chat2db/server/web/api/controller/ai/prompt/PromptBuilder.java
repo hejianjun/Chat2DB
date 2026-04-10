@@ -54,14 +54,6 @@ public interface PromptBuilder {
     PromptBuilder targetSqlType(String targetSqlType);
 
     /**
-     * 设置是否用于表选择
-     *
-     * @param forTableSelection 是否用于表选择
-     * @return 构建器
-     */
-    PromptBuilder forTableSelection(Boolean forTableSelection);
-
-    /**
      * 构建提示词
      *
      * @return 提示词

@@ -129,7 +129,9 @@ public class PromptTemplateRegistry {
                         "# {schema}\n" +
                         "#\n" +
                         "#\n" +
-                        "### SQL input: {message}")
+                        "### SQL input: {message}\n" +
+                        "\n" +
+                        "请只输出 JSON，格式：{\"table_names\":[\"表名 1\",\"表名 2\"]}，不要输出其他文字。")
                 .build();
     }
 

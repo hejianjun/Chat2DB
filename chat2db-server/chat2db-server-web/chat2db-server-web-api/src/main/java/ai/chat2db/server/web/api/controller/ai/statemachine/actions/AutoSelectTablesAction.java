@@ -80,9 +80,8 @@ public class AutoSelectTablesAction extends BaseChatAction {
         PromptContext promptContext = PromptContext.builder()
                 .promptType(PromptType.SELECT_TABLES)
                 .message(ctx.getRequest().getMessage())
-                .dataSourceType(ctx.getRequest().getDestSqlType())
+                .dataSourceType(ctx.getRequest().getDataSourceType())
                 .schemaDdl(ctx.getSchemaDdl())
-                .forTableSelection(true)
                 .build();
 
         return promptBuilder.context(promptContext).build();

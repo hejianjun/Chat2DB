@@ -74,15 +74,6 @@ public class PromptBuilderImpl implements PromptBuilder {
     }
 
     @Override
-    public PromptBuilder forTableSelection(Boolean forTableSelection) {
-        if (this.context == null) {
-            this.context = new PromptContext();
-        }
-        this.context.setForTableSelection(forTableSelection);
-        return this;
-    }
-
-    @Override
     public String build() {
         validateContext();
 
@@ -93,10 +84,6 @@ public class PromptBuilderImpl implements PromptBuilder {
 
         PromptTemplate template = templateRegistry.getTemplate(type);
         String builtPrompt = fillTemplate(template, context);
-
-        if (Boolean.TRUE.equals(context.getForTableSelection())) {
-            builtPrompt = appendTableSelectionInstruction(builtPrompt);
-        }
 
         return validator.cleanPrompt(builtPrompt);
     }
@@ -118,9 +105,9 @@ public class PromptBuilderImpl implements PromptBuilder {
 
     private String fillTemplate(PromptTemplate template, PromptContext context) {
         String templateStr = template.getTemplate();
-        String description = context.getPromptType() != null 
-            ? context.getPromptType().getDescription() 
-            : "将自然语言转换成 SQL 查询";
+        String description = context.getPromptType() != null
+                ? context.getPromptType().getDescription()
+                : "将自然语言转换成 SQL 查询";
 
         return templateStr
                 .replace("{description}", description)
@@ -128,11 +115,7 @@ public class PromptBuilderImpl implements PromptBuilder {
                 .replace("{db_type}", StringUtils.defaultString(context.getDataSourceType(), "MYSQL"))
                 .replace("{schema}", StringUtils.defaultString(context.getSchemaDdl(), ""))
                 .replace("{message}", context.getMessage())
-                .replace("{target_sql_type}", StringUtils.defaultString(context.getTargetSqlType(), 
+                .replace("{target_sql_type}", StringUtils.defaultString(context.getTargetSqlType(),
                         StringUtils.defaultString(context.getDataSourceType(), "MYSQL")));
-    }
-
-    private String appendTableSelectionInstruction(String prompt) {
-        return prompt + "\n\n请只输出 JSON，格式：{\"table_names\":[\"表名 1\",\"表名 2\"]}，不要输出其他文字。";
     }
 }
