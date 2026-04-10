@@ -61,6 +61,14 @@ export default defineConfig({
   plugins: ['@umijs/plugins/dist/dva'],
   chainWebpack,
   proxy: {
+    '/api/ai/chat': {
+      target: 'http://127.0.0.1:10821',
+      changeOrigin: true,
+      proxyTimeout: 3600000,
+      headers: {
+        Connection: 'keep-alive',
+      },
+    },
     '/api': {
       target: 'http://127.0.0.1:10821',
       changeOrigin: true,
