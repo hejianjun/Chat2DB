@@ -308,4 +308,18 @@ public class DataSourceServiceImpl implements DataSourceService {
         environmentConverter.fillDetail(EasyCollectionUtils.toList(list, DataSource::getEnvironment));
     }
 
+    @Override
+    public String queryDatabaseType(Long dataSourceId) {
+        try {
+            DataSourceMapper mapper = getMapper();
+            DataSourceDO dataSourceDO = mapper.selectById(dataSourceId);
+            if (dataSourceDO != null && StringUtils.isNotBlank(dataSourceDO.getType())) {
+                return dataSourceDO.getType();
+            }
+        } catch (Exception e) {
+            log.error("query database type error, dataSourceId:{}", dataSourceId, e);
+        }
+        return "MYSQL";
+    }
+
 }

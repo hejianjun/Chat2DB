@@ -127,4 +127,13 @@ public interface DataSourceService {
      */
     ActionResult close(Long id);
 
+
+    /**
+     * 获取数据库类型
+     *
+     * @param dataSourceId 数据源 ID
+     * @return 数据库类型
+     */
+    String queryDatabaseType(Long dataSourceId);
+
 }

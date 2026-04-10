@@ -58,10 +58,6 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Autowired
     private TableService tableService;
 
-    private DataSourceMapper getDataSourceMapper() {
-        return Dbutils.getMapper(DataSourceMapper.class);
-    }
-
     @Override
     public ListResult<Database> queryAll(DatabaseQueryAllParam param) {
         List<Database> databases = CacheManage.getList(getDataBasesKey(param.getDataSourceId()), Database.class,
@@ -304,17 +300,5 @@ public class DatabaseServiceImpl implements DatabaseService {
                 .collect(Collectors.joining(","));
     }
 
-    @Override
-    public String queryDatabaseType(Long dataSourceId) {
-        try {
-            DataSourceMapper mapper = getDataSourceMapper();
-            DataSourceDO dataSourceDO = mapper.selectById(dataSourceId);
-            if (dataSourceDO != null && StringUtils.isNotBlank(dataSourceDO.getType())) {
-                return dataSourceDO.getType();
-            }
-        } catch (Exception e) {
-            log.error("query database type error, dataSourceId:{}", dataSourceId, e);
-        }
-        return "MYSQL";
-    }
+
 }

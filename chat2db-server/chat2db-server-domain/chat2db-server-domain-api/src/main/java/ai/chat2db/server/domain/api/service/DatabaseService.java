@@ -131,11 +131,5 @@ public interface DatabaseService {
      */
     String queryRedisSchema(Long dataSourceId, String databaseName, String schemaName, java.util.List<String> tableNames);
 
-    /**
-     * 获取数据库类型
-     *
-     * @param dataSourceId 数据源 ID
-     * @return 数据库类型
-     */
-    String queryDatabaseType(Long dataSourceId);
+
 }

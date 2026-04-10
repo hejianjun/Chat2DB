@@ -2,6 +2,8 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.util.concurrent.CompletableFuture;
 
+import ai.chat2db.server.domain.api.service.DataSourceService;
+import ai.chat2db.server.domain.api.service.DatabaseService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -27,6 +29,9 @@ public class BuildPromptAction extends BaseChatAction {
     @Autowired
     private PromptBuilder promptBuilder;
 
+    @Autowired
+    private DataSourceService dataSourceService;
+
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
         ChatContext chatContext = getChatContext(context);
@@ -50,7 +55,7 @@ public class BuildPromptAction extends BaseChatAction {
                         .message(request.getMessage())
                         .ext(request.getExt())
                         .schemaDdl(schemaDdl)
-                        .dataSourceType(guessDataSourceType(schemaDdl))
+                        .dataSourceType(dataSourceService.queryDatabaseType(request.getDataSourceId()))
                         .targetSqlType(request.getDestSqlType())
                         .build();
 
@@ -78,20 +83,5 @@ public class BuildPromptAction extends BaseChatAction {
                 ? PromptType.NL_2_SQL.getCode()
                 : request.getPromptType();
         return PromptType.valueOf(promptType);
-    }
-
-    private String guessDataSourceType(String schemaDdl) {
-        if (StringUtils.isEmpty(schemaDdl)) {
-            return "MYSQL";
-        }
-        String upper = schemaDdl.toUpperCase();
-        if (upper.contains("MYSQL") || upper.contains("AUTO_INCREMENT")) {
-            return "MYSQL";
-        } else if (upper.contains("POSTGRES") || upper.contains("SERIAL")) {
-            return "POSTGRESQL";
-        } else if (upper.contains("ORACLE") || upper.contains("NUMBER(")) {
-            return "ORACLE";
-        }
-        return "MYSQL";
     }
 }
