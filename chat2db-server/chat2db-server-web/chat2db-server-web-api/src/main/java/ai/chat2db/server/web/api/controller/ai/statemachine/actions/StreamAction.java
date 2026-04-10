@@ -55,14 +55,8 @@ public class StreamAction extends BaseChatAction {
                     .user(prompt)
                     .stream()
                     .content();
-
-            AtomicBoolean contextBuilt = new AtomicBoolean(false);
-
             flux.publishOn(Schedulers.boundedElastic())
                     .doOnNext(content -> {
-                        if (contextBuilt.compareAndSet(false, true)) {
-                            buildContext(ctx);
-                        }
                         if (ctx.isCancelled()) {
                             throw new RuntimeException("Cancelled by user");
                         }
@@ -109,7 +103,6 @@ public class StreamAction extends BaseChatAction {
                                 MessageBuilder.withPayload(ChatEvent.STREAM_FINISHED).build()
                         );
                     })
-                    .doFinally(signalType -> removeContext())
                     .subscribe();
 
         } catch (Exception e) {
