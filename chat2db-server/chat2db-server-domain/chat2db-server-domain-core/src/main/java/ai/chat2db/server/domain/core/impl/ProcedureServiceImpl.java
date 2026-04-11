@@ -98,7 +98,7 @@ public class ProcedureServiceImpl implements ProcedureService {
                 .uuid("procedure-" + procedure.getName())
                 .key(procedure.getName())
                 .name(procedure.getName())
-                .treeNodeType("PROCEDURE")
+                .treeNodeType("procedure")
                 .comment(procedure.getComment())
                 .isLeaf(true)
                 .parentPath(parentPath)

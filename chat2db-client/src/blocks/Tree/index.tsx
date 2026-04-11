@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useState, createContext, useContext } from 'react';
+import React, { memo, useEffect, useMemo, useState, createContext, useContext, useRef } from 'react';
 import styles from './index.less';
 import classnames from 'classnames';
 import Iconfont from '@/components/Iconfont';
@@ -8,12 +8,14 @@ import { TreeNodeType, databaseMap } from '@/constants';
 import { treeConfig, switchIcon, ITreeConfigItem } from './treeConfig';
 import { useCommonStore } from '@/store/common';
 import { setCurrentWorkspaceGlobalExtend } from '@/pages/main/workspace/store/common';
+import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import LoadingGracile from '@/components/Loading/LoadingGracile';
 import { setFocusId, setFocusTreeNode, useTreeStore, clearTreeStore } from './treeStore';
 import { useGetRightClickMenu } from './hooks/useGetRightClickMenu';
 import MenuLabel from '@/components/MenuLabel';
 import LoadingContent from '@/components/Loading/LoadingContent';
 import { cloneDeep } from 'lodash';
+import sqlService from '@/service/sql';
 // import { flushSync } from 'react-dom';
 
 interface IProps {
@@ -111,8 +113,13 @@ const Tree = (props: IProps) => {
   const { className, treeData: outerTreeData, searchValue } = props;
   const [treeData, setTreeData] = useState<ITreeNode[] | null>(null);
   const [smoothTreeData, setSmoothTreeData] = useState<ITreeNode[]>([]);
-  const [searchTreeData, setSearchTreeData] = useState<ITreeNode[] | null>(null); // 搜索结果
-  const [searchSmoothTreeData, setSearchSmoothTreeData] = useState<ITreeNode[] | null>(null); // 搜索结果 平级
+  const [searchTreeData, setSearchTreeData] = useState<ITreeNode[] | null>(null); // 前端搜索结果
+  const [searchSmoothTreeData, setSearchSmoothTreeData] = useState<ITreeNode[] | null>(null); // 前端搜索结果平级
+  const [backendSmoothTreeData, setBackendSmoothTreeData] = useState<ITreeNode[] | null>(null); // 后端搜索结果平级
+  const [backendSearchLoading, setBackendSearchLoading] = useState(false);
+  const searchValueRef = useRef<string>('');
+
+  const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
 
   const [scrollTop, setScrollTop] = useState(0); // 滚动位置 // 继续需要渲染的 item 索引有哪些
 
@@ -158,24 +165,153 @@ const Tree = (props: IProps) => {
   }, [searchTreeData]);
 
   const treeNodes = useMemo(() => {
-    const realNodeList = (searchSmoothTreeData || smoothTreeData).slice(startIdx, startIdx + 50);
+    const realNodeList = (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData).slice(startIdx, startIdx + 50);
     return realNodeList.map((item) => {
       return <TreeNode key={item.uuid} level={item.level || 0} data={item} />;
     });
-  }, [smoothTreeData, searchSmoothTreeData, startIdx]);
+  }, [smoothTreeData, searchSmoothTreeData, backendSmoothTreeData, startIdx]);
 
   useEffect(() => {
     if (searchValue && treeData) {
+      searchValueRef.current = searchValue;
       const _searchTreeData = searchTree(cloneDeep(treeData), searchValue);
-      setSearchTreeData(_searchTreeData);
-      setScrollTop(0);
+      
+      const flatResult: ITreeNode[] = [];
+      smoothTree(_searchTreeData, flatResult);
+      const matchCount = flatResult.filter(item => isMatch(item.name, searchValue)).length;
+      
+      if (matchCount > 0) {
+        setSearchTreeData(_searchTreeData);
+        setBackendSmoothTreeData(null);
+        setScrollTop(0);
+      } else if (currentConnectionDetails?.id) {
+        setSearchTreeData(null);
+        setBackendSearchLoading(true);
+        sqlService.searchTree({
+          dataSourceId: currentConnectionDetails.id,
+          dataSourceName: currentConnectionDetails.alias,
+          databaseType: currentConnectionDetails.type,
+          searchKey: searchValue,
+        })
+          .then((res) => {
+            if (searchValueRef.current === searchValue) {
+              const enrichedNodes = res.map(node => ({
+                ...node,
+                treeNodeType: node.treeNodeType?.toLowerCase() || node.treeNodeType,
+                pretendNodeType: node.pretendNodeType?.toLowerCase() || node.pretendNodeType,
+                extraParams: {
+                  ...node.extraParams,
+                  dataSourceId: currentConnectionDetails.id,
+                  dataSourceName: currentConnectionDetails.alias,
+                  databaseType: currentConnectionDetails.type,
+                },
+              }));
+              const treeResult = buildTreeFromFlatData(enrichedNodes);
+              const smoothResult: ITreeNode[] = [];
+              smoothTree(treeResult, smoothResult);
+              setBackendSmoothTreeData(smoothResult);
+              setScrollTop(0);
+            }
+          })
+          .catch(() => {
+            if (searchValueRef.current === searchValue) {
+              setBackendSmoothTreeData([]);
+            }
+          })
+          .finally(() => {
+            if (searchValueRef.current === searchValue) {
+              setBackendSearchLoading(false);
+            }
+          });
+      } else {
+        setSearchTreeData(_searchTreeData);
+        setBackendSmoothTreeData(null);
+        setScrollTop(0);
+      }
     } else {
+      searchValueRef.current = '';
       setSearchTreeData(null);
+      setBackendSmoothTreeData(null);
     }
-  }, [searchValue, treeData]);
+  }, [searchValue, treeData, currentConnectionDetails]);
+
+  function buildTreeFromFlatData(flatNodes: ITreeNode[]): ITreeNode[] {
+    if (!flatNodes || flatNodes.length === 0) return [];
+    
+    const firstNode = flatNodes[0];
+    const baseExtraParams = firstNode.extraParams || {};
+    
+    const map = new Map<string, ITreeNode>();
+    const pathMap = new Map<string, ITreeNode>();
+    const roots: ITreeNode[] = [];
+
+    flatNodes.forEach(item => {
+      map.set(item.uuid, { ...item, children: [] });
+    });
+
+    flatNodes.forEach(node => {
+      if (node.parentPath && node.parentPath.length > 0) {
+        let currentPath = '';
+        node.parentPath.forEach((pathItem, index) => {
+          const prevPath = currentPath;
+          currentPath = prevPath ? `${prevPath}/${pathItem}` : pathItem;
+          
+          if (!pathMap.has(currentPath)) {
+            const pathNode: ITreeNode = {
+              uuid: `path-${currentPath}`,
+              key: `path-${currentPath}`,
+              name: pathItem,
+              treeNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMA,
+              pretendNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMA,
+              isLeaf: false,
+              children: [],
+              extraParams: {
+                ...baseExtraParams,
+                databaseName: index === 0 ? pathItem : baseExtraParams.databaseName,
+                schemaName: index === 1 ? pathItem : baseExtraParams.schemaName,
+              },
+            };
+            pathMap.set(currentPath, pathNode);
+          }
+        });
+      }
+    });
+
+    pathMap.forEach((pathNode, path) => {
+      const pathParts = path.split('/');
+      if (pathParts.length > 1) {
+        const parentPath = pathParts.slice(0, -1).join('/');
+        const parentNode = pathMap.get(parentPath);
+        if (parentNode && parentNode.children) {
+          parentNode.children.push(pathNode);
+          pathNode.parentNode = parentNode;
+        }
+      } else {
+        roots.push(pathNode);
+      }
+    });
+
+    flatNodes.forEach(node => {
+      const mappedNode = map.get(node.uuid);
+      if (mappedNode) {
+        if (node.parentPath && node.parentPath.length > 0) {
+          const parentKey = node.parentPath.join('/');
+          const parentNode = pathMap.get(parentKey);
+          if (parentNode && parentNode.children) {
+            parentNode.children.push(mappedNode);
+            mappedNode.parentNode = parentNode;
+          }
+        } else {
+          roots.push(mappedNode);
+        }
+      }
+    });
+
+    return roots;
+  }
 
   return (
-    <LoadingContent isLoading={!treeData} className={classnames(className)}>
+    <LoadingContent isLoading={!treeData || backendSearchLoading} className={classnames(className)}>
       <Context.Provider
         value={{
           treeData: treeData!,
@@ -192,7 +328,7 @@ const Tree = (props: IProps) => {
         >
           <div
             className={styles.treeListHolder}
-            style={{ '--tree-node-count': (searchSmoothTreeData || smoothTreeData)?.length } as any}
+            style={{ '--tree-node-count': (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData)?.length } as any}
           >
             <div style={{ height: top }} />
             {treeNodes}

@@ -773,7 +773,7 @@ public class TableServiceImpl implements TableService {
                 .uuid("table-" + table.getName())
                 .key(table.getName())
                 .name(table.getName())
-                .treeNodeType("TABLE")
+                .treeNodeType("table")
                 .comment(table.getComment())
                 .isLeaf(true)
                 .pinned(table.isPinned())

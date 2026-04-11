@@ -98,7 +98,7 @@ public class TriggerServiceImpl implements TriggerService {
                 .uuid("trigger-" + trigger.getName())
                 .key(trigger.getName())
                 .name(trigger.getName())
-                .treeNodeType("TRIGGER")
+                .treeNodeType("trigger")
                 .comment(trigger.getComment())
                 .isLeaf(true)
                 .parentPath(parentPath)

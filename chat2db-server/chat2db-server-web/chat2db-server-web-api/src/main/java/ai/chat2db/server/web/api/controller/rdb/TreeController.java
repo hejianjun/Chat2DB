@@ -50,27 +50,28 @@ public class TreeController {
         List<TreeNode> result = new ArrayList<>();
 
         String type = request.getTreeNodeType();
-        if (StringUtils.isBlank(type) || "ALL".equalsIgnoreCase(type)) {
+        if (StringUtils.isBlank(type) || "all".equalsIgnoreCase(type)) {
             result.addAll(tableService.searchTreeNodes(param));
             result.addAll(viewService.searchTreeNodes(param));
             result.addAll(functionService.searchTreeNodes(param));
             result.addAll(procedureService.searchTreeNodes(param));
             result.addAll(triggerService.searchTreeNodes(param));
         } else {
-            switch (type.toUpperCase()) {
-                case "TABLE":
+            String lowerType = type.toLowerCase();
+            switch (lowerType) {
+                case "table":
                     result.addAll(tableService.searchTreeNodes(param));
                     break;
-                case "VIEW":
+                case "view":
                     result.addAll(viewService.searchTreeNodes(param));
                     break;
-                case "FUNCTION":
+                case "function":
                     result.addAll(functionService.searchTreeNodes(param));
                     break;
-                case "PROCEDURE":
+                case "procedure":
                     result.addAll(procedureService.searchTreeNodes(param));
                     break;
-                case "TRIGGER":
+                case "trigger":
                     result.addAll(triggerService.searchTreeNodes(param));
                     break;
                 default:

@@ -98,7 +98,7 @@ public class FunctionServiceImpl implements FunctionService {
                 .uuid("function-" + function.getName())
                 .key(function.getName())
                 .name(function.getName())
-                .treeNodeType("FUNCTION")
+                .treeNodeType("function")
                 .comment(function.getComment())
                 .isLeaf(true)
                 .parentPath(parentPath)

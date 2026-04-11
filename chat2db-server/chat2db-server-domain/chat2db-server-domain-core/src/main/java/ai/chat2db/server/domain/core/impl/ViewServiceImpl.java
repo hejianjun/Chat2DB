@@ -100,7 +100,7 @@ public class ViewServiceImpl implements ViewService {
                 .uuid("view-" + view.getName())
                 .key(view.getName())
                 .name(view.getName())
-                .treeNodeType("VIEW")
+                .treeNodeType("view")
                 .comment(view.getComment())
                 .isLeaf(true)
                 .parentPath(parentPath)
