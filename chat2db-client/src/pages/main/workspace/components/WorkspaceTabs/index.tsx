@@ -174,7 +174,6 @@ const WorkspaceTabs = memo(() => {
       if (cachedData?.[0]?.ddl) {
         sqlContent = cachedData[0].ddl;
       } else {
-        // 如果 indexedDB 没有，使用 uniqueData 中的 ddl
         sqlContent = tabData.uniqueData?.ddl || '';
       }
     } catch {
@@ -198,48 +197,41 @@ const WorkspaceTabs = memo(() => {
       schemaName: tabData.uniqueData?.schemaName,
     });
 
-    const handleMessage = (data: string) => {
-      try {
-        const parsedData = JSON.parse(data);
-        if (parsedData?.content) {
-          generatedTitle += parsedData.content;
-        }
-      } catch (error) {
-        console.error('Parse message error:', error);
+    const handleMessage = (content?: string) => {
+      if (content) {
+        generatedTitle += content;
       }
     };
 
-    const handleComplete = (_message: MessageEvent) => {
+    const handleDone = () => {
       setGeneratingTitleKey(null);
-      const toolFuntion = JSON.parse(_message.data);
-      if ('set_titletitle' == toolFuntion.name) { 
-        // 清理标题，去除引号和多余空白
-        const cleanTitle = JSON.parse(toolFuntion.arguments).title_name.replace(/^["'`]+|["'`]+$/g, '').trim();
-        if (cleanTitle) {
-          // 更新标题
-          const _params: any = {
-            id: consoleId,
-            name: cleanTitle,
-          };
-          historyService.updateSavedConsole(_params);
+      // 清理标题，去除引号和多余空白
+      const cleanTitle = generatedTitle.replace(/^["'`]+|["'`]+$/g, '').trim();
+      if (cleanTitle) {
+        const _params: any = {
+          id: consoleId,
+          name: cleanTitle,
+        };
+        historyService.updateSavedConsole(_params);
 
-          const _workspaceTabList: any =
-            workspaceTabList?.map((item) => {
-              if (item.id === consoleId) {
-                return {
-                  ...item,
-                  title: cleanTitle,
-                };
-              }
-              return item;
-            }) || [];
-          setWorkspaceTabList(_workspaceTabList);
-          message.success(i18n('common.tips.updateSuccess'));
-        }
+        const _workspaceTabList: any =
+          workspaceTabList?.map((item) => {
+            if (item.id === consoleId) {
+              return {
+                ...item,
+                title: cleanTitle,
+              };
+            }
+            return item;
+          }) || [];
+        setWorkspaceTabList(_workspaceTabList);
+        message.success(i18n('common.tips.updateSuccess'));
+      } else {
+        message.warning(i18n('workspace.tips.generateTitleFailed'));
       }
     };
 
-    const handleError = (error: any) => {
+    const handleError = (error: string) => {
       console.error('AI chat error:', error);
       message.error(i18n('workspace.tips.generateTitleFailed'));
       setGeneratingTitleKey(null);
@@ -250,8 +242,8 @@ const WorkspaceTabs = memo(() => {
       uid,
       onOpen: () => {},
       onMessage: handleMessage,
+      onDone: handleDone,
       onError: handleError,
-      onCallback: handleComplete,
     });
   };
 
