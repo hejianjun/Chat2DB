@@ -1114,7 +1114,7 @@ export default function TableBox(props: ITableProps) {
         onCancel={handleCancel}
         width="60vw"
         maskClosable={false}
-        destroyOnClose={true}
+        destroyOnHidden={true}
         footer={
           queryResultData.canEdit && [
             <Button key="1" type="primary" onClick={monacoEditorEditData}>
@@ -1131,7 +1131,7 @@ export default function TableBox(props: ITableProps) {
         title={initError ? i18n('common.button.executionError') : i18n('editTable.title.sqlPreview')}
         open={viewUpdateDataSqlModal}
         footer={false}
-        destroyOnClose={true}
+        destroyOnHidden={true}
         onCancel={() => {
           setViewUpdateDataSqlModal(false);
           setUpdateDataSql('');

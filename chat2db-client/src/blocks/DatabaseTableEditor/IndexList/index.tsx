@@ -417,7 +417,7 @@ const IndexList = forwardRef((props: IProps, ref: ForwardedRef<IIndexListRef>) =
           setIncludeColModalOpen(false);
         }}
         maskClosable={false}
-        destroyOnClose={true}
+        destroyOnHidden={true}
       >
         <IncludeCol includedColumnList={indexIncludedColumnList} ref={includeColRef} />
       </Modal>

@@ -52,7 +52,7 @@ const Modal = memo(() => {
         onCancel={() => {
           setOpen(false);
         }}
-        destroyOnClose={true}
+        destroyOnHidden={true}
         {...footer}
       >
         {modalData.content}

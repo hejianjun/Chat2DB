@@ -195,6 +195,7 @@ function UserManagement() {
       />
 
       <Modal
+        forceRender
         title={isEditing ? i18n('team.action.editUser') : i18n('team.action.addUser')}
         open={isModalVisible}
         onOk={() => {

@@ -187,6 +187,7 @@ function TeamManagement() {
       />
 
       <Modal
+        forceRender
         title={form.getFieldValue('id') !== undefined ? i18n('team.action.editTeam') : i18n('team.action.addTeam')}
         open={isModalVisible}
         onOk={() => {

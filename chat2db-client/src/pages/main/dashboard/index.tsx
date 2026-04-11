@@ -253,6 +253,7 @@ function Chart(props: IProps) {
       </DraggableContainer>
 
       <Modal
+        forceRender
         title={form.getFieldValue('id') ? i18n('dashboard.modal.editTitle') : i18n('dashboard.modal.addTitle')}
         open={openAddDashboard}
         onOk={async () => {

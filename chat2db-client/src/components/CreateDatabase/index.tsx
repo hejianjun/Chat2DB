@@ -144,7 +144,7 @@ const CreateDatabase = () => {
         setOpen(false);
       }}
       title={config.title}
-      destroyOnClose
+      destroyOnHidden
       confirmLoading={confirmLoading}
       open={open}
       onOk={onOk}

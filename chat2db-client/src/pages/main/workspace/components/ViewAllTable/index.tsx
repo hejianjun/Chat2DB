@@ -356,7 +356,7 @@ export default memo<IProps>((props) => {
         width="60vw"
         maskClosable={false}
         footer={false}
-        destroyOnClose={true}
+        destroyOnHidden={true}
       >
         <ExecuteSQL
           initSql={appendValue}

@@ -158,7 +158,7 @@ export default memo<IProps>((props) => {
         )}
       </div>
       <Modal
-        destroyOnClose={true}
+        destroyOnHidden={true}
         title={i18n('connection.title.uploadDriver')}
         open={uploadDriverModal}
         onOk={() => {

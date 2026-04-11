@@ -70,7 +70,8 @@ function ChartItem(props: IChartItemProps) {
   const [isEditing, setIsEditing] = useState<boolean>(props.isEditing ?? false);
   const [isLoading, setIsLoading] = useState(false);
   const [initDDL, setInitDDL] = useState('');
-  const [form] = Form.useForm(); // 创建一个表单实例
+  const [form] = Form.useForm();
+  const [pendingFormValues, setPendingFormValues] = useState<any>(null);
   const chartRef = useRef<any>();
 
   useEffect(() => {
@@ -78,6 +79,12 @@ function ChartItem(props: IChartItemProps) {
       queryChartData();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (isEditing && pendingFormValues) {
+      form.setFieldsValue(pendingFormValues);
+    }
+  }, [isEditing]);
 
   useEffect(() => {
     if (connectionList && connectionList.length > 0) {
@@ -167,7 +174,10 @@ function ChartItem(props: IChartItemProps) {
 
     // 设置Chart参数，eg ChartType、xAxis、yAxis
     const formValue = JSON.parse(res.schema || '{}');
-    form.setFieldsValue(formValue);
+    setPendingFormValues(formValue);
+    if (isEditing) {
+      form.setFieldsValue(formValue);
+    }
 
     if (res.ddl && res.connectable) {
       setInitDDL(res.ddl);
