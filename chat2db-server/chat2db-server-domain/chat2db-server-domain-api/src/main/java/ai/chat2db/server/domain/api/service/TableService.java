@@ -2,12 +2,14 @@ package ai.chat2db.server.domain.api.service;
 
 import java.util.List;
 
+import ai.chat2db.server.domain.api.model.TreeNode;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
 import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.TreeSearchParam;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -158,5 +160,13 @@ public interface TableService {
      * 删除虚拟外键
      */
     ActionResult deleteVirtualForeignKey(DropKeyParam param);
+
+    /**
+     * Search tree nodes for tables.
+     *
+     * @param param
+     * @return
+     */
+    List<TreeNode> searchTreeNodes(TreeSearchParam param);
 
 }

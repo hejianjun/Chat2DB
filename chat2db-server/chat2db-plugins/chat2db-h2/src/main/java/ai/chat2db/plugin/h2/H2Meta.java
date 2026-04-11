@@ -109,7 +109,7 @@ public class H2Meta extends DefaultMetaService implements MetaData {
             Function function = new Function();
             function.setDatabaseName(databaseName);
             function.setSchemaName(schemaName);
-            function.setFunctionName(functionName);
+            function.setName(functionName);
             if (resultSet.next()) {
                 function.setSpecificName(resultSet.getString("SPECIFIC_NAME"));
                 function.setFunctionBody(resultSet.getString("ROUTINE_DEFINITION"));
@@ -134,7 +134,7 @@ public class H2Meta extends DefaultMetaService implements MetaData {
         return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
             while (resultSet.next()) {
                 Trigger trigger = new Trigger();
-                trigger.setTriggerName(resultSet.getString("TRIGGER_NAME"));
+                trigger.setName(resultSet.getString("TRIGGER_NAME"));
                 trigger.setSchemaName(schemaName);
                 trigger.setDatabaseName(databaseName);
                 triggers.add(trigger);
@@ -152,7 +152,7 @@ public class H2Meta extends DefaultMetaService implements MetaData {
             Trigger trigger = new Trigger();
             trigger.setDatabaseName(databaseName);
             trigger.setSchemaName(schemaName);
-            trigger.setTriggerName(triggerName);
+            trigger.setName(triggerName);
             if (resultSet.next()) {
                 trigger.setTriggerBody(resultSet.getString("JAVA_CLASS"));
             }
@@ -168,7 +168,7 @@ public class H2Meta extends DefaultMetaService implements MetaData {
             Procedure procedure = new Procedure();
             procedure.setDatabaseName(databaseName);
             procedure.setSchemaName(schemaName);
-            procedure.setProcedureName(procedureName);
+            procedure.setName(procedureName);
             if (resultSet.next()) {
                 procedure.setSpecificName(resultSet.getString("SPECIFIC_NAME"));
                 procedure.setProcedureBody(resultSet.getString("ROUTINE_DEFINITION"));

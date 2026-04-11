@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Function {
+public class Function implements IndexModel {
     //FUNCTION_CAT String => function catalog (may be null)
     //FUNCTION_SCHEM String => function schema (may be null)
     //FUNCTION_NAME String => function name. This is the name used to invoke the function
@@ -34,10 +34,14 @@ public class Function {
     private String schemaName;
 
     @JsonAlias({"FUNCTION_NAME"})
-    private String functionName;
+    private String name;
 
     @JsonAlias({"REMARKS"})
-    private String remarks;
+    private String comment;
+
+    private String aiComment;
+
+    private Long version;
 
     @JsonAlias({"FUNCTION_TYPE"})
     private Short functionType;
@@ -47,4 +51,12 @@ public class Function {
 
     private String functionBody;
 
+    @Override
+    public String getTableName() {
+        return null;
+    }
+
+    @Override
+    public void setTableName(String tableName) {
+    }
 }

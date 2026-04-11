@@ -12,6 +12,30 @@ import {
 import { ExportSizeEnum, ExportTypeEnum } from '@/typings/resultTable';
 import createRequest from './base';
 
+export interface ITreeSearchParams extends IPageParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+  searchKey?: string;
+  treeNodeType?: string;
+  refresh?: boolean;
+}
+
+export interface ITreeNodeResponse {
+  uuid: string;
+  key: string;
+  name: string;
+  treeNodeType: string;
+  pretendNodeType?: string;
+  comment?: string;
+  isLeaf?: boolean;
+  pinned?: boolean;
+  parentPath?: string[];
+  extraParams?: Record<string, any>;
+}
+
+const searchTree = createRequest<ITreeSearchParams, ITreeNodeResponse[]>('/api/rdb/tree/search', { method: 'get' });
+
 export interface IGetTableListParams extends IPageParams {
   dataSourceId: number;
   databaseName: string;
@@ -393,6 +417,7 @@ const deleteVirtualForeignKey = createRequest<{
 }, void>('/api/rdb/ddl/delete_virtual_foreign_key', { method: 'post' });
 
 export default {
+  searchTree,
   getCreateSchemaSql,
   getCreateDatabaseSql,
   executeUpdateDataSql,

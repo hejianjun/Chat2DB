@@ -151,7 +151,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             Function function = new Function();
             function.setDatabaseName(databaseName);
             function.setSchemaName(schemaName);
-            function.setFunctionName(functionName);
+            function.setName(functionName);
             function.setFunctionBody(sb.toString());
             return function;
 
@@ -243,7 +243,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
                 resultSet -> {
                     while (resultSet.next()) {
                         Trigger trigger = new Trigger();
-                        trigger.setTriggerName(resultSet.getString("TRIGGER_NAME"));
+                        trigger.setName(resultSet.getString("TRIGGER_NAME"));
                         trigger.setSchemaName(schemaName);
                         trigger.setDatabaseName(databaseName);
                         triggers.add(trigger);
@@ -265,7 +265,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             Trigger trigger = new Trigger();
             trigger.setDatabaseName(databaseName);
             trigger.setSchemaName(schemaName);
-            trigger.setTriggerName(triggerName);
+            trigger.setName(triggerName);
             trigger.setTriggerBody(resultSet.getString(sb.toString()));
             return trigger;
         });
@@ -283,7 +283,7 @@ public class OracleMetaData extends DefaultMetaService implements MetaData {
             Procedure procedure = new Procedure();
             procedure.setDatabaseName(databaseName);
             procedure.setSchemaName(schemaName);
-            procedure.setProcedureName(procedureName);
+            procedure.setName(procedureName);
             procedure.setProcedureBody(sb.toString());
             return procedure;
         });

@@ -1,14 +1,35 @@
 package ai.chat2db.server.domain.core.impl;
 
-import ai.chat2db.server.domain.api.service.TriggerService;
-import ai.chat2db.server.tools.base.wrapper.result.DataResult;
-import ai.chat2db.server.tools.base.wrapper.result.ListResult;
-import ai.chat2db.spi.model.Trigger;
-import ai.chat2db.spi.sql.Chat2DBContext;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import ai.chat2db.server.domain.api.model.TreeNode;
+import ai.chat2db.server.domain.api.param.TreeSearchParam;
+import ai.chat2db.server.domain.api.service.TriggerService;
+import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
+import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
+import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import ai.chat2db.server.tools.base.wrapper.result.ListResult;
+import ai.chat2db.spi.MetaData;
+import ai.chat2db.spi.model.Trigger;
+import ai.chat2db.spi.sql.Chat2DBContext;
+import lombok.extern.slf4j.Slf4j;
+
 @Service
+@Slf4j
 public class TriggerServiceImpl implements TriggerService {
+
+    @Autowired
+    private LuceneIndexManagerFactory managerFactory;
+
     @Override
     public ListResult<Trigger> triggers(String databaseName, String schemaName) {
         return ListResult.of(Chat2DBContext.getMetaData().triggers(Chat2DBContext.getConnection(),databaseName, schemaName));
@@ -17,5 +38,71 @@ public class TriggerServiceImpl implements TriggerService {
     @Override
     public DataResult<Trigger> detail(String databaseName, String schemaName, String triggerName) {
         return DataResult.of(Chat2DBContext.getMetaData().trigger(Chat2DBContext.getConnection(), databaseName, schemaName, triggerName));
+    }
+
+    @Override
+    public List<TreeNode> searchTreeNodes(TreeSearchParam param) {
+        LuceneIndexManager<Trigger> mgr = managerFactory.getManager(param.getDataSourceId());
+        Trigger queryModel = Trigger.builder()
+                .databaseName(param.getDatabaseName())
+                .schemaName(param.getSchemaName())
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (param.isRefresh() || version == null) {
+            loadAndCacheMetadata(mgr, param, version);
+        }
+
+        List<Trigger> triggers = mgr.search(queryModel, null, param.getSearchKey());
+        List<TreeNode> result = new ArrayList<>();
+        for (Trigger trigger : triggers) {
+            TreeNode node = buildTreeNode(trigger);
+            result.add(node);
+        }
+        return result;
+    }
+
+    private void loadAndCacheMetadata(LuceneIndexManager<Trigger> mgr, TreeSearchParam param, Long version) {
+        mgr.getLock().writeLock().lock();
+        try {
+            Connection conn = Chat2DBContext.getConnection();
+            MetaData meta = Chat2DBContext.getMetaData();
+            List<Trigger> triggers = meta.triggers(conn, param.getDatabaseName(), param.getSchemaName());
+            if (CollectionUtils.isEmpty(triggers)) {
+                return;
+            }
+            triggers.forEach(t -> t.setVersion(version));
+            mgr.updateDocuments(triggers, version);
+        } catch (Exception e) {
+            log.error("loadAndCacheMetadata error,version:{}", version, e);
+        } finally {
+            mgr.getLock().writeLock().unlock();
+        }
+    }
+
+    private TreeNode buildTreeNode(Trigger trigger) {
+        List<String> parentPath = new ArrayList<>();
+        if (StringUtils.isNotBlank(trigger.getDatabaseName())) {
+            parentPath.add(trigger.getDatabaseName());
+        }
+        if (StringUtils.isNotBlank(trigger.getSchemaName())) {
+            parentPath.add(trigger.getSchemaName());
+        }
+
+        Map<String, Object> extraParams = new HashMap<>();
+        extraParams.put("databaseName", trigger.getDatabaseName());
+        extraParams.put("schemaName", trigger.getSchemaName());
+        extraParams.put("triggerName", trigger.getName());
+
+        return TreeNode.builder()
+                .uuid("trigger-" + trigger.getName())
+                .key(trigger.getName())
+                .name(trigger.getName())
+                .treeNodeType("TRIGGER")
+                .comment(trigger.getComment())
+                .isLeaf(true)
+                .parentPath(parentPath)
+                .extraParams(extraParams)
+                .build();
     }
 }

@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 
 import com.google.common.collect.Lists;
 
+import ai.chat2db.server.domain.api.model.TreeNode;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
 import ai.chat2db.server.domain.api.param.PinTableParam;
@@ -34,6 +35,7 @@ import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.TreeSearchParam;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.domain.api.service.PinService;
 import ai.chat2db.server.domain.api.service.TableService;
@@ -715,6 +717,69 @@ public class TableServiceImpl implements TableService {
         metaSchema.truncate(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
                 param.getTableName());
         return ActionResult.isSuccess();
+    }
+
+    @Override
+    public List<TreeNode> searchTreeNodes(TreeSearchParam param) {
+        LuceneIndexManager<Table> mgr = managerFactory.getManager(param.getDataSourceId());
+        Table queryModel = Table.builder()
+                .databaseName(param.getDatabaseName())
+                .schemaName(param.getSchemaName())
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (param.isRefresh() || version == null) {
+            loadAndCacheMetadataForSearch(mgr, param, version);
+        }
+
+        List<Table> tables = mgr.search(queryModel, null, param.getSearchKey());
+        List<TreeNode> result = new ArrayList<>();
+        for (Table table : tables) {
+            TreeNode node = buildTreeNode(table);
+            result.add(node);
+        }
+        return result;
+    }
+
+    private void loadAndCacheMetadataForSearch(LuceneIndexManager<Table> mgr, TreeSearchParam param, Long version) {
+        mgr.getLock().writeLock().lock();
+        try {
+            Connection conn = Chat2DBContext.getConnection();
+            MetaData meta = Chat2DBContext.getMetaData();
+            List<Table> tables = meta.tables(conn, param.getDatabaseName(), param.getSchemaName(), null);
+            mgr.updateDocuments(tables, version);
+        } catch (Exception e) {
+            log.error("loadAndCacheMetadataForSearch error,version:{}", version, e);
+        } finally {
+            mgr.getLock().writeLock().unlock();
+        }
+    }
+
+    private TreeNode buildTreeNode(Table table) {
+        List<String> parentPath = new ArrayList<>();
+        if (StringUtils.isNotBlank(table.getDatabaseName())) {
+            parentPath.add(table.getDatabaseName());
+        }
+        if (StringUtils.isNotBlank(table.getSchemaName())) {
+            parentPath.add(table.getSchemaName());
+        }
+
+        Map<String, Object> extraParams = new HashMap<>();
+        extraParams.put("databaseName", table.getDatabaseName());
+        extraParams.put("schemaName", table.getSchemaName());
+        extraParams.put("tableName", table.getName());
+
+        return TreeNode.builder()
+                .uuid("table-" + table.getName())
+                .key(table.getName())
+                .name(table.getName())
+                .treeNodeType("TABLE")
+                .comment(table.getComment())
+                .isLeaf(true)
+                .pinned(table.isPinned())
+                .parentPath(parentPath)
+                .extraParams(extraParams)
+                .build();
     }
 
 }

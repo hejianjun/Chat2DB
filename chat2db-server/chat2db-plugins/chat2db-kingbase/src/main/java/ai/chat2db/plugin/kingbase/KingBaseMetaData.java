@@ -160,7 +160,7 @@ public class KingBaseMetaData extends DefaultMetaService implements MetaData {
             Function function = new Function();
             function.setDatabaseName(databaseName);
             function.setSchemaName(schemaName);
-            function.setFunctionName(functionName);
+            function.setName(functionName);
             if (resultSet.next()) {
                 function.setFunctionBody(resultSet.getString("code"));
             }
@@ -176,7 +176,7 @@ public class KingBaseMetaData extends DefaultMetaService implements MetaData {
             Procedure procedure = new Procedure();
             procedure.setDatabaseName(databaseName);
             procedure.setSchemaName(schemaName);
-            procedure.setProcedureName(procedureName);
+            procedure.setName(procedureName);
             if (resultSet.next()) {
                 procedure.setProcedureBody(resultSet.getString("code"));
             }

@@ -87,7 +87,7 @@ public class DefaultMetaService implements MetaData {
         if (CollectionUtils.isEmpty(functions)) {
             return functions;
         }
-        return functions.stream().filter(function -> StringUtils.isNotBlank(function.getFunctionName())).collect(Collectors.toList());
+        return functions.stream().filter(function -> StringUtils.isNotBlank(function.getName())).collect(Collectors.toList());
     }
 
     @Override
@@ -102,7 +102,7 @@ public class DefaultMetaService implements MetaData {
         if (CollectionUtils.isEmpty(procedures)) {
             return procedures;
         }
-        return procedures.stream().filter(function -> StringUtils.isNotBlank(function.getProcedureName())).collect(Collectors.toList());
+        return procedures.stream().filter(function -> StringUtils.isNotBlank(function.getName())).collect(Collectors.toList());
     }
 
     @Override

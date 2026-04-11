@@ -163,7 +163,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
             Function function = new Function();
             function.setDatabaseName(databaseName);
             function.setSchemaName(schemaName);
-            function.setFunctionName(functionName);
+            function.setName(functionName);
             if (resultSet.next()) {
                 function.setFunctionBody(resultSet.getString("definition"));
             }
@@ -180,7 +180,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
                 Function function = new Function();
                 function.setDatabaseName(databaseName);
                 function.setSchemaName(schemaName);
-                function.setFunctionName(resultSet.getString("name"));
+                function.setName(resultSet.getString("name"));
                 functions.add(function);
             }
             return functions;
@@ -188,11 +188,11 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
     }
 
     private Function removeVersion(Function function) {
-        String fullFunctionName = function.getFunctionName();
+        String fullFunctionName = function.getName();
         if (!StringUtils.isEmpty(fullFunctionName)) {
             String[] parts = fullFunctionName.split(";");
             String functionName = parts[0];
-            function.setFunctionName(functionName);
+            function.setName(functionName);
         }
         return function;
     }
@@ -206,7 +206,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
                 Procedure procedure = new Procedure();
                 procedure.setDatabaseName(databaseName);
                 procedure.setSchemaName(schemaName);
-                procedure.setProcedureName(resultSet.getString("name"));
+                procedure.setName(resultSet.getString("name"));
                 procedures.add(procedure);
             }
             return procedures;
@@ -214,11 +214,11 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
     }
 
     private Procedure removeVersion(Procedure procedure) {
-        String fullProcedureName = procedure.getProcedureName();
+        String fullProcedureName = procedure.getName();
         if (!StringUtils.isEmpty(fullProcedureName)) {
             String[] parts = fullProcedureName.split(";");
             String procedureName = parts[0];
-            procedure.setProcedureName(procedureName);
+            procedure.setName(procedureName);
         }
         return procedure;
     }
@@ -239,7 +239,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
         return SQLExecutor.getInstance().execute(connection, TRIGGER_SQL_LIST, resultSet -> {
             while (resultSet.next()) {
                 Trigger trigger = new Trigger();
-                trigger.setTriggerName(resultSet.getString("triggerName"));
+                trigger.setName(resultSet.getString("triggerName"));
                 trigger.setSchemaName(schemaName);
                 trigger.setDatabaseName(databaseName);
                 triggers.add(trigger);
@@ -257,7 +257,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
             Trigger trigger = new Trigger();
             trigger.setDatabaseName(databaseName);
             trigger.setSchemaName(schemaName);
-            trigger.setTriggerName(triggerName);
+            trigger.setName(triggerName);
             if (resultSet.next()) {
                 trigger.setTriggerBody(resultSet.getString("triggerDefinition"));
             }
@@ -273,7 +273,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
                     Procedure procedure = new Procedure();
                     procedure.setDatabaseName(databaseName);
                     procedure.setSchemaName(schemaName);
-                    procedure.setProcedureName(procedureName);
+                    procedure.setName(procedureName);
                     if (resultSet.next()) {
                         procedure.setProcedureBody(resultSet.getString("definition"));
                     }

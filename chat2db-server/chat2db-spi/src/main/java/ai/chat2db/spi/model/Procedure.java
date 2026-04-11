@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Procedure {
+public class Procedure implements IndexModel {
     //PROCEDURE_CAT String => procedure catalog (may be null)
     //PROCEDURE_SCHEM String => procedure schema (may be null)
     //PROCEDURE_NAME String => procedure name
@@ -31,21 +31,32 @@ public class Procedure {
     private String databaseName;
 
     @JsonAlias({"PROCEDURE_SCHEM"})
-
     private String schemaName;
 
     @JsonAlias({"PROCEDURE_NAME"})
-    private String procedureName;
+    private String name;
 
     @JsonAlias({"REMARKS"})
-    private String remarks;
+    private String comment;
+
+    private String aiComment;
+
+    private Long version;
 
     @JsonAlias({"PROCEDURE_TYPE"})
-
     private Short procedureType;
 
     @JsonAlias({"SPECIFIC_NAME"})
     private String specificName;
 
     private String procedureBody;
+
+    @Override
+    public String getTableName() {
+        return null;
+    }
+
+    @Override
+    public void setTableName(String tableName) {
+    }
 }
