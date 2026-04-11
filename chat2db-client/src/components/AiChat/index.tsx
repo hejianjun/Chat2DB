@@ -138,9 +138,9 @@ export default memo<IProps>(() => {
           console.log('[AiChat] State changed:', state, _msg);
           updateState(sessionId, state);
         },
-        onMessage: (content) => {
-          console.log('[AiChat] Message content received:', content);
-          appendContent(sessionId, content);
+        onMessage: (content, thinking) => {
+          console.log('[AiChat] Message received:', { content, thinking });
+          appendContent(sessionId, content, thinking);
         },
         onTablesSelected: (tables) => {
           console.log('[AiChat] Tables selected:', tables);
@@ -258,15 +258,29 @@ export default memo<IProps>(() => {
             key={msg.id}
             className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}
           >
+            {msg.thinking && (
+              <div className={styles.thinkingBlock}>
+                <div className={styles.thinkingHeader}>思考过程：</div>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.thinking}</ReactMarkdown>
+              </div>
+            )}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         ))}
-        {currentSession?.state === 'STREAMING' && currentSession.currentContent && (
+        {currentSession?.state === 'STREAMING' && (currentSession.currentContent || currentSession.currentThinking) && (
           <div className={styles.aiBlock}>
             <Spin size="small">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {currentSession.currentContent}
-              </ReactMarkdown>
+              {currentSession.currentThinking && (
+                <div className={styles.thinkingBlock}>
+                  <div className={styles.thinkingHeader}>思考过程：</div>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentSession.currentThinking}</ReactMarkdown>
+                </div>
+              )}
+              {currentSession.currentContent && (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {currentSession.currentContent}
+                </ReactMarkdown>
+              )}
             </Spin>
           </div>
         )}

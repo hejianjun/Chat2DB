@@ -13,6 +13,7 @@ export interface IChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  thinking?: string;
 }
 
 export interface AiChatSession {
@@ -20,6 +21,7 @@ export interface AiChatSession {
   state: ChatStateType;
   messages: IChatMessage[];
   currentContent: string;
+  currentThinking: string;
   selectedTables?: string[];
   schemaInfo?: string;
   error?: string;
@@ -40,7 +42,7 @@ interface IAiChatStore {
 
   createSession: (sessionId: string) => void;
   updateState: (sessionId: string, state: ChatStateType) => void;
-  appendContent: (sessionId: string, content: string) => void;
+  appendContent: (sessionId: string, content: string, thinking?: string) => void;
   addMessage: (sessionId: string, message: IChatMessage) => void;
   setSelectedTables: (sessionId: string, tables: string[]) => void;
   setSchemaInfo: (sessionId: string, ddl: string) => void;
@@ -63,6 +65,7 @@ export const useAiChatStore = create<IAiChatStore>((set, get) => ({
         state: 'IDLE',
         messages: [],
         currentContent: '',
+        currentThinking: '',
       });
       return { sessions: newSessions, currentSessionId: sessionId };
     });
@@ -79,14 +82,15 @@ export const useAiChatStore = create<IAiChatStore>((set, get) => ({
     });
   },
 
-  appendContent: (sessionId: string, content: string) => {
+  appendContent: (sessionId: string, content: string, thinking?: string) => {
     set((state) => {
       const sessions = new Map(state.sessions);
       const session = sessions.get(sessionId);
       if (session) {
         sessions.set(sessionId, {
           ...session,
-          currentContent: session.currentContent + content,
+          currentContent: session.currentContent + (content || ''),
+          currentThinking: session.currentThinking + (thinking || ''),
         });
       }
       return { sessions };

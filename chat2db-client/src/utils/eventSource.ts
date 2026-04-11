@@ -5,7 +5,7 @@ interface EventSourceOptions {
   url: string;
   uid: string;
   onOpen?: () => void;
-  onMessage?: (content: string) => void;
+  onMessage?: (content: string, thinking?: string) => void;
   onStateChange?: (state: ChatStateType, message?: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
@@ -67,12 +67,13 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     if (data === '[DONE]') {
       console.log('[SSE] Stream completed');
       onDone?.();
+      eventSource.close();
       return;
     }
     try {
       const parsed = JSON.parse(data);
-      if (parsed.content) {
-        onMessage?.(parsed.content);
+      if (parsed.content || parsed.thinking) {
+        onMessage?.(parsed.content, parsed.thinking);
       }
     } catch {
       onMessage?.(data);

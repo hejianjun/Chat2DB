@@ -3,6 +3,8 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
@@ -55,27 +57,56 @@ public class StreamAction extends BaseChatAction {
             sendStateEvent(ctx.getSseEmitter(), ChatState.STREAMING, "AI 正在生成...");
             log.info("[StreamAction] Starting AI stream for uid: {}", ctx.getUid());
 
-            Flux<String> flux = ctx.getChatClient().prompt()
+            Flux<ChatResponse> flux = ctx.getChatClient().prompt()
                     .user(prompt)
                     .stream()
-                    .content();
+                    .chatResponse();
             flux.publishOn(Schedulers.boundedElastic())
-                    .doOnNext(content -> {
+                    .doOnNext(chatResponse -> {
                         if (ctx.isCancelled()) {
                             log.info("[StreamAction] Stream cancelled by user for uid: {}", ctx.getUid());
                             throw new RuntimeException("Cancelled by user");
                         }
-                        try {
-                            JSONObject data = new JSONObject();
-                            data.put("content", content);
-                            ctx.getSseEmitter().send(SseEmitter.event()
-                                    .id(ctx.getUid())
-                                    .name("message")
-                                    .data(data.toJSONString())
-                                    .reconnectTime(3000));
-                        } catch (IOException e) {
-                            log.error("[StreamAction] Failed to send SSE message for uid: {}", ctx.getUid(), e);
-                            throw new RuntimeException(e);
+                        
+                        JSONObject data = new JSONObject();
+                        Generation generation = chatResponse.getResult();
+                        
+                        if (generation != null) {
+                            String content = generation.getOutput().getText();
+                            String thinking = null;
+                            
+                            if (generation.getMetadata() != null) {
+                                var metadata = generation.getMetadata();
+                                if (metadata.containsKey("thinking")) {
+                                    Object thinkingObj = metadata.get("thinking");
+                                    if (thinkingObj instanceof String) {
+                                        thinking = (String) thinkingObj;
+                                    } else if (thinkingObj != null) {
+                                        thinking = thinkingObj.toString();
+                                    }
+                                }
+                            }
+                            
+                            if (content != null && !content.isEmpty()) {
+                                data.put("content", content);
+                            }
+                            if (thinking != null && !thinking.isEmpty()) {
+                                data.put("thinking", thinking);
+                                log.debug("[StreamAction] Thinking content: {}", thinking);
+                            }
+                        }
+                        
+                        if (!data.isEmpty()) {
+                            try {
+                                ctx.getSseEmitter().send(SseEmitter.event()
+                                        .id(ctx.getUid())
+                                        .name("message")
+                                        .data(data.toJSONString())
+                                        .reconnectTime(3000));
+                            } catch (IOException e) {
+                                log.error("[StreamAction] Failed to send SSE message for uid: {}", ctx.getUid(), e);
+                                throw new RuntimeException(e);
+                            }
                         }
                     })
                     .doOnError(error -> {
