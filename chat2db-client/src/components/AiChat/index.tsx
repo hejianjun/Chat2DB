@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { formatParams } from '@/utils/url';
 import connectToEventSource, { cancelChatSession } from '@/utils/eventSource';
 import CascaderDB from '@/components/CascaderDB';
+import { IAiChatPromptType } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import {
   useAiChatStore,
@@ -64,9 +65,10 @@ export default memo<IProps>(() => {
   console.log('[AiChat] sessions:', sessions);
   console.log('[AiChat] currentSession:', currentSession);
 
-  const { currentWorkspaceGlobalExtend, currentConnectionDetails } = useWorkspaceStore((state) => ({
+  const { currentWorkspaceGlobalExtend, currentConnectionDetails, pendingAiChat } = useWorkspaceStore((state) => ({
     currentWorkspaceGlobalExtend: state.currentWorkspaceGlobalExtend,
     currentConnectionDetails: state.currentConnectionDetails,
+    pendingAiChat: state.pendingAiChat,
   }));
 
   const [boundInfo, setBoundInfo] = useState({
@@ -83,15 +85,37 @@ export default memo<IProps>(() => {
     }));
   }, [currentWorkspaceGlobalExtend, currentConnectionDetails]);
 
-  const sendAiChat = useCallback(
-    (messageText: string, promptType: string = 'NL_2_SQL') => {
-      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, boundInfo });
+  useEffect(() => {
+    if (pendingAiChat && pendingAiChat.message) {
+      const overrideBoundInfo = {
+        dataSourceId: pendingAiChat.dataSourceId || boundInfo.dataSourceId,
+        databaseName: boundInfo.databaseName,
+        schemaName: boundInfo.schemaName,
+      };
+      if (pendingAiChat.dataSourceId && pendingAiChat.dataSourceId !== boundInfo.dataSourceId) {
+        setBoundInfo((prev) => ({
+          ...prev,
+          dataSourceId: pendingAiChat.dataSourceId,
+        }));
+      }
+      sendAiChatInternal(pendingAiChat.message, pendingAiChat.promptType, overrideBoundInfo);
+      useWorkspaceStore.setState({ pendingAiChat: null });
+    }
+  }, [pendingAiChat, boundInfo, sendAiChatInternal]);
+
+  const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL') => {
+    sendAiChatInternal(messageText, promptType, boundInfo);
+  };
+
+  const sendAiChatInternal = useCallback(
+    (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', info: typeof boundInfo) => {
+      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, info });
       if (!messageText.trim()) {
         message.warning('请输入问题');
         return;
       }
 
-      if (!boundInfo.dataSourceId) {
+      if (!info.dataSourceId) {
         message.warning('请先选择数据库连接');
         return;
       }
@@ -111,9 +135,9 @@ export default memo<IProps>(() => {
       setLastRequest({
         message: messageText,
         promptType,
-        dataSourceId: boundInfo.dataSourceId,
-        databaseName: boundInfo.databaseName,
-        schemaName: boundInfo.schemaName,
+        dataSourceId: info.dataSourceId,
+        databaseName: info.databaseName,
+        schemaName: info.schemaName,
       });
 
       resetCurrentContent(sessionId);
@@ -121,9 +145,9 @@ export default memo<IProps>(() => {
       const params = formatParams({
         message: messageText,
         promptType,
-        dataSourceId: boundInfo.dataSourceId,
-        databaseName: boundInfo.databaseName,
-        schemaName: boundInfo.schemaName,
+        dataSourceId: info.dataSourceId,
+        databaseName: info.databaseName,
+        schemaName: info.schemaName,
         tableNames: null,
       });
 
@@ -175,7 +199,6 @@ export default memo<IProps>(() => {
       });
     },
     [
-      boundInfo,
       createSession,
       addMessage,
       setLastRequest,
@@ -184,7 +207,6 @@ export default memo<IProps>(() => {
       appendContent,
       setSelectedTables,
       setSchemaInfo,
-      sessions,
       setError,
     ],
   );

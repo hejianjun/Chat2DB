@@ -42,7 +42,7 @@ public class StreamAction extends BaseChatAction {
         }
 
         String prompt = ctx.getBuiltPrompt();
-        log.info("[StreamAction] Prompt length: {}", prompt != null ? prompt.length() : 0);
+        log.info("[StreamAction] Prompt content for uid: {}:\n{}", ctx.getUid(), prompt);
 
         if (!promptValidator.isValidLength(prompt)) {
             log.warn("[StreamAction] Prompt exceeds max length for uid: {}", ctx.getUid());
@@ -67,14 +67,14 @@ public class StreamAction extends BaseChatAction {
                             log.info("[StreamAction] Stream cancelled by user for uid: {}", ctx.getUid());
                             throw new RuntimeException("Cancelled by user");
                         }
-                        
+
                         JSONObject data = new JSONObject();
                         Generation generation = chatResponse.getResult();
-                        
+
                         if (generation != null) {
                             String content = generation.getOutput().getText();
                             String thinking = null;
-                            
+
                             if (generation.getMetadata() != null) {
                                 var metadata = generation.getMetadata();
                                 if (metadata.containsKey("thinking")) {
@@ -86,7 +86,7 @@ public class StreamAction extends BaseChatAction {
                                     }
                                 }
                             }
-                            
+
                             if (content != null && !content.isEmpty()) {
                                 data.put("content", content);
                             }
@@ -95,7 +95,7 @@ public class StreamAction extends BaseChatAction {
                                 log.debug("[StreamAction] Thinking content: {}", thinking);
                             }
                         }
-                        
+
                         if (!data.isEmpty()) {
                             try {
                                 ctx.getSseEmitter().send(SseEmitter.event()

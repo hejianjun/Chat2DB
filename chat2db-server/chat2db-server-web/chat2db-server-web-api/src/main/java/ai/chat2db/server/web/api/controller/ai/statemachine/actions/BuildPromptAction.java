@@ -49,7 +49,7 @@ public class BuildPromptAction extends BaseChatAction {
             try {
                 ChatQueryRequest request = chatContext.getRequest();
                 String schemaDdl = chatContext.getSchemaDdl();
-                log.info("[BuildPromptAction] Building prompt for uid: {}, promptType: {}, message: {}", 
+                log.info("[BuildPromptAction] Building prompt for uid: {}, promptType: {}, message: {}",
                     chatContext.getUid(), request.getPromptType(), request.getMessage());
 
                 PromptType promptType = determinePromptType(request);
@@ -64,7 +64,7 @@ public class BuildPromptAction extends BaseChatAction {
                         .build();
 
                 String builtPrompt = promptBuilder.context(promptContext).build();
-                log.info("[BuildPromptAction] Built prompt length: {}", builtPrompt != null ? builtPrompt.length() : 0);
+                log.info("[BuildPromptAction] Built prompt content for uid: {}:\n{}", chatContext.getUid(), builtPrompt);
                 chatContext.setBuiltPrompt(builtPrompt);
 
                 log.info("[BuildPromptAction] Sending PROMPT_BUILT event for uid: {}", chatContext.getUid());
