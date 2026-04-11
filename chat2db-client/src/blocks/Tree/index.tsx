@@ -172,7 +172,7 @@ const Tree = (props: IProps) => {
     } else {
       setSearchTreeData(null);
     }
-  }, [searchValue]);
+  }, [searchValue, treeData]);
 
   return (
     <LoadingContent isLoading={!treeData} className={classnames(className)}>
