@@ -63,9 +63,9 @@ prompts:
   # 表选择
   select_tables:
     name: "select_tables"
-    description: "选择需要查询的表"
+    description: "Select tables for query"
     template: |
-      ### 请根据以下 table properties 和 SQL input{description}. {ext}
+      ### Based on the following table properties and SQL input{description}. {ext}
       #
       ### {db_type} SQL tables, with their properties:
       #
@@ -74,7 +74,7 @@ prompts:
       #
       ### SQL input: {message}
       
-      请只输出 JSON，格式：{"table_names":["表名 1","表名 2"]}，不要输出其他文字。
+      Output only JSON in format: {"table_names":["table1","table2"]}. Do not output any other text.
 
   # 文本生成
   text_generation:
