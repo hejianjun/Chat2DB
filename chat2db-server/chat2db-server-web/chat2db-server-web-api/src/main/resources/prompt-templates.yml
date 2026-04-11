@@ -86,7 +86,10 @@ prompts:
   title_generation:
     name: "title_generation"
     description: "生成标题"
-    template: "{message}"
+    template: |
+      请为以下 SQL 查询生成一个简洁的中文标题（不超过 20 字），直接输出标题内容，不要包含任何引号或额外解释：
+      
+      {message}
 
   # 自然语言转注释
   nl_2_comment:

@@ -81,7 +81,8 @@ public class FetchSchemaAction extends BaseChatAction {
     }
 
     private boolean isTextGeneration(ChatQueryRequest request) {
-        return PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType());
+        return PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType())
+            || PromptType.TITLE_GENERATION.getCode().equals(request.getPromptType());
     }
 
     private boolean hasTableNames(ChatQueryRequest request) {

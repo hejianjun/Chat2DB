@@ -81,6 +81,7 @@ public class SelectTablesAction extends BaseChatAction {
 
     private List<String> selectTables(ChatContext ctx) {
         String selectPrompt = buildSelectPrompt(ctx);
+        log.info("[SelectTablesAction] Select prompt for uid: {}:\n{}", ctx.getUid(), selectPrompt);
 
         ChatResponse chatResponse = ctx.getChatClient().prompt()
                 .user(selectPrompt)
@@ -88,6 +89,7 @@ public class SelectTablesAction extends BaseChatAction {
                 .chatResponse();
 
         String content = extractContent(chatResponse);
+        log.info("[SelectTablesAction] AI response for uid: {}:\n{}", ctx.getUid(), content);
         return parseTableNames(content, ctx.getRequest().getTableNames());
     }
 

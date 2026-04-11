@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.springframework.statemachine.StateContext;
 import org.springframework.statemachine.action.Action;
@@ -72,7 +73,7 @@ public abstract class BaseChatAction implements Action<ChatState, ChatEvent> {
         }
     }
 
-    protected void sendTablesSelected(SseEmitter emitter, java.util.List<String> tables) {
+    protected void sendTablesSelected(SseEmitter emitter, List<String> tables) {
         try {
             JSONObject data = new JSONObject();
             data.put("tables", tables);
