@@ -6,11 +6,12 @@ import ConsoleEditor, { IConsoleRef } from '@/components/ConsoleEditor';
 import SearchResult, { ISearchResultRef } from '@/components/SearchResult';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { IBoundInfo } from '@/typings';
+import { registerConsoleEditor, unregisterConsoleEditor } from './consoleEditorRegistry';
 
 interface IProps {
   boundInfo: IBoundInfo;
   initDDL: string;
-  // 异步加载sql
+  // 异步加载 sql
   loadSQL: () => Promise<string>;
 }
 
@@ -21,6 +22,17 @@ const SQLExecute = memo<IProps>((props) => {
   const consoleRef = useRef<IConsoleRef>(null);
   const [boundInfo, setBoundInfo] = useState<IBoundInfo>(_boundInfo);
   const activeConsoleId = useWorkspaceStore((state) => state.activeConsoleId);
+
+  // 注册 consoleRef 到全局 map 中
+  useEffect(() => {
+    const consoleId = boundInfo.consoleId;
+    registerConsoleEditor(consoleId, consoleRef);
+
+    return () => {
+      // 组件卸载时移除
+      unregisterConsoleEditor(consoleId);
+    };
+  }, [boundInfo.consoleId]);
 
   useEffect(() => {
     if (loadSQL) {

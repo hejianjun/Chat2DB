@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useMemo, Fragment, useState, useRef } from 'react';
 import styles from './index.less';
 import i18n from '@/i18n';
-import { Button, message } from 'antd';
+import { Button, message, Spin } from 'antd';
+import { LoadingOutlined } from '@ant-design/icons';
 
 // ----- constants -----
 import { WorkspaceTabType, workspaceTabConfig } from '@/constants';
@@ -26,6 +27,7 @@ import {
 } from '@/pages/main/workspace/store/console';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { useTreeStore } from '@/blocks/Tree/treeStore';
+import { useConnectionStore } from '@/pages/main/store/connection';
 
 // ----- services -----
 import historyService from '@/service/history';
@@ -35,6 +37,7 @@ import connectToEventSource from '@/utils/eventSource';
 import { formatParams } from '@/utils/url';
 import { getCookie } from '@/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { getConsoleEditor } from '../SQLExecute/consoleEditorRegistry';
 
 const WorkspaceTabs = memo(() => {
   const { activeConsoleId, consoleList, workspaceTabList } = useWorkspaceStore((state) => {
@@ -45,9 +48,21 @@ const WorkspaceTabs = memo(() => {
     };
   });
 
+  const { connectionList } = useConnectionStore((state) => {
+    return {
+      connectionList: state.connectionList,
+    };
+  });
+
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
   const [generatingTitleKey, setGeneratingTitleKey] = useState<number | string | null>(null);
   const closeEventSourceRef = useRef<(() => void) | null>(null);
+
+  const getConnectionEnvironment = (dataSourceId?: number) => {
+    if (!dataSourceId || !connectionList) return null;
+    const connection = connectionList.find((item) => item.id === dataSourceId);
+    return connection?.environment || null;
+  };
 
   // 获取console
   useEffect(() => {
@@ -163,21 +178,29 @@ const WorkspaceTabs = memo(() => {
     const tabData = workspaceTabList?.find((item) => item.id === consoleId);
     if (!tabData) return;
 
-    // 获取 SQL 内容，优先从 indexedDB 获取（可能有未保存的修改）
+    // 获取 SQL 内容，优先从编辑器实例获取最新内容
     let sqlContent = '';
-    try {
-      const userId = getCookie('CHAT2DB.USER_ID');
-      const cachedData: any = await indexedDB.getDataByCursor('chat2db', 'workspaceConsoleDDL', {
-        consoleId,
-        userId,
-      });
-      if (cachedData?.[0]?.ddl) {
-        sqlContent = cachedData[0].ddl;
-      } else {
+    const editorRef = getConsoleEditor(consoleId);
+    if (editorRef?.current?.editorRef) {
+      sqlContent = editorRef.current.editorRef.getAllContent() || '';
+    }
+    
+    // 如果编辑器实例中没有内容，尝试从 indexedDB 获取（可能有未保存的修改）
+    if (!sqlContent) {
+      try {
+        const userId = getCookie('CHAT2DB.USER_ID');
+        const cachedData: any = await indexedDB.getDataByCursor('chat2db', 'workspaceConsoleDDL', {
+          consoleId,
+          userId,
+        });
+        if (cachedData?.[0]?.ddl) {
+          sqlContent = cachedData[0].ddl;
+        } else {
+          sqlContent = tabData.uniqueData?.ddl || '';
+        }
+      } catch {
         sqlContent = tabData.uniqueData?.ddl || '';
       }
-    } catch {
-      sqlContent = tabData.uniqueData?.ddl || '';
     }
 
     if (!sqlContent?.trim()) {
@@ -362,19 +385,26 @@ const WorkspaceTabs = memo(() => {
     );
   };
 
-  // tab列表
+  // tab 列表
   const workspaceTabItems = useMemo(() => {
     return workspaceTabList?.map((item) => {
+      const environment = getConnectionEnvironment(item.uniqueData?.dataSourceId);
+      const isGeneratingTitle = generatingTitleKey === item.id;
       return {
-        prefixIcon: workspaceTabConfig[item.type]?.icon,
-        label: item.title,
+        prefixIcon: isGeneratingTitle ? <Spin indicator={<LoadingOutlined spin />} size="small" /> : workspaceTabConfig[item.type]?.icon,
+        label: (
+          <div className={styles.tabLabel}>
+            {environment && <span className={styles.envTag} style={{ background: environment.color?.toLocaleLowerCase() }} />}
+            <span className={styles.tabTitle}>{isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title}</span>
+          </div>
+        ),
         key: item.id,
         editableName: item.type === WorkspaceTabType.CONSOLE,
         canGenerateTitle: canGenerateTitleType(item.type),
         children: <Fragment key={item.id}>{workspaceTabConnectionMap(item)}</Fragment>,
       };
     });
-  }, [workspaceTabList, activeConsoleId]);
+  }, [workspaceTabList, activeConsoleId, connectionList, generatingTitleKey]);
 
   function renderCreateConsoleButton() {
     return (

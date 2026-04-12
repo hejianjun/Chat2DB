@@ -11,6 +11,7 @@ import { approximateList } from '@/utils';
 import { addWorkspaceTab, getSavedConsoleList } from '@/pages/main/workspace/store/console';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import MenuLabel from '@/components/MenuLabel';
+import { useConnectionStore } from '@/pages/main/store/connection';
 
 const SaveList = () => {
   const [searching, setSearching] = useState<boolean>(false);
@@ -19,7 +20,18 @@ const SaveList = () => {
   const leftModuleTitleRef = useRef<any>(null);
   const saveBoxListRef = useRef<any>(null);
   const consoleList = useWorkspaceStore((state) => state.savedConsoleList);
+  const { connectionList } = useConnectionStore((state) => {
+    return {
+      connectionList: state.connectionList,
+    };
+  });
   const [editData, setEditData] = useState<any>(null);
+
+  const getConnectionEnvironment = (dataSourceId?: number) => {
+    if (!dataSourceId || !connectionList) return null;
+    const connection = connectionList.find((item) => item.id === dataSourceId);
+    return connection?.environment || null;
+  };
 
   useEffect(() => {
     getSavedConsoleList();
@@ -120,6 +132,7 @@ const SaveList = () => {
         <div ref={saveBoxListRef} className={styles.saveBoxList}>
           <LoadingContent className={styles.loadingContent} data={consoleList} handleEmpty>
             {(searchedList || consoleList)?.map((t) => {
+              const environment = getConnectionEnvironment(t.dataSourceId);
               return (
                 <Dropdown
                   key={t.id}
@@ -157,6 +170,7 @@ const SaveList = () => {
                     className={styles.saveItem}
                   >
                     <div className={styles.saveItemText}>
+                      {environment && <span className={styles.envTag} style={{ background: environment.color?.toLocaleLowerCase() }} />}
                       <div className={styles.iconBox}>
                         <Iconfont code={workspaceTabConfig[t.operationType]?.icon} />
                       </div>

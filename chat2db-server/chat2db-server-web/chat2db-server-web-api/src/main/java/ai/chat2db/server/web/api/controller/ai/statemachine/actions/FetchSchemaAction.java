@@ -42,8 +42,8 @@ public class FetchSchemaAction extends BaseChatAction {
         CompletableFuture.runAsync(() -> {
             buildContext(ctx);
             try {
-                log.info("[FetchSchemaAction] Starting schema fetch for uid: {}, tableNames: {}", 
-                    ctx.getUid(), ctx.getRequest().getTableNames());
+                log.info("[FetchSchemaAction] Starting schema fetch for uid: {}, tableNames: {}",
+                        ctx.getUid(), ctx.getRequest().getTableNames());
                 String schemaDdl = fetchSchemaDdl(ctx);
                 log.info("[FetchSchemaAction] Schema DDL length: {}", schemaDdl != null ? schemaDdl.length() : 0);
                 ctx.setSchemaDdl(schemaDdl);
@@ -72,6 +72,11 @@ public class FetchSchemaAction extends BaseChatAction {
         ChatQueryRequest request = ctx.getRequest();
 
         if (isTextGeneration(request)) {
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                log.error("[FetchSchemaAction] sleep interrupted");
+            }
             return "";
         } else if (hasTableNames(request)) {
             return queryTablesWithNames(request);
@@ -82,7 +87,7 @@ public class FetchSchemaAction extends BaseChatAction {
 
     private boolean isTextGeneration(ChatQueryRequest request) {
         return PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType())
-            || PromptType.TITLE_GENERATION.getCode().equals(request.getPromptType());
+                || PromptType.TITLE_GENERATION.getCode().equals(request.getPromptType());
     }
 
     private boolean hasTableNames(ChatQueryRequest request) {
