@@ -354,7 +354,7 @@ public class TableServiceImpl implements TableService {
         Long version = luceneMgr.getMaxVersion(param);
         // 仅对元数据加载环节加锁
         if (needRefreshCache(param, version)) {
-            loadAndCacheMetadata(luceneMgr, param, version);
+            loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
         param.setLastDocId(luceneMgr.getLastDocId());
@@ -410,7 +410,7 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
-            loadAndCacheMetadata(luceneMgr, param, version);
+            loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> search = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
         List<SimpleTable> tables = new ArrayList<>();
@@ -427,12 +427,12 @@ public class TableServiceImpl implements TableService {
         return param.isRefresh() || version == null;
     }
 
-    private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, TablePageQueryParam param, Long version) {
+    private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, String databaseName, String schemaName, Long version) {
         mgr.getLock().writeLock().lock();
         try {
             Connection conn = Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
-            List<Table> tables = meta.tables(conn, param.getDatabaseName(), param.getSchemaName(), null);
+            List<Table> tables = meta.tables(conn, databaseName, schemaName, null);
             mgr.updateDocuments(tables, version);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);
@@ -729,7 +729,7 @@ public class TableServiceImpl implements TableService {
         Long version = mgr.getMaxVersion(queryModel);
 
         if (param.isRefresh() || version == null) {
-            loadAndCacheMetadataForSearch(mgr, param, version);
+            loadAndCacheMetadata(mgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
 
         List<Table> tables = mgr.search(queryModel, null, param.getSearchKey());
@@ -741,19 +741,6 @@ public class TableServiceImpl implements TableService {
         return result;
     }
 
-    private void loadAndCacheMetadataForSearch(LuceneIndexManager<Table> mgr, TreeSearchParam param, Long version) {
-        mgr.getLock().writeLock().lock();
-        try {
-            Connection conn = Chat2DBContext.getConnection();
-            MetaData meta = Chat2DBContext.getMetaData();
-            List<Table> tables = meta.tables(conn, param.getDatabaseName(), param.getSchemaName(), null);
-            mgr.updateDocuments(tables, version);
-        } catch (Exception e) {
-            log.error("loadAndCacheMetadataForSearch error,version:{}", version, e);
-        } finally {
-            mgr.getLock().writeLock().unlock();
-        }
-    }
 
     private TreeNode buildTreeNode(Table table) {
         List<String> parentPath = new ArrayList<>();
