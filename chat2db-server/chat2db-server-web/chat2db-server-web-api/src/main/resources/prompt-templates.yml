@@ -102,5 +102,4 @@ prompts:
       #
       # {schema}
       #
-      #
-      ### SQL input: {message}
+      ### 猜测表和字段注释

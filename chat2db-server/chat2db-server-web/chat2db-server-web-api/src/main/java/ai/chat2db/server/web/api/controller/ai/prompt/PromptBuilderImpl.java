@@ -5,6 +5,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 /**
  * 提示词构建器实现
  */
@@ -98,7 +100,8 @@ public class PromptBuilderImpl implements PromptBuilder {
         if (context == null) {
             throw new IllegalStateException("PromptContext is null");
         }
-        if (StringUtils.isBlank(context.getMessage())) {
+        if (StringUtils.isBlank(context.getMessage())
+                && !Objects.equals(context.getPromptType(), PromptType.NL_2_COMMENT)) {
             throw new IllegalArgumentException("Message is required");
         }
     }
@@ -111,11 +114,11 @@ public class PromptBuilderImpl implements PromptBuilder {
 
         return templateStr
                 .replace("{description}", description)
-                .replace("{ext}", StringUtils.defaultString(context.getExt(), ""))
-                .replace("{db_type}", StringUtils.defaultString(context.getDataSourceType(), "MYSQL"))
-                .replace("{schema}", StringUtils.defaultString(context.getSchemaDdl(), ""))
-                .replace("{message}", context.getMessage())
-                .replace("{target_sql_type}", StringUtils.defaultString(context.getTargetSqlType(),
-                        StringUtils.defaultString(context.getDataSourceType(), "MYSQL")));
+                .replace("{ext}", Objects.toString(context.getExt(), ""))
+                .replace("{db_type}", Objects.toString(context.getDataSourceType(), "MYSQL"))
+                .replace("{schema}", Objects.toString(context.getSchemaDdl(), ""))
+                .replace("{message}", Objects.toString(context.getMessage(), ""))
+                .replace("{target_sql_type}", Objects.toString(context.getTargetSqlType(),
+                        Objects.toString(context.getDataSourceType(), "MYSQL")));
     }
 }
