@@ -158,11 +158,19 @@ public class ChatController {
 
     private ChatEvent determineInitialEvent(ChatQueryRequest request) {
         boolean hasTables = CollectionUtils.isNotEmpty(request.getTableNames());
-        boolean skipAutoSelect = PromptType.NL_2_COMMENT.getCode().equals(request.getPromptType())
-            || PromptType.TITLE_GENERATION.getCode().equals(request.getPromptType())
-            || PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType());
-
-        return (hasTables || skipAutoSelect) ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
+        
+        String promptType = request.getPromptType();
+        
+        if (PromptType.TEXT_GENERATION.getCode().equals(promptType)
+                || PromptType.TITLE_GENERATION.getCode().equals(promptType)) {
+            return ChatEvent.TABLES_NOT_NEEDED;
+        }
+        
+        if (PromptType.NL_2_COMMENT.getCode().equals(promptType)) {
+            return hasTables ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
+        }
+        
+        return hasTables ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
     }
 
     private void setupSseCallbacks(SseEmitter sseEmitter, String uid, ChatContext ctx) {

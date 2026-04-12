@@ -23,6 +23,8 @@ public enum ChatEvent {
     TABLES_PROVIDED,
     /** 表未提供 */
     TABLES_NOT_PROVIDED,
+    /** 表无需提供（如文本生成、标题生成） */
+    TABLES_NOT_NEEDED,
     /** 自动选择完成 */
     AUTO_SELECT_DONE,
     /** Schema已获取 */

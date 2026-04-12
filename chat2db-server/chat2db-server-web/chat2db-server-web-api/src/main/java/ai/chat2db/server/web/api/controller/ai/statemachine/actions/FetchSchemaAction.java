@@ -9,7 +9,6 @@ import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
 import ai.chat2db.server.domain.api.service.DatabaseService;
-import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
@@ -71,23 +70,11 @@ public class FetchSchemaAction extends BaseChatAction {
     private String fetchSchemaDdl(ChatContext ctx) {
         ChatQueryRequest request = ctx.getRequest();
 
-        if (isTextGeneration(request)) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                log.error("[FetchSchemaAction] sleep interrupted");
-            }
-            return "";
-        } else if (hasTableNames(request)) {
+        if (hasTableNames(request)) {
             return queryTablesWithNames(request);
         } else {
             return queryAllTables(request);
         }
-    }
-
-    private boolean isTextGeneration(ChatQueryRequest request) {
-        return PromptType.TEXT_GENERATION.getCode().equals(request.getPromptType())
-                || PromptType.TITLE_GENERATION.getCode().equals(request.getPromptType());
     }
 
     private boolean hasTableNames(ChatQueryRequest request) {
