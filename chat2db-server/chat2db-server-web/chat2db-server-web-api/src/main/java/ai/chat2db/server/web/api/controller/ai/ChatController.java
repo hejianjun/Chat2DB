@@ -97,7 +97,7 @@ public class ChatController {
 
         activeSessions.put(uid, stateMachine);
         activeContexts.put(uid, ctx);
-        log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}", 
+        log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}",
             uid, activeSessions.size(), activeContexts.size());
 
         CompletableFuture.runAsync(() -> {
@@ -158,18 +158,14 @@ public class ChatController {
 
     private ChatEvent determineInitialEvent(ChatQueryRequest request) {
         boolean hasTables = CollectionUtils.isNotEmpty(request.getTableNames());
-        
+
         String promptType = request.getPromptType();
-        
+
         if (PromptType.TEXT_GENERATION.getCode().equals(promptType)
                 || PromptType.TITLE_GENERATION.getCode().equals(promptType)) {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
-        
-        if (PromptType.NL_2_COMMENT.getCode().equals(promptType)) {
-            return hasTables ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
-        }
-        
+
         return hasTables ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
     }
 
