@@ -73,7 +73,7 @@ public class FetchSchemaAction extends BaseChatAction {
 
         if (isTextGeneration(request)) {
             try {
-                Thread.sleep(1);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 log.error("[FetchSchemaAction] sleep interrupted");
             }
