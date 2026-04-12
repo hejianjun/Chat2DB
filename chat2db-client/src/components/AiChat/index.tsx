@@ -6,13 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { formatParams } from '@/utils/url';
 import connectToEventSource, { cancelChatSession } from '@/utils/eventSource';
 import CascaderDB from '@/components/CascaderDB';
-import { IAiChatPromptType } from '@/pages/main/workspace/store/common';
+import { IAiChatPromptType, ITableCommentResult } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
-import {
-  useAiChatStore,
-  ChatStateType,
-  IChatMessage,
-} from '@/pages/main/workspace/store/aiChatStore';
+import { useAiChatStore, ChatStateType, IChatMessage } from '@/pages/main/workspace/store/aiChatStore';
 import styles from './index.less';
 
 const STATE_LABELS: Record<ChatStateType, { text: string; color: string }> = {
@@ -27,11 +23,25 @@ const STATE_LABELS: Record<ChatStateType, { text: string; color: string }> = {
 
 const isActiveState = (state?: ChatStateType): boolean => {
   return state
-    ? ['AUTO_SELECTING_TABLES', 'FETCHING_TABLE_SCHEMA', 'BUILDING_PROMPT', 'STREAMING'].includes(
-        state,
-      )
+    ? ['AUTO_SELECTING_TABLES', 'FETCHING_TABLE_SCHEMA', 'BUILDING_PROMPT', 'STREAMING'].includes(state)
     : false;
 };
+
+function extractJsonFromContent(content: string): ITableCommentResult | null {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*"table_comment"[\s\S]*"column_comments"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]) as ITableCommentResult;
+    }
+    const directJson = JSON.parse(content);
+    if (directJson.table_comment) {
+      return directJson as ITableCommentResult;
+    }
+  } catch (e) {
+    console.error('[extractJsonFromContent] Parse error:', e);
+  }
+  return null;
+}
 
 interface IProps {
   className?: string;
@@ -42,6 +52,7 @@ export default memo<IProps>(() => {
   const [inputValue, setInputValue] = useState('');
   const closeEventSource = useRef<() => void>();
   const sessionIdRef = useRef<string>();
+  const commentCallbackRef = useRef<(result: ITableCommentResult) => void>();
 
   const {
     currentSessionId,
@@ -75,6 +86,7 @@ export default memo<IProps>(() => {
     dataSourceId: currentConnectionDetails?.id,
     databaseName: currentWorkspaceGlobalExtend?.uniqueData?.databaseName || '',
     schemaName: currentWorkspaceGlobalExtend?.uniqueData?.schemaName || '',
+    tableNames: pendingAiChat?.tableNames || null,
   });
 
   useEffect(() => {
@@ -82,6 +94,7 @@ export default memo<IProps>(() => {
       dataSourceId: prev.dataSourceId || currentConnectionDetails?.id,
       databaseName: prev.databaseName || currentWorkspaceGlobalExtend?.uniqueData?.databaseName || '',
       schemaName: prev.schemaName || currentWorkspaceGlobalExtend?.uniqueData?.schemaName || '',
+      tableNames: prev.tableNames || pendingAiChat?.tableNames || null,
     }));
   }, [currentWorkspaceGlobalExtend, currentConnectionDetails]);
 
@@ -89,14 +102,19 @@ export default memo<IProps>(() => {
     if (pendingAiChat && pendingAiChat.message) {
       const overrideBoundInfo = {
         dataSourceId: pendingAiChat.dataSourceId || boundInfo.dataSourceId,
-        databaseName: boundInfo.databaseName,
-        schemaName: boundInfo.schemaName,
+        databaseName: pendingAiChat.databaseName || boundInfo.databaseName,
+        schemaName: pendingAiChat.schemaName || boundInfo.schemaName,
+        tableNames: pendingAiChat.tableNames || boundInfo.tableNames || null,
       };
       if (pendingAiChat.dataSourceId && pendingAiChat.dataSourceId !== boundInfo.dataSourceId) {
         setBoundInfo((prev) => ({
           ...prev,
           dataSourceId: pendingAiChat.dataSourceId,
+          tableNames: pendingAiChat.tableNames || prev.tableNames,
         }));
+      }
+      if (pendingAiChat.onCommentGenerated) {
+        commentCallbackRef.current = pendingAiChat.onCommentGenerated;
       }
       sendAiChatInternal(pendingAiChat.message, pendingAiChat.promptType, overrideBoundInfo);
       useWorkspaceStore.setState({ pendingAiChat: null });
@@ -148,7 +166,7 @@ export default memo<IProps>(() => {
         dataSourceId: info.dataSourceId,
         databaseName: info.databaseName,
         schemaName: info.schemaName,
-        tableNames: null,
+        tableNames: info.tableNames,
       });
 
       closeEventSource.current = connectToEventSource({
@@ -187,6 +205,21 @@ export default memo<IProps>(() => {
               role: 'assistant',
               content: session.currentContent,
             });
+
+            if (promptType === 'NL_2_COMMENT' && commentCallbackRef.current) {
+              try {
+                const jsonContent = extractJsonFromContent(session.currentContent);
+                if (jsonContent) {
+                  console.log('[AiChat] Parsed comment result:', jsonContent);
+                  commentCallbackRef.current(jsonContent);
+                  message.success('AI 注释已生成，请查看并确认');
+                }
+              } catch (e) {
+                console.error('[AiChat] Failed to parse comment JSON:', e);
+                message.warning('无法解析 AI 生成的注释，请手动查看');
+              }
+              commentCallbackRef.current = undefined;
+            }
           }
           closeEventSource.current = undefined;
         },
@@ -235,11 +268,7 @@ export default memo<IProps>(() => {
     }
   };
 
-  const handleBoundInfoChange = (value: {
-    dataSourceId: number;
-    databaseName: string;
-    schemaName: string;
-  }) => {
+  const handleBoundInfoChange = (value: { dataSourceId: number; databaseName: string; schemaName: string }) => {
     setBoundInfo({
       dataSourceId: value.dataSourceId,
       databaseName: value.databaseName,
@@ -276,10 +305,7 @@ export default memo<IProps>(() => {
 
       <div className={styles.contentArea}>
         {currentSession?.messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}
-          >
+          <div key={msg.id} className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}>
             {msg.thinking && (
               <div className={styles.thinkingBlock}>
                 <div className={styles.thinkingHeader}>思考过程：</div>
@@ -299,9 +325,7 @@ export default memo<IProps>(() => {
                 </div>
               )}
               {currentSession.currentContent && (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {currentSession.currentContent}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentSession.currentContent}</ReactMarkdown>
               )}
             </Spin>
           </div>

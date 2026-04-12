@@ -249,7 +249,185 @@ private String fetchSchemaDdl(ChatContext ctx) {
 
 ---
 
-## 三、重构方案详解
+## 三、重构方案详解（修订版）
+
+### 方案选择：结构化 JSON 输出 + 用户确认流程
+
+#### 方案优势
+
+✅ **不需要 Function Call** - 后端改动最小  
+✅ **用户先查看再确认** - 更安全，避免误操作  
+✅ **与现有流程一致** - 使用 `/modify/sql` + `updateAiComment`  
+✅ **前端改动小** - 只需解析 JSON 并调用 `setTableComment`/`setColumnComment`
+
+#### 流程说明
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Editor as DatabaseTableEditor
+    participant AiChat as AiChat 组件
+    participant Backend as 后端 AI
+    participant Database as 数据库
+    
+    User->>Editor: 点击"猜一猜"按钮
+    Editor->>AiChat: setPendingAiChat(NL_2_COMMENT)
+    AiChat->>Backend: SSE 请求 /api/ai/chat
+    Backend->>Backend: 获取表结构 Schema
+    Backend->>Backend: 构建 Prompt
+    Backend->>AiChat: 流式返回 JSON 内容
+    AiChat->>AiChat: 解析 JSON (table_comment + column_comments)
+    AiChat->>Editor: onCommentGenerated 回调
+    Editor->>Editor: setTableComment / setColumnComment
+    Note over Editor: 用户查看 AI 推荐的注释
+    User->>Editor: 点击"保存"
+    Editor->>Backend: POST /api/rdb/table/modify/sql
+    Backend->>Backend: updateAiComment (更新 Lucene 索引)
+    Backend->>Editor: 返回 ALTER TABLE SQL
+    Editor->>User: 显示 SQL Preview Modal
+    User->>Editor: 确认执行
+    Backend->>Database: 执行 SQL
+    Database-->>Editor: 执行成功
+    Editor->>Editor: 刷新表结构
+```
+
+---
+
+## 四、已完成的修改
+
+### 4.1 状态机优化
+
+新增 `TABLES_NOT_NEEDED` 事件，优化初始路由决策：
+
+| PromptType | 初始事件 | 流程 |
+|------------|----------|------|
+| `TEXT_GENERATION` / `TITLE_GENERATION` | `TABLES_NOT_NEEDED` | 直接构建 Prompt |
+| `NL_2_COMMENT` + 有表名 | `TABLES_PROVIDED` | 获取 Schema → 构建 Prompt |
+| `NL_2_COMMENT` + 无表名 | `TABLES_NOT_PROVIDED` | 自动选表 → 获取 Schema → 构建 Prompt |
+
+### 4.2 Prompt 模板修改
+
+**文件：** `prompt-templates.yml`
+
+修改 `NL_2_COMMENT` 模板，要求 AI 返回 JSON 格式：
+
+```yaml
+nl_2_comment:
+  template: |
+    ### 任务：为表和字段生成合适的中文注释
+    
+    **输出格式要求（严格遵守 JSON 格式）：**
+    
+    ```json
+    {
+      "table_comment": "表的注释内容",
+      "column_comments": [
+        {
+          "column_name": "字段名1",
+          "comment": "字段1的注释内容"
+        }
+      ]
+    }
+    ```
+    
+    只输出 JSON 内容，不要包含其他解释文字
+```
+
+### 4.3 前端修改
+
+#### 修改的文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `common.ts` | 扩展 `IAiChatPromptType` 添加 `NL_2_COMMENT`，新增 `ITableCommentResult` 接口，`IPendingAiChat` 添加 `onCommentGenerated` 回调 |
+| `AiChat/index.tsx` | 在 COMPLETED 状态解析 JSON，调用 `onCommentGenerated` 回调 |
+| `DatabaseTableEditor/index.tsx` | 删除本地 guess() 函数，改用 pendingAiChat 机制触发 AiChat |
+
+#### 关键代码片段
+
+**common.ts - 类型定义：**
+
+```typescript
+export type IAiChatPromptType = 'NL_2_SQL' | 'SQL_EXPLAIN' | 'SQL_OPTIMIZER' | 'SQL_2_SQL' | 'NL_2_COMMENT';
+
+export interface ITableCommentResult {
+  table_comment: string;
+  column_comments: IColumnComment[];
+}
+
+export interface IPendingAiChat {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string | null;
+  message: string;
+  promptType: IAiChatPromptType;
+  onCommentGenerated?: (result: ITableCommentResult) => void;
+}
+```
+
+**AiChat/index.tsx - JSON 解析和回调：**
+
+```typescript
+function extractJsonFromContent(content: string): ITableCommentResult | null {
+  const jsonMatch = content.match(/\{[\s\S]*"table_comment"[\s\S]*"column_comments"[\s\S]*\}/);
+  if (jsonMatch) {
+    return JSON.parse(jsonMatch[0]);
+  }
+  return null;
+}
+
+// 在 onDone 中：
+if (promptType === 'NL_2_COMMENT' && commentCallbackRef.current) {
+  const jsonContent = extractJsonFromContent(session.currentContent);
+  if (jsonContent) {
+    commentCallbackRef.current(jsonContent);
+  }
+}
+```
+
+**DatabaseTableEditor/index.tsx - 使用 AiChat：**
+
+```typescript
+const handleCommentGenerated = useCallback((result: ITableCommentResult) => {
+  if (result.table_comment) {
+    baseInfoRef.current?.setTableComment(result.table_comment);
+  }
+  if (result.column_comments) {
+    result.column_comments.forEach((col) => {
+      columnListRef.current?.setColumnComment(col.column_name, col.comment);
+    });
+  }
+}, []);
+
+const openAiChatForGuess = useCallback(() => {
+  setPendingAiChat({
+    dataSourceId,
+    databaseName,
+    schemaName,
+    message: `请为表 ${tableName} 及其所有字段生成合适的中文注释`,
+    promptType: 'NL_2_COMMENT',
+    onCommentGenerated: handleCommentGenerated,
+  });
+  setCurrentWorkspaceExtend('ai');
+}, [dataSourceId, databaseName, schemaName, tableName]);
+```
+
+---
+
+## 五、预期效果
+
+### 功能层面
+
+✅ **猜一猜功能正常工作** - AI 生成 JSON 格式注释，前端解析并应用  
+✅ **用户先查看再确认** - 注释先显示在表单中，用户确认后再保存  
+✅ **前后端统一** - AiChat 成为唯一的 AI 交互入口  
+✅ **与现有流程一致** - 使用 `/modify/sql` + `updateAiComment`
+
+### 技术层面
+
+✅ **代码简洁** - 删除了 DatabaseTableEditor 中重复的 EventSource 逻辑  
+✅ **架构清晰** - 使用 pendingAiChat 机制统一触发 AI 功能  
+✅ **易于维护** - 单一入口，统一管理
 
 ### 方案选择：Function Call 机制（推荐）
 

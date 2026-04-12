@@ -4,19 +4,16 @@ import { DatabaseTypeCode, WorkspaceTabType } from '@/constants';
 import i18n from '@/i18n';
 import sqlService, { IModifyTableSqlParams } from '@/service/sql';
 import { IColumnTypes, IEditTableInfo, IWorkspaceTab } from '@/typings';
-import connectToEventSource from '@/utils/eventSource';
-import { formatParams } from '@/utils/url';
-import { Button, Drawer, Modal, Spin, message } from 'antd';
+import { Button, Modal, message } from 'antd';
 import classnames from 'classnames';
 import lodash from 'lodash';
-import React, { createContext, memo, useEffect, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { v4 as uuidv4 } from 'uuid';
+import React, { createContext, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BaseInfo, { IBaseInfoRef } from './BaseInfo';
 import ColumnList, { IColumnListRef } from './ColumnList';
 import ForeignKeyList, { IForeignKeyListRef } from './ForeignKeyList';
 import styles from './index.less';
 import IndexList, { IIndexListRef } from './IndexList';
+import { setCurrentWorkspaceExtend, setPendingAiChat, ITableCommentResult } from '@/pages/main/workspace/store/common';
 
 interface IProps {
   dataSourceId: number;
@@ -27,14 +24,6 @@ interface IProps {
   changeTabDetails: (data: IWorkspaceTab) => void;
   tabDetails: IWorkspaceTab;
   submitCallback: () => void;
-}
-enum IPromptType {
-  NL_2_SQL = 'NL_2_SQL',
-  SQL_EXPLAIN = 'SQL_EXPLAIN',
-  SQL_OPTIMIZER = 'SQL_OPTIMIZER',
-  SQL_2_SQL = 'SQL_2_SQL',
-  NL_2_COMMENT = 'NL_2_COMMENT',
-  ChatRobot = 'ChatRobot',
 }
 
 interface ITabItem {
@@ -92,11 +81,6 @@ export default memo((props: IProps) => {
   const indexListRef = useRef<IIndexListRef>(null);
   const foreignKeyListRef = useRef<IForeignKeyListRef>(null);
   const [appendValue, setAppendValue] = useState<string>('');
-  const [isAiDrawerLoading, setIsAiDrawerLoading] = useState(false);
-  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
-  const [isStream, setIsStream] = useState(false);
-  const [aiContent, setAiContent] = useState('');
-  const chatResult = useRef('');
   const tabList = useMemo(() => {
     return [
       {
@@ -134,8 +118,7 @@ export default memo((props: IProps) => {
     defaultValues: [],
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const uid = useMemo(() => uuidv4(), []);
-  const closeEventSource = useRef<any>();
+
   function changeTab(item: ITabItem) {
     setCurrentTab(item);
   }
@@ -260,70 +243,36 @@ export default memo((props: IProps) => {
     }
   }
 
-  function guess() {
-    const handleError = (error: any) => {
-      console.error('Error:', error);
-      setIsLoading(false);
-      closeEventSource.current();
-    };
-    const handleCallback = (_message: MessageEvent) => {
-      setIsLoading(false);
-      const toolFuntion = JSON.parse(_message.data);
-      if ('set_table_comment' == toolFuntion.name) {
-        // 设置表注释
-        baseInfoRef.current?.setTableComment(JSON.parse(toolFuntion.arguments).comment);
-      } else if ('set_column_comment' == toolFuntion.name) {
-        // 设置列注释
-        const columnArgs = JSON.parse(toolFuntion.arguments);
-        columnListRef.current?.setColumnComment(columnArgs.columnName, columnArgs.comment);
-      }
+  const handleCommentGenerated = useCallback((result: ITableCommentResult) => {
+    if (result.table_comment) {
+      baseInfoRef.current?.setTableComment(result.table_comment);
     }
-    const handleMessage = (_message: string) => {
-      setIsLoading(false);
-      setIsAiDrawerLoading(false);
-      try {
-        const isEOF = _message === '[DONE]';
-        if (isEOF) {
-          closeEventSource.current();
-          setIsStream(false);
-          setIsAiDrawerLoading(false);
-          chatResult.current += '\n';
-          setAiContent(chatResult.current);
-          chatResult.current = '';
-          return
-        }
-        chatResult.current += JSON.parse(_message).content;
-        setAiContent(chatResult.current);
-      } catch (error) {
-        setIsLoading(false);
-        setIsStream(false);
-        setIsAiDrawerLoading(false);
-        closeEventSource.current();
-      }
-    };
-    if (baseInfoRef.current && columnListRef.current && indexListRef.current) {
-      const params = formatParams({
-        databaseName,
-        dataSourceId,
-        schemaName,
-        tableNames: tableName ? [tableName] : [],
-        promptType: IPromptType.NL_2_COMMENT,
-      });
-      setAiContent('');
-      setIsAiDrawerOpen(true);
-      setIsAiDrawerLoading(true);
-      closeEventSource.current = connectToEventSource({
-        url: `/api/ai/chat?${params}`,
-        uid,
-        onOpen: () => {
-          setIsLoading(true);
-        },
-        onMessage: handleMessage,
-        onCallback: handleCallback,
-        onError: handleError,
+    if (result.column_comments && result.column_comments.length > 0) {
+      result.column_comments.forEach((col) => {
+        columnListRef.current?.setColumnComment(col.column_name, col.comment);
       });
     }
-  }
+    message.success('AI 注释已应用到表单，请查看并保存');
+  }, []);
+
+  const openAiChatForGuess = useCallback(() => {
+    if (!tableName) {
+      message.warning('请先选择一个表');
+      return;
+    }
+
+    setPendingAiChat({
+      dataSourceId,
+      databaseName,
+      schemaName,
+      tableNames: [tableName],
+      message: `请为表 ${tableName} 及其所有字段生成合适的中文注释`,
+      promptType: 'NL_2_COMMENT',
+      onCommentGenerated: handleCommentGenerated,
+    });
+
+    setCurrentWorkspaceExtend('ai');
+  }, [dataSourceId, databaseName, schemaName, tableName, handleCommentGenerated]);
 
   const executeSuccessCallBack = () => {
     setViewSqlModal(false);
@@ -374,7 +323,7 @@ export default memo((props: IProps) => {
             })}
           </div>
           <div className={styles.saveButton}>
-            <Button type="link" onClick={guess}>
+            <Button type="link" onClick={openAiChatForGuess}>
               {i18n('common.button.guess')}
             </Button>
           </div>
@@ -394,27 +343,6 @@ export default memo((props: IProps) => {
           })}
         </div>
       </LoadingContent>
-      <Drawer
-        open={isAiDrawerOpen}
-        getContainer={false}
-        mask={false}
-        onClose={() => {
-          try {
-            setIsAiDrawerOpen(false);
-            setIsAiDrawerLoading(false);
-            setIsStream(false);
-            closeEventSource.current && closeEventSource.current();
-          } catch (error) {
-            console.error('close drawer', error);
-          }
-        }}
-      >
-        <Spin spinning={isAiDrawerLoading} style={{ height: '100%' }}>
-          <div className={styles.aiBlock}>
-            <ReactMarkdown>{aiContent}</ReactMarkdown>
-          </div>
-        </Spin>
-      </Drawer>
       <Modal
         title={i18n('editTable.title.sqlPreview')}
         open={!!viewSqlModal}
