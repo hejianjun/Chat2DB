@@ -121,6 +121,10 @@
             <artifactId>spring-statemachine-starter</artifactId>
             <version>4.0.0</version>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>context-propagation</artifactId>
+        </dependency>
     </dependencies>
 
 </project>

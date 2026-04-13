@@ -21,6 +21,7 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
@@ -50,8 +51,8 @@ public class StreamAction extends BaseChatAction {
             log.warn("[StreamAction] Prompt exceeds max length for uid: {}", ctx.getUid());
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
             context.getStateMachine().sendEvent(
-                    MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-            );
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+            ).subscribe();
             return;
         }
 
@@ -74,8 +75,8 @@ public class StreamAction extends BaseChatAction {
             CompletableFuture.runAsync(() -> {
                 sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
                 context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build()
-                );
+                        Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+                ).subscribe();
             });
         }
     }
