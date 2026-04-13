@@ -139,6 +139,53 @@ public class ConfigController {
 
         return DataResult.of(config);
     }
+
+    @PostMapping("/system_config/ai/fast")
+    public ActionResult addFastAiSystemConfig(@RequestBody AIConfigCreateRequest request) {
+        PermissionUtils.checkDeskTopOrAdmin();
+
+        String sqlSource = request.getAiSqlSource();
+        if (StringUtils.isBlank(sqlSource)) {
+            sqlSource = AiSqlSourceEnum.OPENAI.getCode();
+        }
+        
+        String prefix = "ai.fast.";
+        
+        saveConfig(prefix + "source", sqlSource);
+        saveConfig(prefix + "apiKey", request.getApiKey());
+        saveConfig(prefix + "apiHost", request.getApiHost());
+        saveConfig(prefix + "model", request.getModel());
+        saveConfig(prefix + "temperature", request.getTemperature());
+        saveConfig(prefix + "maxTokens", request.getMaxTokens());
+
+        return ActionResult.isSuccess();
+    }
+    
+    @GetMapping("/system_config/ai/fast")
+    public DataResult<AIConfig> getFastAiSystemConfig(String aiSqlSource) {
+        AIConfig config = new AIConfig();
+        
+        // 获取快速模型配置的 AI 来源
+        DataResult<Config> sourceConfig = configService.find("ai.fast.source");
+        if (sourceConfig.getData() != null && StringUtils.isNotBlank(sourceConfig.getData().getContent())) {
+            aiSqlSource = sourceConfig.getData().getContent();
+        }
+        
+        if (StringUtils.isBlank(aiSqlSource)) {
+            aiSqlSource = AiSqlSourceEnum.OPENAI.getCode();
+        }
+        
+        config.setAiSqlSource(aiSqlSource);
+        String prefix = "ai.fast.";
+        
+        config.setApiKey(getConfigValue(prefix + "apiKey"));
+        config.setApiHost(getConfigValue(prefix + "apiHost"));
+        config.setModel(getConfigValue(prefix + "model"));
+        config.setTemperature(getConfigValue(prefix + "temperature"));
+        config.setMaxTokens(getConfigValue(prefix + "maxTokens"));
+
+        return DataResult.of(config);
+    }
     
     private String getConfigValue(String code) {
         DataResult<Config> result = configService.find(code);

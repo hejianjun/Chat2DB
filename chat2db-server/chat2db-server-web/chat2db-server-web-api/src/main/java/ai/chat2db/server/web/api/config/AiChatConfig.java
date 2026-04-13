@@ -15,6 +15,7 @@ import ai.chat2db.server.domain.api.enums.AiSqlSourceEnum;
 import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 
 /**
  * AI 聊天客户端配置类
@@ -43,12 +44,144 @@ public class AiChatConfig {
     }
 
     /**
-     * 创建聊天客户端实例
+     * 根据任务类型创建聊天客户端实例
+     * 对于简单任务（如选表），如果配置了快速模型则使用快速模型
+     *
+     * @param promptType 提示类型
+     * @return ChatClient 聊天客户端实例
+     */
+    public ChatClient createChatClient(PromptType promptType) {
+        // 判断是否为简单任务且配置了快速模型
+        boolean useFastModel = promptType != null && promptType.isSimpleTask() 
+                && isFastModelConfigured();
+        
+        if (useFastModel) {
+            return createFastChatClient();
+        }
+        
+        return createDefaultChatClient();
+    }
+    
+    /**
+     * 检查是否配置了快速模型
+     * @return true 如果快速模型已配置
+     */
+    private boolean isFastModelConfigured() {
+        String fastApiKey = getConfigValue("ai.fast.apiKey", "");
+        return fastApiKey != null && !fastApiKey.isEmpty();
+    }
+
+    /**
+     * 创建快速聊天客户端实例
+     * 使用专门为简单任务配置的快速模型（如 gpt-4o-mini 等轻量级模型）
+     *
+     * @return ChatClient 聊天客户端实例
+     */
+    public ChatClient createFastChatClient() {
+        // 获取快速模型的 AI 来源配置，默认为 OPENAI
+        String aiSqlSource = getConfigValue("ai.fast.source", AiSqlSourceEnum.OPENAI.getCode());
+        AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(aiSqlSource);
+        if (aiSqlSourceEnum == null) {
+            aiSqlSourceEnum = AiSqlSourceEnum.OPENAI;
+        }
+
+        // 构建配置前缀
+        String prefix = "ai.fast.";
+
+        switch (aiSqlSourceEnum) {
+            case ANTHROPIC:
+                return createAnthropicFastChatClient(prefix);
+            case OPENAI:
+            default:
+                return createOpenAiFastChatClient(prefix);
+        }
+    }
+
+    /**
+     * 创建 OpenAI 快速聊天客户端
+     *
+     * @param prefix 配置项前缀
+     * @return ChatClient OpenAI 聊天客户端实例
+     */
+    private ChatClient createOpenAiFastChatClient(String prefix) {
+        // 从配置中获取 OpenAI 相关参数
+        String apiKey = getConfigValue(prefix + "apiKey", "");
+        String apiHost = getConfigValue(prefix + "apiHost", "https://api.openai.com/");
+        String model = getConfigValue(prefix + "model", "gpt-4o-mini");
+        String temperatureStr = getConfigValue(prefix + "temperature", "0.5");
+        String maxTokensStr = getConfigValue(prefix + "maxTokens", "1024");
+
+        // 确保 API 主机 URL 以 "/" 结尾
+        if (apiHost != null && !apiHost.endsWith("/")) {
+            apiHost = apiHost + "/";
+        }
+
+        // 构建 OpenAI API 实例
+        OpenAiApi openAiApi = OpenAiApi.builder()
+                .baseUrl(apiHost)
+                .apiKey(apiKey)
+                .build();
+
+        // 构建聊天选项，快速任务使用较低的温度和较少的 token
+        OpenAiChatOptions options = OpenAiChatOptions.builder()
+                .model(model)
+                .temperature(Double.parseDouble(temperatureStr))
+                .maxTokens(Integer.parseInt(maxTokensStr))
+                .build();
+
+        // 构建 OpenAI 聊天模型
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(openAiApi)
+                .defaultOptions(options)
+                .build();
+
+        // 创建并返回聊天客户端
+        return ChatClient.builder(chatModel).build();
+    }
+
+    /**
+     * 创建 Anthropic 快速聊天客户端
+     *
+     * @param prefix 配置项前缀
+     * @return ChatClient Anthropic 聊天客户端实例
+     */
+    private ChatClient createAnthropicFastChatClient(String prefix) {
+        // 从配置中获取 Anthropic 相关参数
+        String apiKey = getConfigValue(prefix + "apiKey", "");
+        String model = getConfigValue(prefix + "model", "claude-3-haiku-20240307");
+        String temperatureStr = getConfigValue(prefix + "temperature", "0.5");
+        String maxTokensStr = getConfigValue(prefix + "maxTokens", "1024");
+
+
+        // 构建 Anthropic API 实例
+        AnthropicApi anthropicApi = AnthropicApi.builder()
+                .apiKey(apiKey)
+                .build();
+
+        // 构建聊天选项，快速任务使用较低的温度和较少的 token
+        AnthropicChatOptions options = AnthropicChatOptions.builder()
+                .model(model)
+                .temperature(Double.parseDouble(temperatureStr))
+                .maxTokens(Integer.parseInt(maxTokensStr))
+                .build();
+
+        // 构建 Anthropic 聊天模型
+        AnthropicChatModel chatModel = AnthropicChatModel.builder()
+                .anthropicApi(anthropicApi)
+                .defaultOptions(options)
+                .build();
+
+        // 创建并返回聊天客户端
+        return ChatClient.builder(chatModel).build();
+    }
+
+    /**
+     * 创建默认聊天客户端实例
      * 根据配置的 AI 来源（如 OPENAI、ANTHROPIC）创建对应的聊天客户端
      *
      * @return ChatClient 聊天客户端实例
      */
-    public ChatClient createChatClient() {
+    private ChatClient createDefaultChatClient() {
         // 获取 AI 来源配置，默认为 OPENAI
         String aiSqlSource = getConfigValue("ai.sql.source", AiSqlSourceEnum.OPENAI.getCode());
         AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(aiSqlSource);

@@ -54,6 +54,15 @@ const setAiSystemConfig = createRequest<IAiConfig, void>('/api/config/system_con
   method: 'post',
 });
 
+const getFastAiSystemConfig = createRequest<{ aiSqlSource?: string }, IAiConfig>('/api/config/system_config/ai/fast', {
+  errorLevel: false,
+});
+
+const setFastAiSystemConfig = createRequest<IAiConfig, void>('/api/config/system_config/ai/fast', {
+  errorLevel: 'toast',
+  method: 'post',
+});
+
 const getAiWhiteAccess = createRequest<{ apiKey: string }, boolean>('/api/ai/embedding/white/check', {
   method: 'get',
 });
@@ -83,6 +92,8 @@ export default {
   setSystemConfig,
   getAiSystemConfig,
   setAiSystemConfig,
+  getFastAiSystemConfig,
+  setFastAiSystemConfig,
   getAiWhiteAccess,
   getLatestVersion,
   isUpdateSuccess,

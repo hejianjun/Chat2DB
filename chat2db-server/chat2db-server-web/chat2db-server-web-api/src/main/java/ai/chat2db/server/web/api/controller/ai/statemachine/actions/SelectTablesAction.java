@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import ai.chat2db.server.web.api.config.AiChatConfig;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -36,6 +37,9 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Autowired
     private DatabaseService databaseService;
+
+    @Autowired
+    private AiChatConfig aiChatConfig;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -82,9 +86,8 @@ public class SelectTablesAction extends BaseChatAction {
     private List<String> selectTables(ChatContext ctx) {
         String selectPrompt = buildSelectPrompt(ctx);
         log.info("[SelectTablesAction] Select prompt for uid: {}:\n{}", ctx.getUid(), selectPrompt);
-
-        ChatResponse chatResponse = ctx.getChatClient().prompt()
-                .user(selectPrompt)
+        ChatResponse chatResponse = aiChatConfig.createFastChatClient()
+                .prompt(selectPrompt)
                 .call()
                 .chatResponse();
 

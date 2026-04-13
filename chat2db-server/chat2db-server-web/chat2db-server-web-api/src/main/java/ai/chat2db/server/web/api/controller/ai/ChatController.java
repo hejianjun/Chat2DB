@@ -69,7 +69,17 @@ public class ChatController {
         log.info("[ChatController] Received uid from client: {}", uid);
         SseEmitter sseEmitter = new SseEmitter(CHAT_TIMEOUT);
 
-        ChatClient chatClient = aiChatConfig.createChatClient();
+        // 根据提示类型选择是否使用快速模型
+        PromptType promptType = null;
+        if (StrUtil.isNotBlank(queryRequest.getPromptType())) {
+            try {
+                promptType = PromptType.valueOf(queryRequest.getPromptType());
+            } catch (Exception ignored) {
+                log.warn("[ChatController] Invalid promptType: {}", queryRequest.getPromptType());
+            }
+        }
+        
+        ChatClient chatClient = aiChatConfig.createChatClient(promptType);
 
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();

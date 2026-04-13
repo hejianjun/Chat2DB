@@ -33,4 +33,13 @@ export interface IOpenAIConfig {
   projectId?: string;
 }
 
+export interface IFastAIConfig {
+  aiSqlSource?: AIType;
+  apiKey?: string;
+  apiHost?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
 export type IAiConfig = IAnthropicConfig | IOpenAIConfig;

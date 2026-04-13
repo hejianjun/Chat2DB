@@ -42,5 +42,22 @@ const AIFormConfig: Record<AIType, IAiConfigBooleans> = {
   },
 };
 
-export { AIFormConfig, AITypeName };
+// 快速模型配置（用于选表等简单任务）
+const FastAIFormConfig: Record<AIType, IAiConfigBooleans> = {
+  [AIType.ANTHROPIC]: {
+    apiKey: '',
+    model: 'claude-3-haiku-20240307',
+    temperature: 0.5,
+    maxTokens: 1024,
+  },
+  [AIType.OPENAI]: {
+    apiKey: '',
+    apiHost: 'https://api.openai.com/',
+    model: 'gpt-4o-mini',
+    temperature: 0.5,
+    maxTokens: 1024,
+  },
+};
+
+export { AIFormConfig, AITypeName, FastAIFormConfig };
 
