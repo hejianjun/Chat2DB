@@ -28,14 +28,14 @@ public class AiChatConfig {
 
     /**
      * 从配置服务中获取配置值
-     * 
+     *
      * @param code 配置项编码
      * @param defaultValue 默认值，当配置不存在时返回
      * @return 配置值或默认值
      */
     private String getConfigValue(String code, String defaultValue) {
         DataResult<Config> result = configService.find(code);
-        if (result.getData() != null && result.getData().getContent() != null 
+        if (result.getData() != null && result.getData().getContent() != null
                 && !result.getData().getContent().isEmpty()) {
             return result.getData().getContent();
         }
@@ -45,7 +45,7 @@ public class AiChatConfig {
     /**
      * 创建聊天客户端实例
      * 根据配置的 AI 来源（如 OPENAI、ANTHROPIC）创建对应的聊天客户端
-     * 
+     *
      * @return ChatClient 聊天客户端实例
      */
     public ChatClient createChatClient() {
@@ -58,7 +58,7 @@ public class AiChatConfig {
 
         // 构建配置前缀，如 "ai.openai." 或 "ai.anthropic."
         String prefix = "ai." + aiSqlSource.toLowerCase() + ".";
-        
+
         switch (aiSqlSourceEnum) {
             case ANTHROPIC:
                 return createAnthropicChatClient(prefix);
@@ -70,7 +70,7 @@ public class AiChatConfig {
 
     /**
      * 创建 OpenAI 聊天客户端
-     * 
+     *
      * @param prefix 配置项前缀
      * @return ChatClient OpenAI 聊天客户端实例
      */
@@ -81,47 +81,38 @@ public class AiChatConfig {
         String model = getConfigValue(prefix + "model", "gpt-4o-mini");
         String temperatureStr = getConfigValue(prefix + "temperature", "0.7");
         String maxTokensStr = getConfigValue(prefix + "maxTokens", "4096");
-        
+
         // 确保 API 主机 URL 以 "/" 结尾
         if (apiHost != null && !apiHost.endsWith("/")) {
             apiHost = apiHost + "/";
         }
-        
-        final String baseUrl = apiHost;
-        // 创建 API Key 对象
-        ApiKey apiKeyObj = new ApiKey() {
-            @Override
-            public String getValue() {
-                return apiKey;
-            }
-        };
-        
+
         // 构建 OpenAI API 实例
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(baseUrl)
-                .apiKey(apiKeyObj)
+                .baseUrl(apiHost)
+                .apiKey(apiKey)
                 .build();
-        
+
         // 构建聊天选项，包括模型、温度和最大 token 数
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(model)
                 .temperature(Double.parseDouble(temperatureStr))
                 .maxTokens(Integer.parseInt(maxTokensStr))
                 .build();
-        
+
         // 构建 OpenAI 聊天模型
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
                 .build();
-        
+
         // 创建并返回聊天客户端
         return ChatClient.builder(chatModel).build();
     }
 
     /**
      * 创建 Anthropic 聊天客户端
-     * 
+     *
      * @param prefix 配置项前缀
      * @return ChatClient Anthropic 聊天客户端实例
      */
@@ -131,33 +122,26 @@ public class AiChatConfig {
         String model = getConfigValue(prefix + "model", "claude-3-5-sonnet-20241022");
         String temperatureStr = getConfigValue(prefix + "temperature", "0.7");
         String maxTokensStr = getConfigValue(prefix + "maxTokens", "4096");
-        
-        // 创建 API Key 对象
-        ApiKey apiKeyObj = new ApiKey() {
-            @Override
-            public String getValue() {
-                return apiKey;
-            }
-        };
-        
+
+
         // 构建 Anthropic API 实例
         AnthropicApi anthropicApi = AnthropicApi.builder()
-                .apiKey(apiKeyObj)
+                .apiKey(apiKey)
                 .build();
-        
+
         // 构建聊天选项，包括模型、温度和最大 token 数
         AnthropicChatOptions options = AnthropicChatOptions.builder()
                 .model(model)
                 .temperature(Double.parseDouble(temperatureStr))
                 .maxTokens(Integer.parseInt(maxTokensStr))
                 .build();
-        
+
         // 构建 Anthropic 聊天模型
         AnthropicChatModel chatModel = AnthropicChatModel.builder()
                 .anthropicApi(anthropicApi)
                 .defaultOptions(options)
                 .build();
-        
+
         // 创建并返回聊天客户端
         return ChatClient.builder(chatModel).build();
     }
