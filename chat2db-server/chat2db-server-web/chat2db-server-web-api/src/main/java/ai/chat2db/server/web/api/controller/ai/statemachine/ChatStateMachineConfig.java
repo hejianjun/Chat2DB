@@ -37,10 +37,10 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
         states
             .withStates()
             .initial(ChatState.IDLE)
-            .state(ChatState.AUTO_SELECTING_TABLES)
-            .state(ChatState.FETCHING_TABLE_SCHEMA)
-            .state(ChatState.BUILDING_PROMPT)
-            .state(ChatState.STREAMING)
+            .state(ChatState.AUTO_SELECTING_TABLES, selectTablesAction)
+            .state(ChatState.FETCHING_TABLE_SCHEMA, fetchSchemaAction)
+            .state(ChatState.BUILDING_PROMPT, buildPromptAction)
+            .state(ChatState.STREAMING, streamAction)
             .end(ChatState.COMPLETED)
             .end(ChatState.FAILED);
     }
@@ -51,22 +51,18 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .withExternal()
                 .source(ChatState.IDLE).target(ChatState.FETCHING_TABLE_SCHEMA)
                 .event(ChatEvent.TABLES_PROVIDED)
-                .action(fetchSchemaAction)
             .and()
             .withExternal()
                 .source(ChatState.IDLE).target(ChatState.AUTO_SELECTING_TABLES)
                 .event(ChatEvent.TABLES_NOT_PROVIDED)
-                .action(selectTablesAction)
             .and()
             .withExternal()
                 .source(ChatState.IDLE).target(ChatState.BUILDING_PROMPT)
                 .event(ChatEvent.TABLES_NOT_NEEDED)
-                .action(buildPromptAction)
             .and()
             .withExternal()
                 .source(ChatState.AUTO_SELECTING_TABLES).target(ChatState.FETCHING_TABLE_SCHEMA)
                 .event(ChatEvent.AUTO_SELECT_DONE)
-                .action(fetchSchemaAction)
             .and()
             .withExternal()
                 .source(ChatState.AUTO_SELECTING_TABLES).target(ChatState.FAILED)
@@ -75,7 +71,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .withExternal()
                 .source(ChatState.FETCHING_TABLE_SCHEMA).target(ChatState.BUILDING_PROMPT)
                 .event(ChatEvent.SCHEMA_FETCHED)
-                .action(buildPromptAction)
             .and()
             .withExternal()
                 .source(ChatState.FETCHING_TABLE_SCHEMA).target(ChatState.FAILED)
@@ -84,7 +79,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .withExternal()
                 .source(ChatState.BUILDING_PROMPT).target(ChatState.STREAMING)
                 .event(ChatEvent.PROMPT_BUILT)
-                .action(streamAction)
             .and()
             .withExternal()
                 .source(ChatState.BUILDING_PROMPT).target(ChatState.FAILED)
@@ -109,22 +103,22 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .listener(new StateMachineListenerAdapter<ChatState, ChatEvent>() {
                 @Override
                 public void stateChanged(org.springframework.statemachine.state.State<ChatState, ChatEvent> from, org.springframework.statemachine.state.State<ChatState, ChatEvent> to) {
-                    log.info("[StateMachine] State changed: {} -> {}", 
-                        from != null ? from.getId() : "null", 
+                    log.info("[StateMachine] State changed: {} -> {}",
+                        from != null ? from.getId() : "null",
                         to != null ? to.getId() : "null");
                 }
 
                 @Override
                 public void stateMachineStarted(StateMachine<ChatState, ChatEvent> stateMachine) {
-                    log.info("[StateMachine] StateMachine started with id: {}, initial state: {}", 
-                        stateMachine.getId(), 
+                    log.info("[StateMachine] StateMachine started with id: {}, initial state: {}",
+                        stateMachine.getId(),
                         stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
                 }
 
                 @Override
                 public void stateMachineStopped(StateMachine<ChatState, ChatEvent> stateMachine) {
-                    log.info("[StateMachine] StateMachine stopped with id: {}, final state: {}", 
-                        stateMachine.getId(), 
+                    log.info("[StateMachine] StateMachine stopped with id: {}, final state: {}",
+                        stateMachine.getId(),
                         stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
                 }
 
