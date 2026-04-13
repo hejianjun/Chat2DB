@@ -24,6 +24,7 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 /**
  * 自动选择表动作
@@ -54,33 +55,31 @@ public class SelectTablesAction extends BaseChatAction {
         sendStateEvent(ctx.getSseEmitter(),
                 ChatState.AUTO_SELECTING_TABLES, "正在选择相关表...");
 
-        CompletableFuture.runAsync(() -> {
-            buildContext(ctx);
-            try {
-                log.info("[SelectTablesAction] Starting table selection for uid: {}", ctx.getUid());
-                List<String> tableNames = selectTables(ctx);
-                log.info("[SelectTablesAction] Selected tables: {}", tableNames);
+        buildContext(ctx);
+        try {
+            log.info("[SelectTablesAction] Starting table selection for uid: {}", ctx.getUid());
+            List<String> tableNames = selectTables(ctx);
+            log.info("[SelectTablesAction] Selected tables: {}", tableNames);
 
-                if (CollectionUtils.isNotEmpty(tableNames)) {
-                    ctx.getRequest().setTableNames(tableNames);
-                    ctx.setSelectedTables(tableNames);
-                    sendTablesSelected(ctx.getSseEmitter(), tableNames);
-                }
-
-                log.info("[SelectTablesAction] Sending AUTO_SELECT_DONE event for uid: {}", ctx.getUid());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build()
-                );
-            } catch (Exception e) {
-                log.error("[SelectTablesAction] Auto select tables failed for uid: {}", ctx.getUid(), e);
-                sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build()
-                );
-            } finally {
-                removeContext();
+            if (CollectionUtils.isNotEmpty(tableNames)) {
+                ctx.getRequest().setTableNames(tableNames);
+                ctx.setSelectedTables(tableNames);
+                sendTablesSelected(ctx.getSseEmitter(), tableNames);
             }
-        });
+
+            log.info("[SelectTablesAction] Sending AUTO_SELECT_DONE event for uid: {}", ctx.getUid());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build())
+            ).subscribe();
+        } catch (Exception e) {
+            log.error("[SelectTablesAction] Auto select tables failed for uid: {}", ctx.getUid(), e);
+            sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build())
+            ).subscribe();
+        } finally {
+            removeContext();
+        }
     }
 
     private List<String> selectTables(ChatContext ctx) {

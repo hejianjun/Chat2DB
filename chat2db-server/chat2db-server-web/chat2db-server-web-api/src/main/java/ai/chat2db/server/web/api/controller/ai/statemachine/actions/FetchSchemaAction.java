@@ -14,6 +14,7 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 /**
  * 获取表结构动作
@@ -38,33 +39,31 @@ public class FetchSchemaAction extends BaseChatAction {
         sendStateEvent(ctx.getSseEmitter(),
                 ChatState.FETCHING_TABLE_SCHEMA, "正在获取表结构...");
 
-        CompletableFuture.runAsync(() -> {
-            buildContext(ctx);
-            try {
-                log.info("[FetchSchemaAction] Starting schema fetch for uid: {}, tableNames: {}",
-                        ctx.getUid(), ctx.getRequest().getTableNames());
-                String schemaDdl = fetchSchemaDdl(ctx);
-                log.info("[FetchSchemaAction] Schema DDL length: {}", schemaDdl != null ? schemaDdl.length() : 0);
-                ctx.setSchemaDdl(schemaDdl);
+        buildContext(ctx);
+        try {
+            log.info("[FetchSchemaAction] Starting schema fetch for uid: {}, tableNames: {}",
+                    ctx.getUid(), ctx.getRequest().getTableNames());
+            String schemaDdl = fetchSchemaDdl(ctx);
+            log.info("[FetchSchemaAction] Schema DDL length: {}", schemaDdl != null ? schemaDdl.length() : 0);
+            ctx.setSchemaDdl(schemaDdl);
 
-                if (CollectionUtils.isNotEmpty(ctx.getRequest().getTableNames())) {
-                    sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
-                }
-
-                log.info("[FetchSchemaAction] Sending SCHEMA_FETCHED event for uid: {}", ctx.getUid());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build()
-                );
-            } catch (Exception e) {
-                log.error("[FetchSchemaAction] Fetch schema failed for uid: {}", ctx.getUid(), e);
-                sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build()
-                );
-            } finally {
-                removeContext();
+            if (CollectionUtils.isNotEmpty(ctx.getRequest().getTableNames())) {
+                sendSchemaFetched(ctx.getSseEmitter(), schemaDdl);
             }
-        });
+
+            log.info("[FetchSchemaAction] Sending SCHEMA_FETCHED event for uid: {}", ctx.getUid());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build())
+            ).subscribe();
+        } catch (Exception e) {
+            log.error("[FetchSchemaAction] Fetch schema failed for uid: {}", ctx.getUid(), e);
+            sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build())
+            ).subscribe();
+        } finally {
+            removeContext();
+        }
     }
 
     private String fetchSchemaDdl(ChatContext ctx) {

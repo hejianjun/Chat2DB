@@ -17,6 +17,7 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 /**
  * 构建提示词动作
@@ -44,44 +45,42 @@ public class BuildPromptAction extends BaseChatAction {
         sendStateEvent(chatContext.getSseEmitter(),
                 ChatState.BUILDING_PROMPT, "正在构建提示...");
 
-        CompletableFuture.runAsync(() -> {
-            buildContext(chatContext);
-            try {
-                ChatQueryRequest request = chatContext.getRequest();
-                String schemaDdl = chatContext.getSchemaDdl();
-                log.info("[BuildPromptAction] Building prompt for uid: {}, promptType: {}, message: {}",
+        buildContext(chatContext);
+        try {
+            ChatQueryRequest request = chatContext.getRequest();
+            String schemaDdl = chatContext.getSchemaDdl();
+            log.info("[BuildPromptAction] Building prompt for uid: {}, promptType: {}, message: {}",
                     chatContext.getUid(), request.getPromptType(), request.getMessage());
 
-                PromptType promptType = determinePromptType(request);
+            PromptType promptType = determinePromptType(request);
 
-                PromptContext promptContext = PromptContext.builder()
-                        .promptType(promptType)
-                        .message(request.getMessage())
-                        .ext(request.getExt())
-                        .schemaDdl(schemaDdl)
-                        .dataSourceType(dataSourceService.queryDatabaseType(request.getDataSourceId()))
-                        .targetSqlType(request.getDestSqlType())
-                        .build();
+            PromptContext promptContext = PromptContext.builder()
+                    .promptType(promptType)
+                    .message(request.getMessage())
+                    .ext(request.getExt())
+                    .schemaDdl(schemaDdl)
+                    .dataSourceType(dataSourceService.queryDatabaseType(request.getDataSourceId()))
+                    .targetSqlType(request.getDestSqlType())
+                    .build();
 
-                String builtPrompt = promptBuilder.context(promptContext).build();
-                log.info("[BuildPromptAction] Built prompt content for uid: {}:\n{}", chatContext.getUid(), builtPrompt);
-                chatContext.setBuiltPrompt(builtPrompt);
+            String builtPrompt = promptBuilder.context(promptContext).build();
+            log.info("[BuildPromptAction] Built prompt content for uid: {}:\n{}", chatContext.getUid(), builtPrompt);
+            chatContext.setBuiltPrompt(builtPrompt);
 
-                log.info("[BuildPromptAction] Sending PROMPT_BUILT event for uid: {}", chatContext.getUid());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build()
-                );
-            } catch (Exception e) {
-                log.error("[BuildPromptAction] Build prompt failed for uid: {}", chatContext.getUid(), e);
-                sendError(chatContext.getSseEmitter(),
-                        "构建提示失败：" + e.getMessage());
-                context.getStateMachine().sendEvent(
-                        MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build()
-                );
-            } finally {
-                removeContext();
-            }
-        });
+            log.info("[BuildPromptAction] Sending PROMPT_BUILT event for uid: {}", chatContext.getUid());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build())
+            ).subscribe();
+        } catch (Exception e) {
+            log.error("[BuildPromptAction] Build prompt failed for uid: {}", chatContext.getUid(), e);
+            sendError(chatContext.getSseEmitter(),
+                    "构建提示失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build())
+            ).subscribe();
+        } finally {
+            removeContext();
+        }
     }
 
     private PromptType determinePromptType(ChatQueryRequest request) {
