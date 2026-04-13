@@ -25,7 +25,9 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <!-- 跳过测试 -->
         <maven.test.skip>true</maven.test.skip>
-        <spring-ai.version>1.0.3</spring-ai.version>
+        <spring-ai.version>1.1.4</spring-ai.version>
+        <!-- DashScope SDK Version -->
+        <dashscope-sdk-java.version>2.15.1</dashscope-sdk-java.version>
     </properties>
 
     <modules>
