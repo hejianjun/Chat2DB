@@ -39,6 +39,7 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 @RestController
 @ConnectionInfoAspect
@@ -78,29 +79,29 @@ public class ChatController {
                 log.warn("[ChatController] Invalid promptType: {}", queryRequest.getPromptType());
             }
         }
-        
+
         ChatClient chatClient = aiChatConfig.createChatClient(promptType);
 
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
         ChatContext ctx = ChatContext.builder()
-            .uid(uid)
-            .request(queryRequest)
-            .sseEmitter(sseEmitter)
-            .chatClient(chatClient)
-            .cancelled(false)
-            .loginUser(loginUser)
-            .connectInfo(connectInfo)
-            .build();
+                .uid(uid)
+                .request(queryRequest)
+                .sseEmitter(sseEmitter)
+                .chatClient(chatClient)
+                .cancelled(false)
+                .loginUser(loginUser)
+                .connectInfo(connectInfo)
+                .build();
 
         setupSseCallbacks(sseEmitter, uid, ctx);
 
         sseEmitter.send(SseEmitter.event()
-            .id(uid)
-            .name("connect")
-            .data(LocalDateTime.now().toString())
-            .reconnectTime(3000));
+                .id(uid)
+                .name("connect")
+                .data(LocalDateTime.now().toString())
+                .reconnectTime(3000));
 
         StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(uid);
         stateMachine.getExtendedState().getVariables().put("chatContext", ctx);
@@ -108,13 +109,15 @@ public class ChatController {
         activeSessions.put(uid, stateMachine);
         activeContexts.put(uid, ctx);
         log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}",
-            uid, activeSessions.size(), activeContexts.size());
+                uid, activeSessions.size(), activeContexts.size());
 
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
-            stateMachine.start();
+            stateMachine.startReactively().subscribe();
             ChatEvent initialEvent = determineInitialEvent(queryRequest);
-            stateMachine.sendEvent(MessageBuilder.withPayload(initialEvent).build());
+            stateMachine.sendEvent(
+                    Mono.just(MessageBuilder.withPayload(initialEvent).build())
+            ).subscribe();
         }).whenComplete((aVoid, throwable) -> {
             removeContext();
         });
