@@ -1,8 +1,10 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,29 +73,30 @@ public class StreamAction extends BaseChatAction {
                         JSONObject data = new JSONObject();
                         Generation generation = chatResponse.getResult();
 
-                        if (generation != null) {
-                            String content = generation.getOutput().getText();
-                            String thinking = null;
+                        String content = generation.getOutput().getText();
+                        String thinking = null;
 
-                            if (generation.getMetadata() != null) {
-                                var metadata = generation.getMetadata();
-                                if (metadata.containsKey("thinking")) {
-                                    Object thinkingObj = metadata.get("thinking");
-                                    if (thinkingObj instanceof String) {
-                                        thinking = (String) thinkingObj;
-                                    } else if (thinkingObj != null) {
-                                        thinking = thinkingObj.toString();
-                                    }
-                                }
+                        ChatGenerationMetadata metadata = generation.getMetadata();
+                        if (metadata.containsKey("thinking")) {
+                            Object thinkingObj = metadata.get("thinking");
+                            if (thinkingObj instanceof String) {
+                                thinking = (String) thinkingObj;
+                            } else if (thinkingObj != null) {
+                                thinking = thinkingObj.toString();
                             }
+                        } else {
+                            Map<String, Object> outputMetadata = generation.getOutput().getMetadata();
+                            if (outputMetadata.containsKey("reasoningContent")) {
+                                thinking = outputMetadata.get("reasoningContent").toString();
+                            }
+                        }
 
-                            if (content != null && !content.isEmpty()) {
-                                data.put("content", content);
-                            }
-                            if (thinking != null && !thinking.isEmpty()) {
-                                data.put("thinking", thinking);
-                                log.debug("[StreamAction] Thinking content: {}", thinking);
-                            }
+                        if (content != null && !content.isEmpty()) {
+                            data.put("content", content);
+                        }
+                        if (thinking != null && !thinking.isEmpty()) {
+                            data.put("thinking", thinking);
+                            log.debug("[StreamAction] Thinking content: {}", thinking);
                         }
 
                         if (!data.isEmpty()) {
