@@ -72,12 +72,10 @@ public class StreamAction extends BaseChatAction {
 
         } catch (Exception e) {
             log.error("[StreamAction] Start streaming failed for uid: {}", ctx.getUid(), e);
-            CompletableFuture.runAsync(() -> {
-                sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
-                context.getStateMachine().sendEvent(
-                        Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
-                ).subscribe();
-            });
+            sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
+            context.getStateMachine().sendEvent(
+                    Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
+            ).subscribe();
         }
     }
 

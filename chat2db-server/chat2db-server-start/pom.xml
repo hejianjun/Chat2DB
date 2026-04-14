@@ -100,6 +100,12 @@
             <groupId>org.zalando</groupId>
             <artifactId>logbook-spring-boot-starter</artifactId>
         </dependency>
+
+        <!-- Micrometer Context Propagation for Reactor -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>context-propagation</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <finalName>chat2db-server-start</finalName>
@@ -107,6 +113,9 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>ai.chat2db.server.start.Chat2dbLiteApplication</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>

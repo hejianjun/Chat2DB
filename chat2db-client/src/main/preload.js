@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronApi', {
     const child = spawn(path.join(__dirname, '../..', `./static/${JAVA_PATH}`), [
       '-noverify',
       `-Dspring.profiles.active=${isTest ? 'test' : 'release'}`,
+      '-Dmicrometer.context-propagation.enabled=true',
       '-Dserver.address=127.0.0.1',
       '-Dchat2db.mode=DESKTOP',
       `-Dproject.path=${javaPath}`,

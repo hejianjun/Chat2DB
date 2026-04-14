@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.collections4.CollectionUtils;
@@ -111,17 +110,11 @@ public class ChatController {
         log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}",
                 uid, activeSessions.size(), activeContexts.size());
 
-        CompletableFuture.runAsync(() -> {
-            buildContext(loginUser, connectInfo);
-            stateMachine.startReactively().subscribe();
-            ChatEvent initialEvent = determineInitialEvent(queryRequest);
-            stateMachine.sendEvent(
-                    Mono.just(MessageBuilder.withPayload(initialEvent).build())
-            ).subscribe();
-        }).whenComplete((aVoid, throwable) -> {
-            removeContext();
-        });
-
+        stateMachine.startReactively().subscribe();
+        ChatEvent initialEvent = determineInitialEvent(queryRequest);
+        stateMachine.sendEvent(
+                Mono.just(MessageBuilder.withPayload(initialEvent).build())
+        ).subscribe();
         return sseEmitter;
     }
 
