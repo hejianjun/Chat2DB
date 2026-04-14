@@ -57,7 +57,8 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
   
   const effectiveParserType = parserType || mapDatabaseTypeToParser(boundInfo.databaseType || 'MYSQL');
 
-  monacoSqlAutocomplete(monaco, editor, {
+  // Register completion provider and store the disposable
+  const completionProviderDisposable = monacoSqlAutocomplete(monaco, editor, {
     language: 'sql',
     parserType: effectiveParserType,
     
@@ -220,6 +221,10 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
   return {
     dispose: () => {
+      // Dispose the completion provider to avoid duplicate registrations
+      if (completionProviderDisposable) {
+        completionProviderDisposable.dispose();
+      }
       // 清理缓存（可选，根据 boundInfo 清理或不清理）
       // fieldCache.clear();
     },

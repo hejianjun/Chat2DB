@@ -32,93 +32,42 @@ export function monacoSqlAutocomplete(
     );
   }
 
+  // Register completion provider
   // Get parser info and show error.
   let currentParserPromise: any = null;
   let editVersion = 0;
-
-  editor.onDidChangeModelContent((event: any) => {
-    editVersion++;
-    const currentEditVersion = editVersion;
-
-    currentParserPromise = new Promise((resolve) => {
-      setTimeout(() => {
-        const model = editor.getModel();
-
-        asyncParser(
-          editor.getValue(),
-          model.getOffsetAt(editor.getPosition()),
-          opts.parserType,
-        ).then((parseResult) => {
-          resolve(parseResult);
-
-          if (currentEditVersion !== editVersion) {
-            return;
-          }
-
-          opts.onParse(parseResult);
-
-          if (parseResult.error) {
-            const newReason =
-              parseResult.error.reason === 'incomplete'
-                ? `Incomplete, expect next input: \n${parseResult.error.suggestions
-                    .map((each: any) => {
-                      return each.value;
-                    })
-                    .join('\n')}`
-                : `Wrong input, expect: \n${parseResult.error.suggestions
-                    .map((each: any) => {
-                      return each.value;
-                    })
-                    .join('\n')}`;
-
-            const errorPosition = parseResult.error.token
-              ? {
-                  startLineNumber: model.getPositionAt(
-                    parseResult.error.token.position[0],
-                  ).lineNumber,
-                  startColumn: model.getPositionAt(
-                    parseResult.error.token.position[0],
-                  ).column,
-                  endLineNumber: model.getPositionAt(
-                    parseResult.error.token.position[1],
-                  ).lineNumber,
-                  endColumn:
-                    model.getPositionAt(parseResult.error.token.position[1])
-                      .column + 1,
-                }
-              : {
-                  startLineNumber: 0,
-                  startColumn: 0,
-                  endLineNumber: 0,
-                  endColumn: 0,
-                };
-
-            model.getPositionAt(parseResult.error.token);
-
-            monaco.editor.setModelMarkers(model, opts.language, [
-              {
-                ...errorPosition,
-                message: newReason,
-                severity: getSeverityByVersion(
-                  monaco,
-                  opts.monacoEditorVersion,
-                ),
-              },
-            ]);
-          } else {
-            monaco.editor.setModelMarkers(editor.getModel(), opts.language, []);
-          }
-        });
-      });
-    });
-  });
-
-  monaco.languages.registerCompletionItemProvider(opts.language, {
+  
+  // Initialize parser promise with current editor content
+  const initParserPromise = () => {
+    const model = editor.getModel();
+    if (model) {
+      currentParserPromise = asyncParser(
+        editor.getValue(),
+        model.getOffsetAt(editor.getPosition()),
+        opts.parserType,
+      );
+    }
+  };
+  
+  // Initialize on first load
+  initParserPromise();
+  
+  const completionProvider = monaco.languages.registerCompletionItemProvider(opts.language, {
     triggerCharacters:
       ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
     provideCompletionItems: async () => {
       const currentEditVersion = editVersion;
+      
+      // If currentParserPromise is null, initialize it
+      if (!currentParserPromise) {
+        initParserPromise();
+      }
+      
       const parseResult: IParseResult = await currentParserPromise;
+
+      if (!parseResult) {
+        return returnCompletionItemsByVersion([], opts.monacoEditorVersion);
+      }
 
       if (currentEditVersion !== editVersion) {
         return returnCompletionItemsByVersion([], opts.monacoEditorVersion);
@@ -133,6 +82,8 @@ export function monacoSqlAutocomplete(
         cursorKeyPath: parseResult.cursorKeyPath?.length || 0,
         nextMatchingsCount: parseResult.nextMatchings?.length || 0,
       });
+      console.log('debugInfo:', parseResult.debugInfo);
+      console.log('cursorKeyPath 详情:', parseResult.cursorKeyPath);
 
       const cursorInfo = await reader.getCursorInfo(
         parseResult.ast,
@@ -166,6 +117,30 @@ export function monacoSqlAutocomplete(
           );
 
           console.log('获取到字段数量:', cursorRootStatementFields.length);
+
+          // 打印所有字段的详细信息
+          console.log('所有字段详情:');
+          cursorRootStatementFields.forEach((f, idx) => {
+            console.log(`  [${idx}] label=${f.label}, groupPickerName=${f.groupPickerName}, detail=${f.detail}`);
+          });
+
+          // 打印重复字段的详细信息
+          const labelCounts = _.countBy(cursorRootStatementFields, 'label');
+          const duplicates = _.pickBy(labelCounts, (count, label) => count > 1);
+          if (Object.keys(duplicates).length > 0) {
+            console.log('⚠️ 发现重复字段:', duplicates);
+            // 打印重复字段的完整信息
+            Object.keys(duplicates).forEach(label => {
+              const dupFields = cursorRootStatementFields.filter(f => f.label === label);
+              console.log(`字段 "${label}" 的 ${dupFields.length} 个实例:`, dupFields.map(f => ({
+                label: f.label,
+                groupPickerName: f.groupPickerName,
+                tableInfo: f.tableInfo,
+              })));
+            });
+          } else {
+            console.log('✅ 没有发现重复字段');
+          }
 
           // 去重字段（避免重复）
           const uniqueFields = _.uniqBy(cursorRootStatementFields, 'label');
@@ -267,10 +242,90 @@ export function monacoSqlAutocomplete(
             parserSuggestion,
             opts.monacoEditorVersion,
           );
-      }
+}
     },
   });
-  monaco.languages.registerHoverProvider(opts.language, {
+  
+  // Listen for content changes and update parser promise
+  editor.onDidChangeModelContent((event: any) => {
+    editVersion++;
+    const currentEditVersion = editVersion;
+
+    currentParserPromise = new Promise((resolve) => {
+      setTimeout(() => {
+        const model = editor.getModel();
+
+        asyncParser(
+          editor.getValue(),
+          model.getOffsetAt(editor.getPosition()),
+          opts.parserType,
+        ).then((parseResult) => {
+          resolve(parseResult);
+
+          if (currentEditVersion !== editVersion) {
+            return;
+          }
+
+          opts.onParse(parseResult);
+
+          if (parseResult.error) {
+            const newReason =
+              parseResult.error.reason === 'incomplete'
+                ? `Incomplete, expect next input: \n${parseResult.error.suggestions
+                    .map((each: any) => {
+                      return each.value;
+                    })
+                    .join('\n')}`
+                : `Wrong input, expect: \n${parseResult.error.suggestions
+                    .map((each: any) => {
+                      return each.value;
+                    })
+                    .join('\n')}`;
+
+            const errorPosition = parseResult.error.token
+              ? {
+                  startLineNumber: model.getPositionAt(
+                    parseResult.error.token.position[0],
+                  ).lineNumber,
+                  startColumn: model.getPositionAt(
+                    parseResult.error.token.position[0],
+                  ).column,
+                  endLineNumber: model.getPositionAt(
+                    parseResult.error.token.position[1],
+                  ).lineNumber,
+                  endColumn:
+                    model.getPositionAt(parseResult.error.token.position[1])
+                      .column + 1,
+                }
+              : {
+                  startLineNumber: 0,
+                  startColumn: 0,
+                  endLineNumber: 0,
+                  endColumn: 0,
+                };
+
+            model.getPositionAt(parseResult.error.token);
+
+            monaco.editor.setModelMarkers(model, opts.language, [
+              {
+                ...errorPosition,
+                message: newReason,
+                severity: getSeverityByVersion(
+                  monaco,
+                  opts.monacoEditorVersion,
+                ),
+              },
+            ]);
+          } else {
+            monaco.editor.setModelMarkers(editor.getModel(), opts.language, []);
+          }
+        });
+      });
+    });
+  });
+  
+  // Register hover provider and store it for disposal
+  const hoverProviderDisposable = monaco.languages.registerHoverProvider(opts.language, {
     provideHover: async (model: any, position: any) => {
       const parseResult: IParseResult = await asyncParser(
         editor.getValue(),
@@ -332,6 +387,14 @@ export function monacoSqlAutocomplete(
       };
     },
   });
+
+  // Return disposable object
+  return {
+    dispose: () => {
+      completionProvider.dispose();
+      hoverProviderDisposable.dispose();
+    },
+  };
 }
 
 // 实例化一个 worker

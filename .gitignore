@@ -30,3 +30,4 @@ package-lock.json
 /lib
 /out/*
 /chat2db-gateway/target
+.playwright-mcp
