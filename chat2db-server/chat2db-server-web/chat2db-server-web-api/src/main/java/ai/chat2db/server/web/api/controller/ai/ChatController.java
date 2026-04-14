@@ -118,20 +118,6 @@ public class ChatController {
         return sseEmitter;
     }
 
-    public static void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
-        ContextUtils.setContext(Context.builder()
-                .loginUser(loginUser)
-                .build());
-        Dbutils.setSession();
-        Chat2DBContext.putContext(connectInfo);
-    }
-
-    public static void removeContext() {
-        Dbutils.removeSession();
-        ContextUtils.removeContext();
-        Chat2DBContext.removeContext();
-    }
-
     @DeleteMapping("/chat/{uid}")
     @CrossOrigin
     public ResponseEntity<Void> cancelChat(@PathVariable String uid) {
