@@ -15,6 +15,9 @@ export interface ISqlAutocompleteDisposable {
   dispose: () => void;
 }
 
+// 字段缓存
+const fieldCache = new Map<string, any[]>();
+
 const mapDatabaseTypeToParser = (databaseType: string): ISqlAutocompleteOptions['parserType'] => {
   const typeMap: Record<string, ISqlAutocompleteOptions['parserType']> = {
     MYSQL: 'mysql',
@@ -84,7 +87,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           return {
             label: name,
             insertText: name,
-            sortText: `A${name}`,
+            sortText: `Z${name}`,  // 表名排在最后（Z 开头）
             kind: monaco.languages.CompletionItemKind.Folder as any,
             detail: table.comment || '',
           };
@@ -103,6 +106,21 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         cursorValue,
       });
       
+      // 检查缓存
+      const cacheKey = `${boundInfo.dataSourceId}_${boundInfo.databaseName || ''}_${boundInfo.schemaName || ''}_${tableName}`;
+      if (fieldCache.has(cacheKey)) {
+        console.log('[SQL 补全 - API] 使用缓存字段:', cacheKey);
+        const cachedData = fieldCache.get(cacheKey);
+        return cachedData.map((column) => ({
+          label: column.name,
+          insertText: column.name,
+          sortText: `B${column.name}`,
+          kind: monaco.languages.CompletionItemKind.Field as any,
+          detail: column.columnType || column.dataType,
+          documentation: column.comment || '',
+        }));
+      }
+      
       try {
         if (!tableName) {
           console.warn('[SQL 补全 - API] 表名为空，返回空数组');
@@ -118,6 +136,9 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         
         console.log('[SQL 补全 - API] 获取到字段数量:', data.length);
         console.log('[SQL 补全 - API] 字段示例:', data.slice(0, 3));
+        
+        // 缓存结果
+        fieldCache.set(cacheKey, data);
         
         return data.map((column) => {
           const name = column.name;
@@ -199,8 +220,16 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
   return {
     dispose: () => {
+      // 清理缓存（可选，根据 boundInfo 清理或不清理）
+      // fieldCache.clear();
     },
   };
+};
+
+// 缓存清理函数
+export const clearFieldCache = () => {
+  fieldCache.clear();
+  console.log('[SQL 补全 - API] 缓存已清理');
 };
 
 export const disposeSqlAutocomplete = (disposable?: ISqlAutocompleteDisposable) => {

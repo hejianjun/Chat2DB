@@ -29,7 +29,7 @@ export class DefaultOpts {
         return {
           label: name,
           insertText: name,
-          sortText: `A${name}`,
+          sortText: `Z${name}`,  // 表名排在最后（Z 开头）
           kind: this.monaco.languages.CompletionItemKind.Folder,
         };
       }),
@@ -62,6 +62,10 @@ export class DefaultOpts {
       .filter(matching => {
         return matching.type === 'string';
       })
+      .filter(matching => {
+        // 过滤掉空值或 cursor
+        return matching.value && matching.value.toString().trim() !== '';
+      })
       .map(matching => {
         const value = /[a-zA-Z]+/.test(matching.value.toString())
           ? _.upperCase(matching.value.toString())
@@ -72,7 +76,7 @@ export class DefaultOpts {
           documentation: 'documentation',
           detail: 'detail',
           kind: this.monaco.languages.CompletionItemKind.Keyword,
-          sortText: `W${matching.value}`,
+          sortText: `W${value}`,
         };
       });
   };

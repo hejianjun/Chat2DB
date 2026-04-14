@@ -165,9 +165,13 @@ export function monacoSqlAutocomplete(
 
           console.log('[SQL 补全] 获取到字段数量:', cursorRootStatementFields.length);
 
+          // 去重字段（避免重复）
+          const uniqueFields = _.uniqBy(cursorRootStatementFields, 'label');
+          console.log('[SQL 补全] 去重后字段数量:', uniqueFields.length);
+
           // group.fieldName
           const groups = _.groupBy(
-            cursorRootStatementFields.filter((cursorRootStatementField) => {
+            uniqueFields.filter((cursorRootStatementField) => {
               return cursorRootStatementField.groupPickerName !== null;
             }),
             'groupPickerName',
@@ -179,9 +183,9 @@ export function monacoSqlAutocomplete(
             cursorInfo.token.value,
           );
 
-          const result = cursorRootStatementFields
-            .concat(parserSuggestion)
-            .concat(functionNames)
+          const result = uniqueFields
+            .concat(functionNames)  // 函数名
+            .concat(parserSuggestion)  // SQL 关键字
             .concat(
               groups
                 ? Object.keys(groups).map((groupName) => {
@@ -209,18 +213,31 @@ export function monacoSqlAutocomplete(
 
           console.log('[SQL 补全] 过滤前字段数量:', cursorRootStatementFieldsAfter.length);
 
-          const filteredFields = cursorRootStatementFieldsAfter
+          // 去重并过滤
+          const uniqueFieldsAfter = _.uniqBy(cursorRootStatementFieldsAfter, 'label');
+          const filteredFields = uniqueFieldsAfter
             .filter((cursorRootStatementField: any) => {
               return (
                 cursorRootStatementField.groupPickerName ===
                 (cursorInfo as ICursorInfo<{ groupName: string }>).groupName
               );
+            })
+            .filter((field: any) => {
+              // 过滤掉无效的补全项
+              return field && field.label && field.label.trim() !== '' && field.insertText && field.insertText.trim() !== '';
             });
 
           console.log('[SQL 补全] 过滤后字段数量:', filteredFields.length);
 
+          // 字段排在最前面，关键字排在后面
+          const sortedFields = [
+            ...filteredFields,  // 字段（sortText: B*）
+            ...parserSuggestion.filter(item => item.insertText && item.insertText.trim() !== ''),  // SQL 关键字（sortText: W*）
+          ];
+
+          console.log('[SQL 补全] 最终补全项总数:', sortedFields.length);
           return returnCompletionItemsByVersion(
-            filteredFields.concat(parserSuggestion),
+            sortedFields,
             opts.monacoEditorVersion,
           );
         case 'tableName':

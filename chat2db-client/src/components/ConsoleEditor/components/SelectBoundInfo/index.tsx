@@ -12,14 +12,15 @@ import { IBoundInfo } from '@/typings';
 const { Option } = Select;
 
 import {
-  registerIntelliSenseField,
-  registerIntelliSenseKeyword,
-  registerIntelliSenseTable,
-  registerIntelliSenseDatabase,
-  resetSenseKeyword,
-  resetSenseTable,
-  resetSenseDatabase,
-  resetSenseField,
+  // 注释掉旧的 IntelliSense 补全，使用新的 syntax-parser 补全
+  // registerIntelliSenseField,
+  // registerIntelliSenseKeyword,
+  // registerIntelliSenseTable,
+  // registerIntelliSenseDatabase,
+  // resetSenseKeyword,
+  // resetSenseTable,
+  // resetSenseDatabase,
+  // resetSenseField,
 } from '@/utils/IntelliSense';
 
 interface IProps {
@@ -49,10 +50,11 @@ const SelectBoundInfo = memo((props: IProps) => {
 
   useEffect(() => {
     if(!isActive){
-      resetSenseKeyword();
-      resetSenseTable();
-      resetSenseDatabase();
-      resetSenseField();
+      // 注释掉旧的 IntelliSense 重置
+      // resetSenseKeyword();
+      // resetSenseTable();
+      // resetSenseDatabase();
+      // resetSenseField();
     }
   }, [isActive]);
 
@@ -80,7 +82,8 @@ const SelectBoundInfo = memo((props: IProps) => {
     if(!isActive){
       return
     }
-    registerIntelliSenseKeyword(boundInfo.databaseType);
+    // 注释掉旧的关键字注册，使用新的 syntax-parser
+    // registerIntelliSenseKeyword(boundInfo.databaseType);
   }, [boundInfo.dataSourceId, isActive]);
 
   // 当数据源变化时，重新获取数据库列表
@@ -170,32 +173,34 @@ const SelectBoundInfo = memo((props: IProps) => {
   // 注册表名
   useEffect(() => {
     if (isActive) {
-      const tableNameListTemp = allTableList.map((t) => t.name);
-      setTableNameList(tableNameListTemp);
-      registerIntelliSenseTable(
-        allTableList,
-        boundInfo.databaseType,
-        boundInfo.dataSourceId,
-        boundInfo.databaseName,
-        boundInfo.schemaName,
-      );
-      registerIntelliSenseField(
-        tableNameListTemp,
-        boundInfo.dataSourceId,
-        boundInfo.databaseName,
-        boundInfo.schemaName,
-      );
+      // 注释掉旧的表名注册，使用新的 syntax-parser
+      // const tableNameListTemp = allTableList.map((t) => t.name);
+      // setTableNameList(tableNameListTemp);
+      // registerIntelliSenseTable(
+      //   allTableList,
+      //   boundInfo.databaseType,
+      //   boundInfo.dataSourceId,
+      //   boundInfo.databaseName,
+      //   boundInfo.schemaName,
+      // );
+      // registerIntelliSenseField(
+      //   tableNameListTemp,
+      //   boundInfo.dataSourceId,
+      //   boundInfo.databaseName,
+      //   boundInfo.schemaName,
+      // );
       //setSelectedTables(tableNameListTemp.slice(0, 1));
     }
   }, [allTableList, isActive]);
 
   // 注册数据库名
   useEffect(() => {
-    const editorDatabaseTips = databaseNameList.map((item) => ({
-      name: item.value,
-      dataSourceName: boundInfo.dataSourceName,
-    }));
-    registerIntelliSenseDatabase(editorDatabaseTips);
+    // 注释掉旧的数据库名注册，使用新的 syntax-parser
+    // const editorDatabaseTips = databaseNameList.map((item) => ({
+    //   name: item.value,
+    //   dataSourceName: boundInfo.dataSourceName,
+    // }));
+    // registerIntelliSenseDatabase(editorDatabaseTips);
   }, [databaseNameList]);
 
   // 选择数据源
