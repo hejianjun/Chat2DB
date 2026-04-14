@@ -1,120 +1,5 @@
 # SQL 智能补全测试用例
 
-## 测试环境准备
-
-1. 启动前端项目
-```bash
-cd chat2db-client
-yarn run start
-```
-
-2. 启动后端项目
-```bash
-cd chat2db-server
-mvn spring-boot:run -pl chat2db-server-start
-```
-
-## 测试步骤
-
-### 测试 1：基础表别名补全（核心功能）
-
-**操作步骤：**
-1. 打开 SQL 编辑器
-2. 选择一个数据源和数据库
-3. 输入以下 SQL：
-```sql
-select * from AKMG_APP t where t.
-```
-
-**预期结果：**
-- 在 `t.` 后自动弹出补全列表
-- 显示 AKMG_APP 表的所有字段
-- 每个字段显示字段名和类型
-
-**验证点：**
-- [ ] 补全列表正常弹出
-- [ ] 字段列表完整
-- [ ] 字段类型显示正确
-- [ ] 字段注释显示正确（如果有）
-
-### 测试 2：直接表名补全
-
-**操作步骤：**
-1. 在 SQL 编辑器中输入：
-```sql
-select * from AKMG_APP.
-```
-
-**预期结果：**
-- 在 `AKMG_APP.` 后自动弹出补全列表
-- 显示该表的所有字段
-
-### 测试 3：多表 JOIN 补全
-
-**操作步骤：**
-1. 输入以下 SQL：
-```sql
-select t1.id, t2.name 
-from table1 t1 
-join table2 t2 on t1.id = t2.
-```
-
-**预期结果：**
-- 在 `t2.` 后弹出 table2 的字段列表
-- 在 `t1.` 后弹出 table1 的字段列表
-
-### 测试 4：表名补全
-
-**操作步骤：**
-1. 输入以下 SQL：
-```sql
-select * from 
-```
-
-**预期结果：**
-- 在 `from ` 后弹出当前数据库的所有表列表
-
-### 测试 5：关键字补全
-
-**操作步骤：**
-1. 输入以下 SQL 片段：
-```sql
-SEL
-```
-
-**预期结果：**
-- 弹出 SQL 关键字补全列表，包含 SELECT
-
-### 测试 6：Hover 提示
-
-**操作步骤：**
-1. 输入完整的 SQL 并执行
-2. 将鼠标悬停在字段名上
-
-**预期结果：**
-- 显示字段的详细信息（类型、注释等）
-
-### 测试 7：数据库切换
-
-**操作步骤：**
-1. 在 SQL 编辑器中选择不同的数据库
-2. 重复测试 1
-
-**预期结果：**
-- 显示新数据库中的表字段
-- 补全列表自动更新
-
-### 测试 8：性能测试
-
-**操作步骤：**
-1. 快速输入 SQL，触发多次补全
-2. 观察响应速度
-
-**预期结果：**
-- 补全响应流畅
-- 无明显卡顿
-- 无重复 API 调用
-
 ## 测试数据准备
 
 为了测试表别名补全功能，需要确保数据库中有表。可以使用以下 SQL 创建测试表：
@@ -143,7 +28,7 @@ CREATE TABLE test_orders (
 -- 测试 1：表别名补全
 select * from test_users t where t.
 
--- 测试 2：直接表名补全
+-- 测试 2：直接字段名补全
 select * from test_users.
 
 -- 测试 3：多表 JOIN
@@ -152,13 +37,13 @@ from test_users u
 join test_orders o on u.id = o.
 
 -- 测试 4：WHERE 条件
-select * from test_users where .
+select * from test_users where 
 
 -- 测试 5：ORDER BY
-select * from test_users order by .
+select * from test_users order by 
 
 -- 测试 6：GROUP BY
-select username, count(*) from test_users group by .
+select username, count(*) from test_users group by 
 ```
 
 ## 问题排查

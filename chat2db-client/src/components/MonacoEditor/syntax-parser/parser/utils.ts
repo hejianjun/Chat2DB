@@ -34,10 +34,42 @@ export function tailCallOptimize<T>(f: T): T {
   } as any;
 }
 
+function findNearestTokenBeforeCursor(obj: any, cursorIndex: number, path?: string): { path: string; token: any; distance: number } | null {
+  // eslint-disable-next-line no-param-reassign
+  path = path || '';
+  let nearest: { path: string; token: any; distance: number } | null = null;
+  
+  // eslint-disable-next-line guard-for-in
+  for (const key in obj) {
+    if (obj[key] && obj[key].token === true && obj[key].position) {
+      const tokenEnd = obj[key].position[1] + 1;
+      if (tokenEnd <= cursorIndex) {
+        const distance = cursorIndex - tokenEnd;
+        if (!nearest || distance < nearest.distance) {
+          nearest = {
+            path: path === '' ? key : `${path}.${key}`,
+            token: obj[key],
+            distance,
+          };
+        }
+      }
+    }
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
+      const childNearest = findNearestTokenBeforeCursor(obj[key], cursorIndex, path === '' ? key : `${path}.${key}`);
+      if (childNearest && (!nearest || childNearest.distance < nearest.distance)) {
+        nearest = childNearest;
+      }
+    }
+  }
+  return nearest;
+}
+
 export function getPathByCursorIndexFromAst(obj: any, cursorIndex: number, path?: string) {
   // eslint-disable-next-line no-param-reassign
   path = path || '';
   let fullpath = '';
+  
+  // 首先尝试找到光标所在的 token
   // eslint-disable-next-line guard-for-in
   for (const key in obj) {
     if (
@@ -51,9 +83,20 @@ export function getPathByCursorIndexFromAst(obj: any, cursorIndex: number, path?
       }
       return `${path}.${key}`;
     }
-    if (typeof obj[key] === 'object') {
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
       fullpath = getPathByCursorIndexFromAst(obj[key], cursorIndex, path === '' ? key : `${path}.${key}`) || fullpath;
     }
   }
+  
+  // 如果找不到光标所在的 token，尝试找最近的 token
+  if (!fullpath) {
+    const nearest = findNearestTokenBeforeCursor(obj, cursorIndex, path);
+    if (nearest && nearest.distance <= 5) {
+      // 如果光标距离最近的 token 结束位置不超过 5 个字符，返回该路径
+      // 这可以帮助处理光标在空格后面的情况
+      return nearest.path;
+    }
+  }
+  
   return fullpath;
 }

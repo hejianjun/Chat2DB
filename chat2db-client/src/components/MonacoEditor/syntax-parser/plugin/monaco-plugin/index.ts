@@ -96,6 +96,33 @@ export function monacoSqlAutocomplete(
 
       console.log('关键字补全数量:', parserSuggestion.length);
 
+      // 当 cursorInfo 为 null 但解析失败时，尝试从 SELECT 语句获取字段
+      if (!cursorInfo && parseResult.ast && parseResult.error) {
+        console.log('🔄 解析失败，尝试从 SELECT 语句获取字段');
+        const fallbackFields = await reader.getFieldsFromStatement(
+          parseResult.ast,
+          [],  // 空的 cursorKeyPath
+          opts.onSuggestTableFields,
+        );
+        
+        if (fallbackFields && fallbackFields.length > 0) {
+          console.log('✅ 从 SELECT 语句获取到字段数量:', fallbackFields.length);
+          const uniqueFallbackFields = _.uniqBy(fallbackFields, 'label');
+          const functionNames = await opts.onSuggestFunctionName('');
+          const result = uniqueFallbackFields.concat(functionNames).concat(parserSuggestion);
+          console.log('最终补全项总数:', result.length);
+          console.groupEnd();
+          return returnCompletionItemsByVersion(result, opts.monacoEditorVersion);
+        }
+        
+        console.log('⚠️ 无法获取字段，返回关键字补全');
+        console.groupEnd();
+        return returnCompletionItemsByVersion(
+          parserSuggestion,
+          opts.monacoEditorVersion,
+        );
+      }
+
       if (!cursorInfo) {
         console.log('⚠️ 无光标信息，返回关键字补全');
         console.groupEnd();

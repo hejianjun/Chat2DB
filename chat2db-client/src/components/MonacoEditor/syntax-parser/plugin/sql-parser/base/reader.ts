@@ -119,9 +119,23 @@ export async function getFieldsFromStatement(
   // console.log('[Reader] getFieldsFromStatement - 开始执行');
   
   const cursorInfo = await getCursorInfo(rootStatement, cursorKeyPath);
-  const cursorRootStatement = findNearestStatement(rootStatement, cursorKeyPath);
+  let cursorRootStatement = findNearestStatement(rootStatement, cursorKeyPath);
 
   // console.log('[Reader] getFieldsFromStatement - cursorRootStatement:', cursorRootStatement?.variant);
+
+  // 如果 cursorKeyPath 为空，尝试从 rootStatement 中找到 SELECT 语句
+  if (!cursorRootStatement && rootStatement) {
+    // 检查 rootStatement 是否是 statements 数组
+    if (_.isArray(rootStatement) && rootStatement.length > 0) {
+      // 找到第一个 SELECT 语句
+      const selectStatement = rootStatement.find(stmt => stmt?.variant === 'select');
+      if (selectStatement) {
+        cursorRootStatement = selectStatement;
+      }
+    } else if (rootStatement?.variant === 'select') {
+      cursorRootStatement = rootStatement;
+    }
+  }
 
   if (!cursorRootStatement) {
     // console.log('[Reader] getFieldsFromStatement - cursorRootStatement 为空，返回空数组');
@@ -217,7 +231,9 @@ async function getFieldsByFromClause(
         // console.log('[Reader] getFieldsByFromClause - 处理表标识符，表信息:', itFromStatement.name);
         // console.log('[Reader] getFieldsByFromClause - 别名:', itFromStatement.alias);
 
-        let originFields = await getFieldsByTableName(itFromStatement.name, cursorInfo.token.value, rootStatement);
+        // 当 cursorInfo 为 null 时，使用空字符串作为 cursorValue
+        const cursorValue = cursorInfo?.token?.value || '';
+        let originFields = await getFieldsByTableName(itFromStatement.name, cursorValue, rootStatement);
         const tableNames: string[] = _.get(itFromStatement, 'name.tableNames', []);
 
         // console.log('[Reader] getFieldsByFromClause - 原始字段数:', originFields.length);
