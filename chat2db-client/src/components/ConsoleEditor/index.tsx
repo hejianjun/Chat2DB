@@ -201,6 +201,7 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
             addAction={addAction}
             options={props.editorOptions}
             shortcutKey={registerShortcutKey}
+            boundInfo={boundInfo}
           />
         </Spin>
         <Modal

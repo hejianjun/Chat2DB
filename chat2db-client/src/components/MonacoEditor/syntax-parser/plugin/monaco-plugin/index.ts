@@ -6,7 +6,8 @@
 import * as _ from 'lodash';
 import { IParseResult } from '../..';
 import { DefaultOpts, IMonacoVersion, IParserType } from './default-opts';
-import * as MyWorker from './parser.worker';
+import { createParserWorker } from './worker-factory';
+import { mysqlParser } from '../sql-parser';
 import {
   ICompletionItem,
   ITableInfo,
@@ -116,34 +117,53 @@ export function monacoSqlAutocomplete(
     triggerCharacters:
       ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
     provideCompletionItems: async () => {
+      console.log('[SQL 补全] === 开始补全流程 ===');
       const currentEditVersion = editVersion;
       const parseResult: IParseResult = await currentParserPromise;
 
       if (currentEditVersion !== editVersion) {
+        console.log('[SQL 补全] 编辑已更新，取消当前补全');
         return returnCompletionItemsByVersion([], opts.monacoEditorVersion);
       }
+
+      console.log('[SQL 补全] 解析结果:', {
+        success: parseResult.success,
+        hasError: !!parseResult.error,
+        cursorKeyPath: parseResult.cursorKeyPath,
+        nextMatchingsCount: parseResult.nextMatchings?.length || 0,
+      });
 
       const cursorInfo = await reader.getCursorInfo(
         parseResult.ast,
         parseResult.cursorKeyPath,
       );
 
+      console.log('[SQL 补全] 光标信息:', cursorInfo);
+
       const parserSuggestion = opts.pipeKeywords(parseResult.nextMatchings);
 
+      console.log('[SQL 补全] 关键字补全数量:', parserSuggestion.length);
+
       if (!cursorInfo) {
+        console.log('[SQL 补全] 无光标信息，返回关键字补全');
         return returnCompletionItemsByVersion(
           parserSuggestion,
           opts.monacoEditorVersion,
         );
       }
 
+      console.log('[SQL 补全] 光标类型:', cursorInfo.type);
+
       switch (cursorInfo.type) {
         case 'tableField':
+          console.log('[SQL 补全] 表字段补全模式');
           const cursorRootStatementFields = await reader.getFieldsFromStatement(
             parseResult.ast,
             parseResult.cursorKeyPath,
             opts.onSuggestTableFields,
           );
+
+          console.log('[SQL 补全] 获取到字段数量:', cursorRootStatementFields.length);
 
           // group.fieldName
           const groups = _.groupBy(
@@ -153,25 +173,33 @@ export function monacoSqlAutocomplete(
             'groupPickerName',
           );
 
+          console.log('[SQL 补全] 分组信息:', Object.keys(groups));
+
           const functionNames = await opts.onSuggestFunctionName(
             cursorInfo.token.value,
           );
 
+          const result = cursorRootStatementFields
+            .concat(parserSuggestion)
+            .concat(functionNames)
+            .concat(
+              groups
+                ? Object.keys(groups).map((groupName) => {
+                    console.log('[SQL 补全] 添加分组:', groupName);
+                    return opts.onSuggestFieldGroup(groupName);
+                  })
+                : [],
+            );
+
+          console.log('[SQL 补全] 最终补全项总数:', result.length);
           return returnCompletionItemsByVersion(
-            cursorRootStatementFields
-              .concat(parserSuggestion)
-              .concat(functionNames)
-              .concat(
-                groups
-                  ? Object.keys(groups).map((groupName) => {
-                      return opts.onSuggestFieldGroup(groupName);
-                    })
-                  : [],
-              ),
+            result,
             opts.monacoEditorVersion,
           );
+          
         case 'tableFieldAfterGroup':
           // 字段 . 后面的部分
+          console.log('[SQL 补全] 表名限定字段模式，分组:', (cursorInfo as ICursorInfo<{ groupName: string }>).groupName);
           const cursorRootStatementFieldsAfter =
             await reader.getFieldsFromStatement(
               parseResult.ast,
@@ -179,29 +207,38 @@ export function monacoSqlAutocomplete(
               opts.onSuggestTableFields,
             );
 
+          console.log('[SQL 补全] 过滤前字段数量:', cursorRootStatementFieldsAfter.length);
+
+          const filteredFields = cursorRootStatementFieldsAfter
+            .filter((cursorRootStatementField: any) => {
+              return (
+                cursorRootStatementField.groupPickerName ===
+                (cursorInfo as ICursorInfo<{ groupName: string }>).groupName
+              );
+            });
+
+          console.log('[SQL 补全] 过滤后字段数量:', filteredFields.length);
+
           return returnCompletionItemsByVersion(
-            cursorRootStatementFieldsAfter
-              .filter((cursorRootStatementField: any) => {
-                return (
-                  cursorRootStatementField.groupPickerName ===
-                  (cursorInfo as ICursorInfo<{ groupName: string }>).groupName
-                );
-              })
-              .concat(parserSuggestion),
+            filteredFields.concat(parserSuggestion),
             opts.monacoEditorVersion,
           );
         case 'tableName':
+          console.log('[SQL 补全] 表名补全模式');
           const tableNames = await opts.onSuggestTableNames(
             cursorInfo as ICursorInfo<ITableInfo>,
           );
 
+          console.log('[SQL 补全] 表名数量:', tableNames.length);
           return returnCompletionItemsByVersion(
             tableNames.concat(parserSuggestion),
             opts.monacoEditorVersion,
           );
         case 'functionName':
+          console.log('[SQL 补全] 函数名补全模式');
           return opts.onSuggestFunctionName(cursorInfo.token.value);
         default:
+          console.log('[SQL 补全] 默认模式，返回关键字补全');
           return returnCompletionItemsByVersion(
             parserSuggestion,
             opts.monacoEditorVersion,
@@ -275,7 +312,14 @@ export function monacoSqlAutocomplete(
 }
 
 // 实例化一个 worker
-const worker: Worker = new (MyWorker as any)();
+// 注意：开发环境下使用同步解析避免 HMR 问题
+// let worker: Worker | null = null;
+// try {
+//   worker = createParserWorker();
+// } catch (error) {
+//   console.warn('Failed to create worker, will use fallback:', error);
+// }
+const worker: Worker | null = null; // 暂时禁用 worker
 
 let parserIndex = 0;
 
@@ -283,30 +327,50 @@ const asyncParser = async (
   text: string,
   index: number,
   parserType: IParserType,
-) => {
-  parserIndex++;
-  const currentParserIndex = parserIndex;
-
-  let resolve: any = null;
-  let reject: any = null;
-
-  const promise = new Promise((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
-
-  worker.postMessage({ text, index, parserType });
-
-  worker.onmessage = (event) => {
-    if (currentParserIndex === parserIndex) {
-      resolve(event.data);
-    } else {
-      reject();
-    }
-  };
-
-  return promise as Promise<IParseResult>;
+): Promise<IParseResult> => {
+  // 开发环境直接使用同步解析
+  try {
+    console.log('[Parser] 使用同步解析');
+    const result = mysqlParser(text, index);
+    return Promise.resolve(result);
+  } catch (error) {
+    console.error('[Parser] 解析错误:', error);
+    return Promise.reject(error);
+  }
 };
+
+// const asyncParser = async (
+//   text: string,
+//   index: number,
+//   parserType: IParserType,
+// ): Promise<IParseResult> => {
+//   // 如果 worker 可用，使用异步解析
+//   if (worker) {
+//     parserIndex++;
+//     const currentParserIndex = parserIndex;
+//
+//     return new Promise((resolve, reject) => {
+//       worker!.postMessage({ text, index, parserType });
+//
+//       worker!.onmessage = (event) => {
+//         if (currentParserIndex === parserIndex) {
+//           resolve(event.data);
+//         } else {
+//           reject();
+//         }
+//       };
+//     });
+//   } else {
+//     // 回退方案：同步解析
+//     try {
+//       const result = mysqlParser(text, index);
+//       return Promise.resolve(result);
+//     } catch (error) {
+//       console.error('Parser error:', error);
+//       return Promise.reject(error);
+//     }
+//   }
+// };
 
 function returnCompletionItemsByVersion(
   value: ICompletionItem[],

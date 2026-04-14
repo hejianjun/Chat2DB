@@ -5,6 +5,8 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { DatabaseTypeCode, EditorThemeType } from '@/constants';
 import { editorDefaultOptions } from './monacoEditorConfig';
 import { IQuickInputService } from 'monaco-editor/esm/vs/platform/quickinput/common/quickInput';
+import { IBoundInfo } from '@/typings';
+import { initSqlAutocomplete, ISqlAutocompleteDisposable } from './syntax-parser/plugin/monaco-plugin/sql-autocomplete';
 
 import styles from './index.less';
 
@@ -35,6 +37,7 @@ interface IProps {
   didMount?: (editor: IEditorIns) => any;
   shortcutKey?: (editor, monaco, isActive: boolean) => void;
   focusChange?: (isActive: boolean) => void;
+  boundInfo?: IBoundInfo;
 }
 
 export interface IExportRefFunction {
@@ -54,9 +57,11 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
     defaultValue,
     appendValue,
     shortcutKey,
+    boundInfo,
   } = props;
   const editorRef = useRef<IEditorIns>();
   const quickInputCommand = useRef<any>();
+  const sqlAutocompleteDisposable = useRef<ISqlAutocompleteDisposable | null>(null);
   const [appTheme] = useTheme();
   const [isActive, setIsActive] = React.useState(false);
 
@@ -101,7 +106,19 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
 
     createAction(editorIns);
 
+    // Initialize SQL autocomplete if boundInfo is provided
+    if (boundInfo && language === 'sql') {
+      sqlAutocompleteDisposable.current = initSqlAutocomplete({
+        monaco,
+        editor: editorIns,
+        boundInfo,
+      });
+    }
+
     return () => {
+      if (sqlAutocompleteDisposable.current) {
+        sqlAutocompleteDisposable.current.dispose();
+      }
       if (props.needDestroy) {
         editorRef.current && editorRef.current.dispose();
       }
@@ -154,6 +171,31 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
       monaco.editor.setTheme(options.theme);
     }
   }, [options?.theme]);
+
+  // Reinitialize SQL autocomplete when boundInfo changes
+  useEffect(() => {
+    if (!boundInfo || language !== 'sql' || !editorRef.current) {
+      return;
+    }
+
+    // Dispose old autocomplete
+    if (sqlAutocompleteDisposable.current) {
+      sqlAutocompleteDisposable.current.dispose();
+    }
+
+    // Initialize new autocomplete
+    sqlAutocompleteDisposable.current = initSqlAutocomplete({
+      monaco,
+      editor: editorRef.current,
+      boundInfo,
+    });
+
+    return () => {
+      if (sqlAutocompleteDisposable.current) {
+        sqlAutocompleteDisposable.current.dispose();
+      }
+    };
+  }, [boundInfo, language]);
 
   useImperativeHandle(ref, () => ({
     getCurrentSelectContent,
