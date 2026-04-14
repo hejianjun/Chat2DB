@@ -67,11 +67,11 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
     },
 
     onSuggestTableNames: async (cursorInfo?: ICursorInfo<ITableInfo>) => {
-      console.log('[SQL 补全 - API] 获取表名列表，boundInfo:', {
-        dataSourceId: boundInfo.dataSourceId,
-        databaseName: boundInfo.databaseName,
-        schemaName: boundInfo.schemaName,
-      });
+      // console.log('[SQL 补全 - API] 获取表名列表，boundInfo:', {
+      //   dataSourceId: boundInfo.dataSourceId,
+      //   databaseName: boundInfo.databaseName,
+      //   schemaName: boundInfo.schemaName,
+      // });
       
       try {
         const data = await sqlService.getAllTableList({
@@ -80,7 +80,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           schemaName: boundInfo.schemaName,
         });
         
-        console.log('[SQL 补全 - API] 获取到表名数量:', data.length);
+        // console.log('[SQL 补全 - API] 获取到表名数量:', data.length);
         
         return data.map((table) => {
           const name = table.name;
@@ -100,16 +100,16 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
     onSuggestTableFields: async (tableInfo?: ITableInfo, cursorValue?: string, rootStatement?: any) => {
       const tableName = tableInfo?.tableName?.value;
-      console.log('[SQL 补全 - API] 获取表字段，表信息:', {
-        tableName,
-        namespace: tableInfo?.namespace?.value,
-        cursorValue,
-      });
+      // console.log('[SQL 补全 - API] 获取表字段，表信息:', {
+      //   tableName,
+      //   namespace: tableInfo?.namespace?.value,
+      //   cursorValue,
+      // });
       
       // 检查缓存
       const cacheKey = `${boundInfo.dataSourceId}_${boundInfo.databaseName || ''}_${boundInfo.schemaName || ''}_${tableName}`;
       if (fieldCache.has(cacheKey)) {
-        console.log('[SQL 补全 - API] 使用缓存字段:', cacheKey);
+        // console.log('[SQL 补全 - API] 使用缓存字段:', cacheKey);
         const cachedData = fieldCache.get(cacheKey);
         return cachedData.map((column) => ({
           label: column.name,
@@ -134,8 +134,8 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           tableName,
         });
         
-        console.log('[SQL 补全 - API] 获取到字段数量:', data.length);
-        console.log('[SQL 补全 - API] 字段示例:', data.slice(0, 3));
+        // console.log('[SQL 补全 - API] 获取到字段数量:', data.length);
+        // console.log('[SQL 补全 - API] 字段示例:', data.slice(0, 3));
         
         // 缓存结果
         fieldCache.set(cacheKey, data);

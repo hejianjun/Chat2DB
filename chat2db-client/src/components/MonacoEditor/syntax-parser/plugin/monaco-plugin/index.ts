@@ -117,19 +117,20 @@ export function monacoSqlAutocomplete(
     triggerCharacters:
       ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
     provideCompletionItems: async () => {
-      console.log('[SQL 补全] === 开始补全流程 ===');
       const currentEditVersion = editVersion;
       const parseResult: IParseResult = await currentParserPromise;
 
       if (currentEditVersion !== editVersion) {
-        console.log('[SQL 补全] 编辑已更新，取消当前补全');
         return returnCompletionItemsByVersion([], opts.monacoEditorVersion);
       }
 
-      console.log('[SQL 补全] 解析结果:', {
+      // 生成补全 ID 用于分组日志
+      const completionId = `补全_${Date.now() % 10000}`;
+      console.group(`🔍 [SQL 补全] ${completionId}`);
+      console.log('解析结果:', {
         success: parseResult.success,
         hasError: !!parseResult.error,
-        cursorKeyPath: parseResult.cursorKeyPath,
+        cursorKeyPath: parseResult.cursorKeyPath?.length || 0,
         nextMatchingsCount: parseResult.nextMatchings?.length || 0,
       });
 
@@ -138,36 +139,37 @@ export function monacoSqlAutocomplete(
         parseResult.cursorKeyPath,
       );
 
-      console.log('[SQL 补全] 光标信息:', cursorInfo);
+      console.log('光标信息:', cursorInfo?.type || 'null');
 
       const parserSuggestion = opts.pipeKeywords(parseResult.nextMatchings);
 
-      console.log('[SQL 补全] 关键字补全数量:', parserSuggestion.length);
+      console.log('关键字补全数量:', parserSuggestion.length);
 
       if (!cursorInfo) {
-        console.log('[SQL 补全] 无光标信息，返回关键字补全');
+        console.log('⚠️ 无光标信息，返回关键字补全');
+        console.groupEnd();
         return returnCompletionItemsByVersion(
           parserSuggestion,
           opts.monacoEditorVersion,
         );
       }
 
-      console.log('[SQL 补全] 光标类型:', cursorInfo.type);
+      console.log('光标类型:', cursorInfo.type);
 
       switch (cursorInfo.type) {
         case 'tableField':
-          console.log('[SQL 补全] 表字段补全模式');
+          console.log('📋 表字段补全模式');
           const cursorRootStatementFields = await reader.getFieldsFromStatement(
             parseResult.ast,
             parseResult.cursorKeyPath,
             opts.onSuggestTableFields,
           );
 
-          console.log('[SQL 补全] 获取到字段数量:', cursorRootStatementFields.length);
+          console.log('获取到字段数量:', cursorRootStatementFields.length);
 
           // 去重字段（避免重复）
           const uniqueFields = _.uniqBy(cursorRootStatementFields, 'label');
-          console.log('[SQL 补全] 去重后字段数量:', uniqueFields.length);
+          console.log('去重后字段数量:', uniqueFields.length);
 
           // group.fieldName
           const groups = _.groupBy(
@@ -177,7 +179,7 @@ export function monacoSqlAutocomplete(
             'groupPickerName',
           );
 
-          console.log('[SQL 补全] 分组信息:', Object.keys(groups));
+          console.log('分组信息:', Object.keys(groups));
 
           const functionNames = await opts.onSuggestFunctionName(
             cursorInfo.token.value,
@@ -189,13 +191,13 @@ export function monacoSqlAutocomplete(
             .concat(
               groups
                 ? Object.keys(groups).map((groupName) => {
-                    console.log('[SQL 补全] 添加分组:', groupName);
                     return opts.onSuggestFieldGroup(groupName);
                   })
                 : [],
             );
 
-          console.log('[SQL 补全] 最终补全项总数:', result.length);
+          console.log('最终补全项总数:', result.length);
+          console.groupEnd();
           return returnCompletionItemsByVersion(
             result,
             opts.monacoEditorVersion,
@@ -203,7 +205,7 @@ export function monacoSqlAutocomplete(
           
         case 'tableFieldAfterGroup':
           // 字段 . 后面的部分
-          console.log('[SQL 补全] 表名限定字段模式，分组:', (cursorInfo as ICursorInfo<{ groupName: string }>).groupName);
+          console.log(`🔹 表名限定字段模式，分组: ${(cursorInfo as ICursorInfo<{ groupName: string }>).groupName}`);
           const cursorRootStatementFieldsAfter =
             await reader.getFieldsFromStatement(
               parseResult.ast,
@@ -211,7 +213,7 @@ export function monacoSqlAutocomplete(
               opts.onSuggestTableFields,
             );
 
-          console.log('[SQL 补全] 过滤前字段数量:', cursorRootStatementFieldsAfter.length);
+          console.log('过滤前字段数量:', cursorRootStatementFieldsAfter.length);
 
           // 去重并过滤
           const uniqueFieldsAfter = _.uniqBy(cursorRootStatementFieldsAfter, 'label');
@@ -227,7 +229,7 @@ export function monacoSqlAutocomplete(
               return field && field.label && field.label.trim() !== '' && field.insertText && field.insertText.trim() !== '';
             });
 
-          console.log('[SQL 补全] 过滤后字段数量:', filteredFields.length);
+          console.log('过滤后字段数量:', filteredFields.length);
 
           // 字段排在最前面，关键字排在后面
           const sortedFields = [
@@ -235,27 +237,32 @@ export function monacoSqlAutocomplete(
             ...parserSuggestion.filter(item => item.insertText && item.insertText.trim() !== ''),  // SQL 关键字（sortText: W*）
           ];
 
-          console.log('[SQL 补全] 最终补全项总数:', sortedFields.length);
+          console.log('最终补全项总数:', sortedFields.length);
+          console.groupEnd();
           return returnCompletionItemsByVersion(
             sortedFields,
             opts.monacoEditorVersion,
           );
+          
         case 'tableName':
-          console.log('[SQL 补全] 表名补全模式');
+          console.log('📚 表名补全模式');
           const tableNames = await opts.onSuggestTableNames(
             cursorInfo as ICursorInfo<ITableInfo>,
           );
 
-          console.log('[SQL 补全] 表名数量:', tableNames.length);
+          console.log('表名数量:', tableNames.length);
+          console.groupEnd();
           return returnCompletionItemsByVersion(
             tableNames.concat(parserSuggestion),
             opts.monacoEditorVersion,
           );
         case 'functionName':
-          console.log('[SQL 补全] 函数名补全模式');
+          console.log('🔧 函数名补全模式');
+          console.groupEnd();
           return opts.onSuggestFunctionName(cursorInfo.token.value);
         default:
-          console.log('[SQL 补全] 默认模式，返回关键字补全');
+          console.log('⚪ 默认模式，返回关键字补全');
+          console.groupEnd();
           return returnCompletionItemsByVersion(
             parserSuggestion,
             opts.monacoEditorVersion,
@@ -263,7 +270,6 @@ export function monacoSqlAutocomplete(
       }
     },
   });
-
   monaco.languages.registerHoverProvider(opts.language, {
     provideHover: async (model: any, position: any) => {
       const parseResult: IParseResult = await asyncParser(
@@ -340,6 +346,10 @@ const worker: Worker | null = null; // 暂时禁用 worker
 
 let parserIndex = 0;
 
+// 防抖：记录上一次补全时间，避免频繁触发
+let lastCompletionTime = 0;
+const COMPLETION_DEBOUNCE = 200; // 200ms 防抖
+
 const asyncParser = async (
   text: string,
   index: number,
@@ -347,7 +357,6 @@ const asyncParser = async (
 ): Promise<IParseResult> => {
   // 开发环境直接使用同步解析
   try {
-    console.log('[Parser] 使用同步解析');
     const result = mysqlParser(text, index);
     return Promise.resolve(result);
   } catch (error) {
