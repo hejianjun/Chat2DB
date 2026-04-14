@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import i18n from '@/i18n';
-import { Input, Dropdown, Modal } from 'antd';
+import { Input, Dropdown, Modal, Pagination } from 'antd';
 import Iconfont from '@/components/Iconfont';
 import LoadingContent from '@/components/Loading/LoadingContent';
 import historyServer from '@/service/history';
@@ -19,7 +19,10 @@ const SaveList = () => {
   const [searchedList, setSearchedList] = useState<ITreeNode[] | undefined>();
   const leftModuleTitleRef = useRef<any>(null);
   const saveBoxListRef = useRef<any>(null);
-  const consoleList = useWorkspaceStore((state) => state.savedConsoleList);
+  const savedConsoleList = useWorkspaceStore((state) => state.savedConsoleList);
+  const savedConsoleTotal = useWorkspaceStore((state) => state.savedConsoleTotal);
+  const [pageNo, setPageNo] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(100);
   const { connectionList } = useConnectionStore((state) => {
     return {
       connectionList: state.connectionList,
@@ -34,8 +37,8 @@ const SaveList = () => {
   };
 
   useEffect(() => {
-    getSavedConsoleList();
-  }, []);
+    getSavedConsoleList(pageNo, pageSize);
+  }, [pageNo, pageSize]);
 
   useEffect(() => {
     if (searching) {
@@ -57,8 +60,8 @@ const SaveList = () => {
   }
 
   function onChange(value: string) {
-    if (consoleList) {
-      setSearchedList(approximateList(consoleList as any, value));
+    if (savedConsoleList) {
+      setSearchedList(approximateList(savedConsoleList as any, value));
     }
   }
 
@@ -91,12 +94,21 @@ const SaveList = () => {
       id: data.id,
     };
     historyServer.deleteSavedConsole(params).then(() => {
-      getSavedConsoleList();
+      getSavedConsoleList(pageNo, pageSize);
     });
   }
 
   const editSaved = (data: IConsole) => {
     setEditData(data);
+  };
+
+  const handlePageChange = (page: number) => {
+    setPageNo(page);
+  };
+
+  const handlePageSizeChange = (current: number, size: number) => {
+    setPageSize(size);
+    setPageNo(1);
   };
 
   return (
@@ -130,8 +142,8 @@ const SaveList = () => {
           )}
         </div>
         <div ref={saveBoxListRef} className={styles.saveBoxList}>
-          <LoadingContent className={styles.loadingContent} data={consoleList} handleEmpty>
-            {(searchedList || consoleList)?.map((t) => {
+          <LoadingContent className={styles.loadingContent} data={savedConsoleList} handleEmpty>
+            {(searchedList || savedConsoleList)?.map((t) => {
               const environment = getConnectionEnvironment(t.dataSourceId);
               return (
                 <Dropdown
@@ -181,6 +193,18 @@ const SaveList = () => {
               );
             })}
           </LoadingContent>
+        </div>
+        <div className={styles.paginationWrapper}>
+          <Pagination
+            current={pageNo}
+            pageSize={pageSize}
+            total={savedConsoleTotal}
+            onChange={handlePageChange}
+            onShowSizeChange={handlePageSizeChange}
+            showSizeChanger
+            showQuickJumper
+            showTotal={(total) => `共 ${total} 条`}
+          />
         </div>
       </div>
       <Modal

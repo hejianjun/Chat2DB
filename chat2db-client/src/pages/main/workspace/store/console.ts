@@ -9,6 +9,7 @@ import i18n from '@/i18n';
 export interface IConsoleStore {
   consoleList: IConsole[] | null;
   savedConsoleList: IConsole[] | null;
+  savedConsoleTotal: number;
   activeConsoleId: string | number | null;
   workspaceTabList: IWorkspaceTab[] | null;
   createConsoleLoading: boolean
@@ -17,6 +18,7 @@ export interface IConsoleStore {
 export const initConsoleStore = {
   consoleList: null,
   savedConsoleList: null,
+  savedConsoleTotal: 0,
   activeConsoleId: null,
   workspaceTabList: null,
   createConsoleLoading: false,
@@ -34,15 +36,19 @@ export const getOpenConsoleList = () => {
     });
 };
 
-export const getSavedConsoleList = () => { 
+export const getSavedConsoleList = (pageNo: number = 1, pageSize: number = 100) => { 
   historyService
     .getConsoleList({
-      pageNo: 1,
-      pageSize: 100,
+      pageNo,
+      pageSize,
       status: ConsoleStatus.RELEASE,
+      orderByCreateDesc: true,
     })
     .then((res) => {
-      useWorkspaceStore.setState({ savedConsoleList: res?.data });
+      useWorkspaceStore.setState({ 
+        savedConsoleList: res?.data,
+        savedConsoleTotal: res?.total || 0,
+      });
     });
 }
 
@@ -56,6 +62,7 @@ export const setWorkspaceTabList = (items: IConsoleStore['workspaceTabList']) =>
 
 export const createConsole = (params: ICreateConsoleParams) => {
   const workspaceTabList = useWorkspaceStore.getState().workspaceTabList;
+  const consoleList = useWorkspaceStore.getState().consoleList;
   const currentConnectionDetails = useWorkspaceStore.getState().currentConnectionDetails;
   const newConsole = {
     ...params,
@@ -75,6 +82,23 @@ export const createConsole = (params: ICreateConsoleParams) => {
     }
     useWorkspaceStore.setState({ createConsoleLoading: true });
     historyService.createConsole(newConsole).then((res) => {
+      const newConsoleItem: IConsole = {
+        id: res,
+        name: newConsole.name,
+        ddl: newConsole.ddl,
+        dataSourceId: newConsole.dataSourceId,
+        dataSourceName: newConsole.dataSourceName,
+        type: newConsole.type,
+        databaseName: newConsole.databaseName,
+        schemaName: newConsole.schemaName,
+        status: newConsole.status,
+        connectable: true,
+        operationType: newConsole.operationType,
+      };
+
+      const newConsoleList = [...(consoleList || []), newConsoleItem];
+      useWorkspaceStore.setState({ consoleList: newConsoleList });
+
       const newList = [
         ...(workspaceTabList || []),
         {

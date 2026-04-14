@@ -72,31 +72,33 @@ export default memo<IProps>(() => {
 
   const currentSession = currentSessionId ? sessions.get(currentSessionId) : null;
 
-  console.log('[AiChat] currentSessionId:', currentSessionId);
-  console.log('[AiChat] sessions:', sessions);
-  console.log('[AiChat] currentSession:', currentSession);
-
-  const { currentWorkspaceGlobalExtend, currentConnectionDetails, pendingAiChat } = useWorkspaceStore((state) => ({
-    currentWorkspaceGlobalExtend: state.currentWorkspaceGlobalExtend,
+  const { consoleList, activeConsoleId, currentConnectionDetails, pendingAiChat } = useWorkspaceStore((state) => ({
+    consoleList: state.consoleList,
+    activeConsoleId: state.activeConsoleId,
     currentConnectionDetails: state.currentConnectionDetails,
     pendingAiChat: state.pendingAiChat,
   }));
 
-  const [boundInfo, setBoundInfo] = useState({
-    dataSourceId: currentConnectionDetails?.id,
-    databaseName: currentWorkspaceGlobalExtend?.uniqueData?.databaseName || '',
-    schemaName: currentWorkspaceGlobalExtend?.uniqueData?.schemaName || '',
+  const activeConsole = consoleList?.find((c) => c.id === activeConsoleId);
+
+  const [boundInfo, setBoundInfo] = useState(() => ({
+    dataSourceId: activeConsole?.dataSourceId || currentConnectionDetails?.id,
+    databaseName: activeConsole?.databaseName || '',
+    schemaName: activeConsole?.schemaName || '',
     tableNames: pendingAiChat?.tableNames || null,
-  });
+  }));
 
   useEffect(() => {
-    setBoundInfo((prev) => ({
-      dataSourceId: prev.dataSourceId || currentConnectionDetails?.id,
-      databaseName: prev.databaseName || currentWorkspaceGlobalExtend?.uniqueData?.databaseName || '',
-      schemaName: prev.schemaName || currentWorkspaceGlobalExtend?.uniqueData?.schemaName || '',
-      tableNames: prev.tableNames || pendingAiChat?.tableNames || null,
-    }));
-  }, [currentWorkspaceGlobalExtend, currentConnectionDetails]);
+    const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
+    if (activeConsoleInfo) {
+      setBoundInfo((prev) => ({
+        dataSourceId: activeConsoleInfo.dataSourceId || prev.dataSourceId,
+        databaseName: activeConsoleInfo.databaseName || prev.databaseName,
+        schemaName: activeConsoleInfo.schemaName || prev.schemaName,
+        tableNames: prev.tableNames,
+      }));
+    }
+  }, [activeConsoleId, consoleList]);
 
   useEffect(() => {
     if (pendingAiChat && pendingAiChat.message) {
