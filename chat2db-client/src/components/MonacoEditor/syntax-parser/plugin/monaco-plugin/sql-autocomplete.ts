@@ -68,12 +68,6 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
     },
 
     onSuggestTableNames: async (cursorInfo?: ICursorInfo<ITableInfo>) => {
-      // console.log('[SQL 补全 - API] 获取表名列表，boundInfo:', {
-      //   dataSourceId: boundInfo.dataSourceId,
-      //   databaseName: boundInfo.databaseName,
-      //   schemaName: boundInfo.schemaName,
-      // });
-      
       try {
         const data = await sqlService.getAllTableList({
           dataSourceId: boundInfo.dataSourceId,
@@ -81,16 +75,18 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           schemaName: boundInfo.schemaName,
         });
         
-        // console.log('[SQL 补全 - API] 获取到表名数量:', data.length);
+        const parentName = boundInfo.schemaName || boundInfo.databaseName || '';
         
         return data.map((table) => {
           const name = table.name;
+          const label = parentName ? `${parentName}.${name}` : name;
           return {
-            label: name,
+            label,
             insertText: name,
-            sortText: `Z${name}`,  // 表名排在最后（Z 开头）
-            kind: monaco.languages.CompletionItemKind.Folder as any,
-            detail: table.comment || '',
+            sortText: `Z${name}`,
+            kind: monaco.languages.CompletionItemKind.Struct as any,
+            detail: `(表) ${table.comment || ''}`,
+            documentation: table.comment || `表: ${name}`,
           };
         });
       } catch (error) {
@@ -101,25 +97,23 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
     onSuggestTableFields: async (tableInfo?: ITableInfo, cursorValue?: string, rootStatement?: any) => {
       const tableName = tableInfo?.tableName?.value;
-      // console.log('[SQL 补全 - API] 获取表字段，表信息:', {
-      //   tableName,
-      //   namespace: tableInfo?.namespace?.value,
-      //   cursorValue,
-      // });
       
-      // 检查缓存
       const cacheKey = `${boundInfo.dataSourceId}_${boundInfo.databaseName || ''}_${boundInfo.schemaName || ''}_${tableName}`;
       if (fieldCache.has(cacheKey)) {
-        // console.log('[SQL 补全 - API] 使用缓存字段:', cacheKey);
         const cachedData = fieldCache.get(cacheKey);
-        return cachedData.map((column) => ({
-          label: column.name,
-          insertText: column.name,
-          sortText: `B${column.name}`,
-          kind: monaco.languages.CompletionItemKind.Field as any,
-          detail: column.columnType || column.dataType,
-          documentation: column.comment || '',
-        }));
+        return cachedData.map((column) => {
+          const name = column.name;
+          const label = tableName ? `${tableName}.${name}` : name;
+          const dataType = column.columnType || column.dataType || '';
+          return {
+            label,
+            insertText: name,
+            sortText: `A${name}`,
+            kind: monaco.languages.CompletionItemKind.Field as any,
+            detail: `(字段) ${dataType}`,
+            documentation: column.comment || `字段: ${name}, 类型: ${dataType}`,
+          };
+        });
       }
       
       try {
@@ -135,21 +129,19 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           tableName,
         });
         
-        // console.log('[SQL 补全 - API] 获取到字段数量:', data.length);
-        // console.log('[SQL 补全 - API] 字段示例:', data.slice(0, 3));
-        
-        // 缓存结果
         fieldCache.set(cacheKey, data);
         
         return data.map((column) => {
           const name = column.name;
+          const label = tableName ? `${tableName}.${name}` : name;
+          const dataType = column.columnType || column.dataType || '';
           return {
-            label: name,
+            label,
             insertText: name,
-            sortText: `B${name}`,
+            sortText: `A${name}`,
             kind: monaco.languages.CompletionItemKind.Field as any,
-            detail: column.columnType || column.dataType,
-            documentation: column.comment || '',
+            detail: `(字段) ${dataType}`,
+            documentation: column.comment || `字段: ${name}, 类型: ${dataType}`,
           };
         });
       } catch (error) {
@@ -159,8 +151,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
     },
 
     onSuggestFunctionName: async (inputValue?: string) => {
-      const commonFunctions = [
-        'COUNT', 'SUM', 'AVG', 'MAX', 'MIN',
+      const keywords = [
         'SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN',
         'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT',
         'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE',
@@ -168,18 +159,36 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         'ASC', 'DESC', 'NULLS FIRST', 'NULLS LAST',
         'UNION', 'UNION ALL', 'INTERSECT', 'EXCEPT',
         'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
-        'CAST', 'CONVERT', 'TRIM', 'SUBSTRING', 'LENGTH',
-        'UPPER', 'LOWER', 'CONCAT', 'REPLACE',
-        'DATE', 'TIME', 'TIMESTAMP', 'EXTRACT',
-        'COALESCE', 'IFNULL', 'NULLIF',
+        'WITH', 'RECURSIVE',
       ];
       
-      return commonFunctions.map((func) => ({
+      const functions = [
+        'COUNT', 'SUM', 'AVG', 'MAX', 'MIN',
+        'CAST', 'CONVERT', 'TRIM', 'SUBSTRING', 'LENGTH',
+        'UPPER', 'LOWER', 'CONCAT', 'REPLACE', 'COALESCE', 'IFNULL', 'NULLIF',
+        'DATE', 'TIME', 'TIMESTAMP', 'EXTRACT',
+        'ABS', 'CEIL', 'FLOOR', 'ROUND', 'MOD', 'POWER', 'SQRT',
+        'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP',
+        'IF', 'IIF',
+      ];
+      
+      const keywordItems = keywords.map((kw) => ({
+        label: kw,
+        insertText: kw,
+        sortText: `C${kw}`,
+        kind: monaco.languages.CompletionItemKind.Keyword as any,
+        detail: '(关键字)',
+      }));
+      
+      const functionItems = functions.map((func) => ({
         label: func,
         insertText: func,
-        sortText: `C${func}`,
+        sortText: `D${func}`,
         kind: monaco.languages.CompletionItemKind.Function as any,
+        detail: '(函数)',
       }));
+      
+      return [...keywordItems, ...functionItems];
     },
 
     onSuggestFieldGroup: (tableNameOrAlias?: string) => {
@@ -187,8 +196,9 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
       return {
         label,
         insertText: label,
-        sortText: `D${label}`,
-        kind: monaco.languages.CompletionItemKind.Folder as any,
+        sortText: `E${label}`,
+        kind: monaco.languages.CompletionItemKind.Class as any,
+        detail: '(表别名)',
       };
     },
 
