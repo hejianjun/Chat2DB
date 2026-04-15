@@ -39,4 +39,5 @@ export default {
   'workspace.tips.openExecutiveLogging': 'Open this executive logging',
   'workspace.tips.noSqlContent': 'No SQL content in current console',
   'workspace.tips.generateTitleFailed': 'Failed to generate title by AI, please try again',
+  'workspace.tips.enterReleaseEnvironment': 'You have entered the production environment',
 };

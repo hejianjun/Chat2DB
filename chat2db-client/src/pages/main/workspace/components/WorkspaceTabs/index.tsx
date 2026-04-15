@@ -57,11 +57,19 @@ const WorkspaceTabs = memo(() => {
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
   const [generatingTitleKey, setGeneratingTitleKey] = useState<number | string | null>(null);
   const closeEventSourceRef = useRef<(() => void) | null>(null);
+  const prevEnvironmentRef = useRef<string | null>(null);
 
   const getConnectionEnvironment = (dataSourceId?: number) => {
     if (!dataSourceId || !connectionList) return null;
     const connection = connectionList.find((item) => item.id === dataSourceId);
     return connection?.environment || null;
+  };
+
+  const isReleaseEnvironment = (environment: { name: string; shortName: string } | null) => {
+    if (!environment) return false;
+    const envName = environment.name?.toLowerCase();
+    const envShortName = environment.shortName?.toLowerCase();
+    return envName?.includes('release') || envShortName === 'release';
   };
 
   // 获取console
@@ -149,6 +157,19 @@ const WorkspaceTabs = memo(() => {
   // 切换tab
   const onTabChange = (key: string | null) => {
     setActiveConsoleId(key);
+    
+    const tab = workspaceTabList?.find((item) => String(item.id) === String(key));
+    const environment = getConnectionEnvironment(tab?.uniqueData?.dataSourceId);
+    
+    if (isReleaseEnvironment(environment)) {
+      const envKey = environment?.id?.toString() || 'release';
+      if (prevEnvironmentRef.current !== envKey) {
+        message.warning(i18n('workspace.tips.enterReleaseEnvironment'));
+        prevEnvironmentRef.current = envKey;
+      }
+    } else {
+      prevEnvironmentRef.current = null;
+    }
   };
 
   // 编辑名称
@@ -385,17 +406,27 @@ const WorkspaceTabs = memo(() => {
     );
   };
 
+  const getEnvLabelStyle = (environment: { name: string; shortName: string } | null, isActive: boolean) => {
+    if (!environment || !isActive) return {};
+    const envName = environment.name?.toLowerCase();
+    const envShortName = environment.shortName?.toLowerCase();
+    if (envName?.includes('test') || envShortName === 'test') return { color: '#1890ff' };
+    if (envName?.includes('release') || envShortName === 'release') return { color: '#ff4d4f' };
+    return {};
+  };
+
   // tab 列表
   const workspaceTabItems = useMemo(() => {
     return workspaceTabList?.map((item) => {
       const environment = getConnectionEnvironment(item.uniqueData?.dataSourceId);
       const isGeneratingTitle = generatingTitleKey === item.id;
+      const isActive = activeConsoleId === item.id;
       return {
         prefixIcon: isGeneratingTitle ? <Spin indicator={<LoadingOutlined spin />} size="small" /> : workspaceTabConfig[item.type]?.icon,
         label: (
           <div className={styles.tabLabel}>
             {environment && <span className={styles.envTag} style={{ background: environment.color?.toLocaleLowerCase() }} />}
-            <span className={styles.tabTitle}>{isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title}</span>
+            <span className={styles.tabTitle} style={getEnvLabelStyle(environment, isActive)}>{isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title}</span>
           </div>
         ),
         key: item.id,

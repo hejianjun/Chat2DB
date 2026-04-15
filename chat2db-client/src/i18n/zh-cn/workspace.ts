@@ -41,4 +41,5 @@ export default {
   'workspace.tips.openExecutiveLogging': '打开执行记录',
   'workspace.tips.noSqlContent': '当前控制台没有 SQL 内容',
   'workspace.tips.generateTitleFailed': 'AI 生成标题失败，请重试',
+  'workspace.tips.enterReleaseEnvironment': '已进入生产环境',
 };
