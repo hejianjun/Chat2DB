@@ -52,6 +52,11 @@ const mapDatabaseTypeToParser = (databaseType: string): ISqlAutocompleteOptions[
   return typeMap[databaseType?.toUpperCase()] || 'mysql';
 };
 
+const cleanIdentifier = (name: string): string => {
+  if (!name) return '';
+  return name.replace(/^[`'"[\]]+|[`'"[\]]+$/g, '');
+};
+
 export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutocompleteDisposable => {
   const { monaco, editor, boundInfo, parserType } = options;
   
@@ -96,7 +101,8 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
     },
 
     onSuggestTableFields: async (tableInfo?: ITableInfo, cursorValue?: string, rootStatement?: any) => {
-      const tableName = tableInfo?.tableName?.value;
+      const rawTableName = tableInfo?.tableName?.value;
+      const tableName = cleanIdentifier(rawTableName);
       
       const cacheKey = `${boundInfo.dataSourceId}_${boundInfo.databaseName || ''}_${boundInfo.schemaName || ''}_${tableName}`;
       if (fieldCache.has(cacheKey)) {
