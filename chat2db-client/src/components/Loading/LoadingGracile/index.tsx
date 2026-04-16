@@ -7,21 +7,21 @@ interface IProps {
   className?: any;
 }
 
-export default memo(function LoadingGracile(props: IProps) {
+export default memo((props: IProps) => {
   const { className } = props;
   return <div className={classnames(styles.spinner, styles.center)}>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
-    <div className={styles.spinnerBlade}></div>
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
+    <div className={styles.spinnerBlade} />
   </div>
 
 });

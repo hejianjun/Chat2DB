@@ -7,8 +7,8 @@ interface IProps {
   className?: string;
 }
 
-export default memo<IProps>(function LazyLoading({ className }) {
+export default memo<IProps>(({ className }) => {
   return <div className={classnames(className, styles.box)}>
-    <Loading></Loading>
+    <Loading />
   </div>
 })

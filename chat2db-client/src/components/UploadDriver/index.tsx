@@ -14,7 +14,7 @@ interface IProps {
   jdbcDriverClass: string | undefined;
 }
 
-export default memo<IProps>(function UploadDriver(props) {
+export default memo<IProps>((props) => {
   const { className, databaseType = DatabaseTypeCode.MYSQL, formChange, jdbcDriverClass } = props;
   const [formData, setFormData] = useState<any>({
     dbType: databaseType,

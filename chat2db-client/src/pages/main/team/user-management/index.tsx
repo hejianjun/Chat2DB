@@ -113,7 +113,7 @@ function UserManagement() {
 
   const queryUserList = async () => {
     const { searchKey, current: pageNo, pageSize } = pagination;
-    let res = await getUserManagementList({ searchKey, pageNo, pageSize });
+    const res = await getUserManagementList({ searchKey, pageNo, pageSize });
     if (res) {
       setDataSource(res?.data ?? []);
       setPagination({
@@ -139,7 +139,7 @@ function UserManagement() {
 
   const handleCreateOrUpdateUser = async (userInfo: IUserVO) => {
     const requestApi = userInfo?.id ? updateUser : createUser;
-    let res = await requestApi(userInfo);
+    const res = await requestApi(userInfo);
     if (res) {
       queryUserList();
     }

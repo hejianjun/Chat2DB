@@ -123,7 +123,8 @@ export function approximateList<T, K extends keyof T>(
 
 // 获取var变量的值
 export const callVar = (css: string) => {
-  return getComputedStyle(document.documentElement).getPropertyValue(css).trim();
+  return getComputedStyle(document.documentElement).getPropertyValue(css)
+.trim();
 };
 
 // 给我一个 obj[]， 和 obj的 key 和 value，给你返index

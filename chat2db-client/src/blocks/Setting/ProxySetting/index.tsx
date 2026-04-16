@@ -20,7 +20,8 @@ export default function ProxyBody() {
     outSideService.dynamicUrl(`${apiPrefix}/api/system/get-version-a`).then((res: any) => {
       localStorage.setItem('_BaseURL', apiPrefix);
       location.reload();
-    }).catch((err: any) => {
+    })
+.catch((err: any) => {
       message.error(i18n('setting.message.urlTestError'))
     });
     // try {

@@ -30,7 +30,8 @@ export const TruncateModalContent = (params: { treeNodeData: any; openModal: any
         treeNodeData: treeNodeData.parentNode
       });
       openModal(false);
-    }).catch((error) => {
+    })
+.catch((error) => {
       console.error('Error truncating table:', error);
     });
   };

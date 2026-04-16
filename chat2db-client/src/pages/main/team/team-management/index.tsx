@@ -110,7 +110,7 @@ function TeamManagement() {
     setLoading(true);
     try {
       const { searchKey, current: pageNo, pageSize } = pagination;
-      let res = await getTeamManagementList({ searchKey, pageNo, pageSize });
+      const res = await getTeamManagementList({ searchKey, pageNo, pageSize });
       if (res) {
         setDataSource(res?.data ?? []);
         setPagination({
@@ -140,7 +140,7 @@ function TeamManagement() {
 
   const handleCreateOrUpdateTeam = async (teamInfo: ITeamVO) => {
     const requestApi = teamInfo.id ? updateTeam : createTeam;
-    let res = await requestApi(teamInfo);
+    const res = await requestApi(teamInfo);
     if (res) {
       queryTeamList();
     }
