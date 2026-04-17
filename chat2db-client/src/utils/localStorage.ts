@@ -1,5 +1,5 @@
 import { ThemeType, PrimaryColorType, LangType } from '@/constants';
-import { ICurWorkspaceParams } from '@/models/workspace';
+import { ICurWorkspaceParams } from '@/typings/workspace';
 import { getCookie } from '@/utils';
 
 export function getLang(): LangType {

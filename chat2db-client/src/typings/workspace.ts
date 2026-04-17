@@ -26,3 +26,13 @@ export interface IBoundInfo {
   supportDatabase: boolean;
   supportSchema: boolean;
 }
+
+export interface ICurWorkspaceParams {
+  [key: string]: any;
+}
+
+export interface IWorkspaceModelType {
+  state: {
+    databaseAndSchema: any;
+  };
+}

@@ -1,8 +1,7 @@
 import { DatabaseTypeCode } from '@/constants/common';
-import { IWorkspaceModelType } from '@/models/workspace';
 import { Option } from '@/typings/common';
 
-export function handleDatabaseAndSchema(databaseAndSchema: IWorkspaceModelType['state']['databaseAndSchema']) {
+export function handleDatabaseAndSchema(databaseAndSchema: any) {
   let newCascaderOptions: Option[] = [];
   if (databaseAndSchema.databases) {
     newCascaderOptions = (databaseAndSchema?.databases || []).map((t) => {
