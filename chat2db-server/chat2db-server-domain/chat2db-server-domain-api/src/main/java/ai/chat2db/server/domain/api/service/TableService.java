@@ -150,11 +150,6 @@ public interface TableService {
      * @return
      */
     List<ForeignKey> queryForeignKeys(TableQueryParam param);
-    /**
-     * 更新表的AI注释
-     * @param table
-     */
-    void updateAiComment(Long dataSourceId,Table table);
 
     /**
      * 删除虚拟外键

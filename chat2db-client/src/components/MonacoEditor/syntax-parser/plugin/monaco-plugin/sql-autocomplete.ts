@@ -84,7 +84,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         
         return data.map((table) => {
           const name = table.name;
-          const label = parentName ? `${parentName}.${name}` : name;
+          const label = parentName ? `${name} (${parentName})` : name;
           return {
             label,
             insertText: name,
@@ -109,7 +109,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         const cachedData = fieldCache.get(cacheKey);
         return cachedData.map((column) => {
           const name = column.name;
-          const label = tableName ? `${tableName}.${name}` : name;
+          const label = tableName ? `${name} (${tableName})` : name;
           const dataType = column.columnType || column.dataType || '';
           return {
             label,
@@ -139,7 +139,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         
         return data.map((column) => {
           const name = column.name;
-          const label = tableName ? `${tableName}.${name}` : name;
+          const label = tableName ? `${name} (${tableName})` : name;
           const dataType = column.columnType || column.dataType || '';
           return {
             label,

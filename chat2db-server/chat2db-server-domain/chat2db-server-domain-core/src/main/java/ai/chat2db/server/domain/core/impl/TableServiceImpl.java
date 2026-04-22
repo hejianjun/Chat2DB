@@ -564,13 +564,6 @@ public class TableServiceImpl implements TableService {
         return mgr.search(param, null, null);
     }
 
-    @Override
-    public void updateAiComment(Long dataSourceId, Table table) {
-        LuceneIndexManager<IndexModel> luceneIndexManager = managerFactory.getManager(dataSourceId);
-        luceneIndexManager.updateDocument(table);
-        // luceneIndexManager.updateDocuments(table.getColumnList());
-    }
-
     /**
      * 发现可能的虚拟外键关系（根据命名规范推断）
      *
