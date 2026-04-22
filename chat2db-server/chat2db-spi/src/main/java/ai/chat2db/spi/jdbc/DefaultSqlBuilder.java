@@ -2,6 +2,7 @@ package ai.chat2db.spi.jdbc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
@@ -27,11 +28,12 @@ import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.OrderByElement;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
+import org.apache.commons.lang3.math.NumberUtils;
 
 public class DefaultSqlBuilder implements SqlBuilder {
 
 
-@Override
+    @Override
     public String buildCreateTableSql(Table table) {
         StringBuilder script = new StringBuilder();
         script.append("CREATE TABLE ");
@@ -158,7 +160,7 @@ public class DefaultSqlBuilder implements SqlBuilder {
             }
 
             // 添加注释
-            if(StringUtils.isNotBlank(column.getAiComment())){
+            if (StringUtils.isNotBlank(column.getAiComment())) {
                 script.append(" -- ").append(column.getAiComment());
             }
             script.append(",\n");
@@ -211,7 +213,7 @@ public class DefaultSqlBuilder implements SqlBuilder {
         if (!StringUtils.equalsIgnoreCase(oldTable.getComment(), newTable.getComment())) {
             script.append("\t").append("COMMENT=").append("'").append(newTable.getComment()).append("'").append(",\n");
         }
-        if (!oldTable.getIncrementValue().equals(newTable.getIncrementValue())) {
+        if (!Objects.equals(oldTable.getIncrementValue(), newTable.getIncrementValue())) {
             script.append("\t").append("AUTO_INCREMENT=").append(newTable.getIncrementValue()).append(",\n");
         }
     }
@@ -301,13 +303,13 @@ public class DefaultSqlBuilder implements SqlBuilder {
             List<String> odlRow = operation.getOldDataList();
             String sql = "";
             if ("UPDATE".equalsIgnoreCase(operation.getType())) {
-                sql = getUpdateSql(tableName,headerList, row, odlRow, metaSchema, keyColumns, false);
+                sql = getUpdateSql(tableName, headerList, row, odlRow, metaSchema, keyColumns, false);
             } else if ("CREATE".equalsIgnoreCase(operation.getType())) {
-                sql = getInsertSql(tableName,headerList, row, metaSchema);
+                sql = getInsertSql(tableName, headerList, row, metaSchema);
             } else if ("DELETE".equalsIgnoreCase(operation.getType())) {
-                sql = getDeleteSql(tableName,headerList, odlRow, metaSchema, keyColumns);
+                sql = getDeleteSql(tableName, headerList, odlRow, metaSchema, keyColumns);
             } else if ("UPDATE_COPY".equalsIgnoreCase(operation.getType())) {
-                sql = getUpdateSql(tableName,headerList, row, row, metaSchema, keyColumns, true);
+                sql = getUpdateSql(tableName, headerList, row, row, metaSchema, keyColumns, true);
             }
 
             stringBuilder.append(sql + ";\n");
@@ -378,7 +380,7 @@ public class DefaultSqlBuilder implements SqlBuilder {
         return script.toString();
     }
 
-    private String getInsertSql(String tableName, List<Header> headerList,  List<String> row, MetaData metaSchema) {
+    private String getInsertSql(String tableName, List<Header> headerList, List<String> row, MetaData metaSchema) {
         if (CollectionUtils.isEmpty(row) || ObjectUtils.allNull(row.toArray())) {
             return "";
         }
