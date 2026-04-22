@@ -96,9 +96,11 @@ public class StreamAction extends BaseChatAction {
 
         if (content != null && !content.isEmpty()) {
             data.put("content", content);
+            appendContent(ctx, content);
         }
         if (thinking != null && !thinking.isEmpty()) {
             data.put("thinking", thinking);
+            appendThinking(ctx, thinking);
             log.debug("[StreamAction] Thinking content: {}", thinking);
         }
 
@@ -114,6 +116,16 @@ public class StreamAction extends BaseChatAction {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private synchronized void appendContent(ChatContext ctx, String content) {
+        String current = ctx.getCurrentContent();
+        ctx.setCurrentContent(current == null ? content : current + content);
+    }
+
+    private synchronized void appendThinking(ChatContext ctx, String thinking) {
+        String current = ctx.getCurrentThinking();
+        ctx.setCurrentThinking(current == null ? thinking : current + thinking);
     }
 
     /**

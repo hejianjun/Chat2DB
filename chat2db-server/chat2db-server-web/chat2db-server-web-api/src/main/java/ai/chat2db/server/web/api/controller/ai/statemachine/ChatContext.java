@@ -24,4 +24,7 @@ public class ChatContext {
     private volatile boolean cancelled;
     private LoginUser loginUser;
     private ConnectInfo connectInfo;
+    
+    private String currentContent;
+    private String currentThinking;
 }

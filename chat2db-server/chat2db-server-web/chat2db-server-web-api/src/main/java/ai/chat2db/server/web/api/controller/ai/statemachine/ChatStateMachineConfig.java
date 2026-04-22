@@ -1,5 +1,8 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.statemachine.config.EnableStateMachineFactory;
@@ -9,9 +12,11 @@ import org.springframework.statemachine.config.builders.StateMachineTransitionCo
 import org.springframework.statemachine.listener.StateMachineListenerAdapter;
 import org.springframework.statemachine.StateMachine;
 
+import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.SelectTablesAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.BuildPromptAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.FetchSchemaAction;
+import ai.chat2db.server.web.api.controller.ai.statemachine.actions.SaveAiCommentAction;
 import ai.chat2db.server.web.api.controller.ai.statemachine.actions.StreamAction;
 import lombok.extern.slf4j.Slf4j;
 
@@ -31,6 +36,11 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
 
     @Autowired
     private StreamAction streamAction;
+
+    @Autowired
+    private SaveAiCommentAction saveAiCommentAction;
+
+    private final ExecutorService aiCommentSaveExecutor = Executors.newFixedThreadPool(3);
 
     @Override
     public void configure(StateMachineStateConfigurer<ChatState, ChatEvent> states) throws Exception {
@@ -101,6 +111,8 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
     public void configure(org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer<ChatState, ChatEvent> config) throws Exception {
         config.withConfiguration()
             .listener(new StateMachineListenerAdapter<ChatState, ChatEvent>() {
+                private StateMachine<ChatState, ChatEvent> stateMachine;
+                
                 @Override
                 public void stateChanged(org.springframework.statemachine.state.State<ChatState, ChatEvent> from, org.springframework.statemachine.state.State<ChatState, ChatEvent> to) {
                     log.info("[StateMachine] State changed: {} -> {}",
@@ -109,22 +121,37 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
                 }
 
                 @Override
-                public void stateMachineStarted(StateMachine<ChatState, ChatEvent> stateMachine) {
+                public void stateMachineStarted(StateMachine<ChatState, ChatEvent> sm) {
+                    this.stateMachine = sm;
                     log.info("[StateMachine] StateMachine started with id: {}, initial state: {}",
-                        stateMachine.getId(),
-                        stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
+                        sm.getId(),
+                        sm.getState() != null ? sm.getState().getId() : "null");
                 }
 
                 @Override
-                public void stateMachineStopped(StateMachine<ChatState, ChatEvent> stateMachine) {
+                public void stateMachineStopped(StateMachine<ChatState, ChatEvent> sm) {
                     log.info("[StateMachine] StateMachine stopped with id: {}, final state: {}",
-                        stateMachine.getId(),
-                        stateMachine.getState() != null ? stateMachine.getState().getId() : "null");
+                        sm.getId(),
+                        sm.getState() != null ? sm.getState().getId() : "null");
                 }
 
                 @Override
                 public void stateEntered(org.springframework.statemachine.state.State<ChatState, ChatEvent> state) {
                     log.info("[StateMachine] State entered: {}", state.getId());
+                    
+                    if (state.getId() == ChatState.COMPLETED && stateMachine != null) {
+                        ChatContext ctx = (ChatContext) stateMachine.getExtendedState().getVariables().get("chatContext");
+                        if (ctx != null && PromptType.NL_2_COMMENT.getCode().equals(ctx.getRequest().getPromptType())) {
+                            log.info("[StateMachine] Triggering SaveAiCommentAction for uid: {}", ctx.getUid());
+                            aiCommentSaveExecutor.submit(() -> {
+                                try {
+                                    saveAiCommentAction.execute(ctx);
+                                } catch (Exception e) {
+                                    log.error("[StateMachine] SaveAiCommentAction failed for uid: {}", ctx.getUid(), e);
+                                }
+                            });
+                        }
+                    }
                 }
 
                 @Override
