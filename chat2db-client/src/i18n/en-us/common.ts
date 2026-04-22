@@ -96,6 +96,8 @@ export default {
   'common.text.selectFile': 'Select File',
   'common.text.noTableFoundUp': 'No tables in this database',
   'common.text.noTableFoundDown': 'Switch databases at the top',
+  'common.text.noTables': 'No tables to guess comments',
+  'common.text.aiCommentGenerated': 'AI comments generated and saved to index',
   'common.title.preview': 'Preview',
   'common.title.errorMessage': 'Error message',
   'common.label.comment': 'Comment',

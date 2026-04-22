@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { formatParams } from '@/utils/url';
 import connectToEventSource, { cancelChatSession } from '@/utils/eventSource';
 import CascaderDB from '@/components/CascaderDB';
-import { IAiChatPromptType, ITableCommentResult } from '@/pages/main/workspace/store/common';
+import { IAiChatPromptType, ITableCommentResult, IBatchTableCommentResult } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { useAiChatStore, ChatStateType, IChatMessage } from '@/pages/main/workspace/store/aiChatStore';
 import styles from './index.less';
@@ -62,6 +62,22 @@ function extractJsonFromContent(content: string): ITableCommentResult | null {
   return null;
 }
 
+function extractBatchJsonFromContent(content: string): IBatchTableCommentResult | null {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*"tables"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]) as IBatchTableCommentResult;
+    }
+    const directJson = JSON.parse(content);
+    if (directJson.tables) {
+      return directJson as IBatchTableCommentResult;
+    }
+  } catch (e) {
+    console.error('[extractBatchJsonFromContent] Parse error:', e);
+  }
+  return null;
+}
+
 interface IProps {
   className?: string;
   data?: any;
@@ -72,6 +88,7 @@ export default memo<IProps>(() => {
   const closeEventSource = useRef<() => void>();
   const sessionIdRef = useRef<string>();
   const commentCallbackRef = useRef<(result: ITableCommentResult) => void>();
+  const batchCommentCallbackRef = useRef<(result: IBatchTableCommentResult) => void>();
 
   const {
     currentSessionId,
@@ -136,6 +153,9 @@ export default memo<IProps>(() => {
       }
       if (pendingAiChat.onCommentGenerated) {
         commentCallbackRef.current = pendingAiChat.onCommentGenerated;
+      }
+      if (pendingAiChat.onBatchCommentGenerated) {
+        batchCommentCallbackRef.current = pendingAiChat.onBatchCommentGenerated;
       }
       sendAiChatInternal(pendingAiChat.message, pendingAiChat.promptType, overrideBoundInfo);
       useWorkspaceStore.setState({ pendingAiChat: null });
@@ -241,6 +261,21 @@ export default memo<IProps>(() => {
                 message.warning('无法解析 AI 生成的注释，请手动查看');
               }
               commentCallbackRef.current = undefined;
+            }
+
+            if (promptType === 'NL_2_COMMENT_BATCH' && batchCommentCallbackRef.current) {
+              try {
+                const jsonContent = extractBatchJsonFromContent(session.currentContent);
+                if (jsonContent) {
+                  console.log('[AiChat] Parsed batch comment result:', jsonContent);
+                  batchCommentCallbackRef.current(jsonContent);
+                  message.success('AI 批量注释已生成');
+                }
+              } catch (e) {
+                console.error('[AiChat] Failed to parse batch comment JSON:', e);
+                message.warning('无法解析 AI 生成的批量注释，请手动查看');
+              }
+              batchCommentCallbackRef.current = undefined;
             }
           }
           closeEventSource.current = undefined;

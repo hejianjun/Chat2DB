@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from 'react';
+import React, { memo, useEffect, useState, useCallback } from 'react';
 import i18n from '@/i18n';
 import styles from './index.less';
 import classnames from 'classnames';
@@ -14,7 +14,7 @@ import ExecuteSQL from '@/components/ExecuteSQL';
 import Iconfont from '@/components/Iconfont';
 import { getRightClickMenu } from '@/blocks/Tree/hooks/useGetRightClickMenu';
 import MenuLabel from '@/components/MenuLabel';
-import { setCurrentWorkspaceGlobalExtend } from '@/pages/main/workspace/store/common';
+import { setCurrentWorkspaceGlobalExtend, setPendingAiChat, setCurrentWorkspaceExtend, IBatchTableCommentResult } from '@/pages/main/workspace/store/common';
 
 // ----- store -----
 import { addWorkspaceTab } from '@/pages/main/workspace/store/console';
@@ -259,6 +259,55 @@ export default memo<IProps>((props) => {
     });
   };
 
+  const handleBatchCommentGenerated = useCallback((result: IBatchTableCommentResult) => {
+    if (result.tables && result.tables.length > 0) {
+      message.success(i18n('common.text.aiCommentGenerated'));
+      
+      const commentMap = new Map<string, string>();
+      result.tables.forEach((t) => {
+        commentMap.set(t.table_name, t.table_comment);
+      });
+      
+      setTableData((prevData) => {
+        if (!prevData) return prevData;
+        const newData = prevData.map((item) => {
+          const newComment = commentMap.get(item.name);
+          if (newComment) {
+            return { ...item, comment: newComment };
+          }
+          return item;
+        });
+        
+        form.setFieldsValue(
+          newData.reduce((acc, record) => {
+            acc[record.key] = record;
+            return acc;
+          }, {})
+        );
+        
+        return newData;
+      });
+    }
+  }, [form]);
+
+  const openAiChatForGuess = useCallback(() => {
+    if (!tableData || tableData.length === 0) {
+      message.warning(i18n('common.text.noTables'));
+      return;
+    }
+    const tableNames = tableData.map(t => t.name);
+    setPendingAiChat({
+      dataSourceId: Number(uniqueData.dataSourceId),
+      databaseName: uniqueData.databaseName,
+      schemaName: uniqueData.schemaName,
+      tableNames,
+      message: '请为这些表生成合适的中文注释',
+      promptType: 'NL_2_COMMENT_BATCH',
+      onBatchCommentGenerated: handleBatchCommentGenerated,
+    });
+    setCurrentWorkspaceExtend('ai');
+  }, [tableData, uniqueData, handleBatchCommentGenerated]);
+
   return (
     <div className={classnames(styles.allTable, className)}>
       <div className={styles.headerBox}>
@@ -281,6 +330,9 @@ export default memo<IProps>((props) => {
           <Search size="small" placeholder={i18n('common.text.search')} onSearch={onSearch} style={{ width: 150 }} />
           {isEditing ? (
             <>
+              <Button onClick={openAiChatForGuess} style={{ marginLeft: 8 }}>
+                {i18n('common.button.guess')}
+              </Button>
               <Button onClick={saveAll} style={{ marginLeft: 8 }}>
                 {i18n('common.button.saveAll')}
               </Button>
