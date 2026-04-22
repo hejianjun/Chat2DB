@@ -30,8 +30,10 @@ public class SaveAiCommentAction {
     public void execute(ChatContext ctx) {
         log.info("[SaveAiCommentAction] execute called for uid: {}", ctx.getUid());
 
-        if (!PromptType.NL_2_COMMENT.getCode().equals(ctx.getRequest().getPromptType())) {
-            log.debug("[SaveAiCommentAction] Not NL_2_COMMENT type, skip");
+        String promptType = ctx.getRequest().getPromptType();
+        if (!PromptType.NL_2_COMMENT.getCode().equals(promptType)
+                && !PromptType.NL_2_COMMENT_BATCH.getCode().equals(promptType)) {
+            log.debug("[SaveAiCommentAction] Not comment type, skip");
             return;
         }
 
@@ -41,37 +43,112 @@ public class SaveAiCommentAction {
             return;
         }
 
+        Long dataSourceId = ctx.getRequest().getDataSourceId();
+        String databaseName = ctx.getRequest().getDatabaseName();
+        String schemaName = ctx.getRequest().getSchemaName();
+
         try {
-            AiCommentResult result = parseCommentResult(content);
-            if (result == null) {
-                log.warn("[SaveAiCommentAction] Failed to parse comment result for uid: {}", ctx.getUid());
-                return;
+            if (PromptType.NL_2_COMMENT_BATCH.getCode().equals(promptType)) {
+                executeBatch(ctx, dataSourceId, databaseName, schemaName, content);
+            } else {
+                executeSingle(ctx, dataSourceId, databaseName, schemaName, content);
             }
-
-            Long dataSourceId = ctx.getRequest().getDataSourceId();
-            String databaseName = ctx.getRequest().getDatabaseName();
-            String schemaName = ctx.getRequest().getSchemaName();
-            List<String> tableNames = ctx.getRequest().getTableNames();
-
-            if (CollectionUtils.isEmpty(tableNames)) {
-                log.warn("[SaveAiCommentAction] No table names for uid: {}", ctx.getUid());
-                return;
-            }
-
-            String tableName = tableNames.get(0);
-
-            if (StringUtils.isNotBlank(result.getTableComment())) {
-                saveTableAiComment(dataSourceId, databaseName, schemaName, tableName, result.getTableComment());
-            }
-
-            if (CollectionUtils.isNotEmpty(result.getColumnComments())) {
-                saveColumnAiComments(dataSourceId, databaseName, schemaName, tableName, result.getColumnComments());
-            }
-
-            log.info("[SaveAiCommentAction] Successfully saved aiComment for uid: {}, table: {}", ctx.getUid(), tableName);
-
         } catch (Exception e) {
             log.error("[SaveAiCommentAction] Failed to save aiComment for uid: {}", ctx.getUid(), e);
+        }
+    }
+
+    private void executeSingle(ChatContext ctx, Long dataSourceId, String databaseName,
+                                String schemaName, String content) {
+        AiCommentResult result = parseCommentResult(content);
+        if (result == null) {
+            log.warn("[SaveAiCommentAction] Failed to parse comment result for uid: {}", ctx.getUid());
+            return;
+        }
+
+        List<String> tableNames = ctx.getRequest().getTableNames();
+        if (CollectionUtils.isEmpty(tableNames)) {
+            log.warn("[SaveAiCommentAction] No table names for uid: {}", ctx.getUid());
+            return;
+        }
+
+        String tableName = tableNames.get(0);
+
+        if (StringUtils.isNotBlank(result.getTableComment())) {
+            saveTableAiComment(dataSourceId, databaseName, schemaName, tableName, result.getTableComment());
+        }
+
+        if (CollectionUtils.isNotEmpty(result.getColumnComments())) {
+            saveColumnAiComments(dataSourceId, databaseName, schemaName, tableName, result.getColumnComments());
+        }
+
+        log.info("[SaveAiCommentAction] Successfully saved aiComment for uid: {}, table: {}", ctx.getUid(), tableName);
+    }
+
+    private void executeBatch(ChatContext ctx, Long dataSourceId, String databaseName,
+                               String schemaName, String content) {
+        List<BatchTableComment> batchResult = parseBatchCommentResult(content);
+        if (CollectionUtils.isEmpty(batchResult)) {
+            log.warn("[SaveAiCommentAction] Failed to parse batch comment result for uid: {}", ctx.getUid());
+            return;
+        }
+
+        saveBatchTableAiComments(dataSourceId, databaseName, schemaName, batchResult);
+        log.info("[SaveAiCommentAction] Successfully saved batch aiComment for uid: {}, count: {}",
+                ctx.getUid(), batchResult.size());
+    }
+
+    private List<BatchTableComment> parseBatchCommentResult(String content) {
+        String json = extractBatchJson(content);
+        if (StringUtils.isBlank(json)) {
+            return null;
+        }
+
+        try {
+            JSONObject obj = JSONObject.parseObject(json);
+            JSONArray tables = obj.getJSONArray("tables");
+            if (tables == null || tables.isEmpty()) {
+                return null;
+            }
+            return tables.toJavaList(BatchTableComment.class);
+        } catch (Exception e) {
+            log.error("[SaveAiCommentAction] Failed to parse batch JSON: {}", content, e);
+            return null;
+        }
+    }
+
+    private String extractBatchJson(String content) {
+        if (StringUtils.isBlank(content)) {
+            return null;
+        }
+
+        Pattern pattern = Pattern.compile("\\{[\\s\\S]*\"tables\"[\\s\\S]*\\}");
+        Matcher matcher = pattern.matcher(content);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+
+        String trimmed = content.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            return trimmed;
+        }
+
+        int start = content.indexOf('{');
+        int end = content.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return content.substring(start, end + 1);
+        }
+
+        return null;
+    }
+
+    private void saveBatchTableAiComments(Long dataSourceId, String databaseName, String schemaName,
+                                           List<BatchTableComment> batchComments) {
+        for (BatchTableComment btc : batchComments) {
+            if (StringUtils.isBlank(btc.getTableName()) || StringUtils.isBlank(btc.getTableComment())) {
+                continue;
+            }
+            saveTableAiComment(dataSourceId, databaseName, schemaName, btc.getTableName(), btc.getTableComment());
         }
     }
 
@@ -209,6 +286,27 @@ public class SaveAiCommentAction {
 
         public void setComment(String comment) {
             this.comment = comment;
+        }
+    }
+
+    private static class BatchTableComment {
+        private String tableName;
+        private String tableComment;
+
+        public String getTableName() {
+            return tableName;
+        }
+
+        public void setTableName(String tableName) {
+            this.tableName = tableName;
+        }
+
+        public String getTableComment() {
+            return tableComment;
+        }
+
+        public void setTableComment(String tableComment) {
+            this.tableComment = tableComment;
         }
     }
 }

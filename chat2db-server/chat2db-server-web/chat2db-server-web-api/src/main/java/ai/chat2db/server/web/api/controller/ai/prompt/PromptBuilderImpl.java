@@ -101,7 +101,8 @@ public class PromptBuilderImpl implements PromptBuilder {
             throw new IllegalStateException("PromptContext is null");
         }
         if (StringUtils.isBlank(context.getMessage())
-                && !Objects.equals(context.getPromptType(), PromptType.NL_2_COMMENT)) {
+                && !Objects.equals(context.getPromptType(), PromptType.NL_2_COMMENT)
+                && !Objects.equals(context.getPromptType(), PromptType.NL_2_COMMENT_BATCH)) {
             throw new IllegalArgumentException("Message is required");
         }
     }

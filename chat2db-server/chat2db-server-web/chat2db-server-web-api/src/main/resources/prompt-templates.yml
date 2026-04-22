@@ -129,3 +129,42 @@ prompts:
       2. 注释应该简洁明了，不超过 50 字
       3. 注释应该准确反映表/字段的业务含义
       4. 使用中文注释
+
+  # 批量猜测表注释
+  nl_2_comment_batch:
+    name: "nl_2_comment_batch"
+    description: "批量猜测表注释"
+    template: |
+      ### 请根据以下 table properties 和 SQL input{description}. {ext}
+      #
+      ### {db_type} SQL tables, with their properties:
+      #
+      # {schema}
+      #
+      ### 任务：为所有表生成合适的中文注释
+      
+      请根据表名和字段名推测每个表的业务含义，生成简洁的中文注释。
+      
+      **输出格式要求（严格遵守 JSON 格式）：**
+      
+      ```json
+      {
+        "tables": [
+          {
+            "table_name": "表名1",
+            "table_comment": "表1的注释内容"
+          },
+          {
+            "table_name": "表名2",
+            "table_comment": "表2的注释内容"
+          }
+        ]
+      }
+      ```
+      
+      **注意事项：**
+      1. 只输出 JSON 内容，不要包含其他解释文字
+      2. 注释应该简洁明了，不超过 50 字
+      3. 注释应该准确反映表的业务含义
+      4. 使用中文注释
+      5. 必须为每个表都生成注释

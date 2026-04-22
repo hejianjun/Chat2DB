@@ -141,7 +141,9 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
                     
                     if (state.getId() == ChatState.COMPLETED && stateMachine != null) {
                         ChatContext ctx = (ChatContext) stateMachine.getExtendedState().getVariables().get("chatContext");
-                        if (ctx != null && PromptType.NL_2_COMMENT.getCode().equals(ctx.getRequest().getPromptType())) {
+                        String promptType = ctx != null ? ctx.getRequest().getPromptType() : null;
+                        if (ctx != null && (PromptType.NL_2_COMMENT.getCode().equals(promptType)
+                                || PromptType.NL_2_COMMENT_BATCH.getCode().equals(promptType))) {
                             log.info("[StateMachine] Triggering SaveAiCommentAction for uid: {}", ctx.getUid());
                             aiCommentSaveExecutor.submit(() -> {
                                 try {

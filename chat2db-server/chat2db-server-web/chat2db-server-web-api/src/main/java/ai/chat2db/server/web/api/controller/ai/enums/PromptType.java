@@ -53,6 +53,8 @@ public enum PromptType implements BaseEnum<String> {
      * 自然语言转换成注释
      */
     NL_2_COMMENT("猜测表和字段注释"),
+
+    NL_2_COMMENT_BATCH("批量猜测表注释"),
     ;
 
     final String description;
@@ -63,7 +65,7 @@ public enum PromptType implements BaseEnum<String> {
      * @return true 如果是简单任务
      */
     public boolean isSimpleTask() {
-        return this == SELECT_TABLES || this == TITLE_GENERATION;
+        return this == SELECT_TABLES || this == TITLE_GENERATION || this == NL_2_COMMENT_BATCH;
     }
 
     PromptType(String description) {
