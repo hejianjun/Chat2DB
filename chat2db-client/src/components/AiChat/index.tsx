@@ -1,5 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Input, Spin, message, Tag, Alert } from 'antd';
+import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,6 +27,24 @@ const isActiveState = (state?: ChatStateType): boolean => {
     ? ['AUTO_SELECTING_TABLES', 'FETCHING_TABLE_SCHEMA', 'BUILDING_PROMPT', 'STREAMING'].includes(state)
     : false;
 };
+
+const ThinkingBlock = memo<{ thinking: string; collapsed?: boolean }>(({ thinking, collapsed = true }) => {
+  const [isCollapsed, setIsCollapsed] = useState(collapsed);
+
+  return (
+    <div className={styles.thinkingBlock}>
+      <div className={styles.thinkingHeader} onClick={() => setIsCollapsed(!isCollapsed)}>
+        {isCollapsed ? <RightOutlined /> : <DownOutlined />}
+        <span>思考过程</span>
+      </div>
+      {!isCollapsed && (
+        <div className={styles.thinkingContent}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{thinking}</ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+});
 
 function extractJsonFromContent(content: string): ITableCommentResult | null {
   try {
@@ -206,6 +225,7 @@ export default memo<IProps>(() => {
               id: uuidv4(),
               role: 'assistant',
               content: session.currentContent,
+              thinking: session.currentThinking || undefined,
             });
 
             if (promptType === 'NL_2_COMMENT' && commentCallbackRef.current) {
@@ -308,12 +328,7 @@ export default memo<IProps>(() => {
       <div className={styles.contentArea}>
         {currentSession?.messages.map((msg) => (
           <div key={msg.id} className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}>
-            {msg.thinking && (
-              <div className={styles.thinkingBlock}>
-                <div className={styles.thinkingHeader}>思考过程：</div>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.thinking}</ReactMarkdown>
-              </div>
-            )}
+            {msg.thinking && <ThinkingBlock thinking={msg.thinking} />}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         ))}
@@ -322,8 +337,13 @@ export default memo<IProps>(() => {
             <Spin size="small">
               {currentSession.currentThinking && (
                 <div className={styles.thinkingBlock}>
-                  <div className={styles.thinkingHeader}>思考过程：</div>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentSession.currentThinking}</ReactMarkdown>
+                  <div className={styles.thinkingHeader}>
+                    <DownOutlined />
+                    <span>思考过程...</span>
+                  </div>
+                  <div className={styles.thinkingContent}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentSession.currentThinking}</ReactMarkdown>
+                  </div>
                 </div>
               )}
               {currentSession.currentContent && (

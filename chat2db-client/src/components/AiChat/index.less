@@ -66,9 +66,23 @@
 
         .thinkingHeader {
           font-weight: 600;
-          margin-bottom: 8px;
           color: #d48806;
           font-size: 12px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          user-select: none;
+
+          :global {
+            .anticon {
+              font-size: 10px;
+            }
+          }
+        }
+
+        .thinkingContent {
+          margin-top: 8px;
         }
 
         :global {
