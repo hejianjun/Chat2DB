@@ -7,7 +7,7 @@ interface IProps{
 
 function LayoutBasic(props: IProps) {
   return <div className={style.layoutBasic}>
-    <div></div>
+    <div />
   </div>;
 }
 

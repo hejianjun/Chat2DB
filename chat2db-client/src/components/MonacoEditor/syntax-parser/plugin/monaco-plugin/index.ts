@@ -434,10 +434,10 @@ export function monacoSqlAutocomplete(
 // }
 const worker: Worker | null = null; // 暂时禁用 worker
 
-let parserIndex = 0;
+const parserIndex = 0;
 
 // 防抖：记录上一次补全时间，避免频繁触发
-let lastCompletionTime = 0;
+const lastCompletionTime = 0;
 const COMPLETION_DEBOUNCE = 200; // 200ms 防抖
 
 const asyncParser = async (

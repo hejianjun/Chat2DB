@@ -14,7 +14,7 @@ interface IProps {
   }
 }
 
-export default memo<IProps>(function EditDialog(props) {
+export default memo<IProps>((props) => {
   const { className, verifyDialog, value, title } = props;
   const [open, setOpen] = useState<boolean>();
   const monacoEditorRef = useRef<any>();
@@ -37,7 +37,7 @@ export default memo<IProps>(function EditDialog(props) {
       width={800}
     // onCancel={(() => { setVerifyDialog(false) })}
     >
-      <MonacoEditor id='edit-dialog' ref={monacoEditorRef}></MonacoEditor>
+      <MonacoEditor id='edit-dialog' ref={monacoEditorRef} />
     </Modal>
   </div>
 })

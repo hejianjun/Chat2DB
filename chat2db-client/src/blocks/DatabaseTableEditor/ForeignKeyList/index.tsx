@@ -88,7 +88,7 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
 
   const isEditing = (record: IForeignKeyItemNew) => record.key === editingData?.key;
   const handleFieldsChange = (field: any) => {
-    let { value } = field[0];
+    const { value } = field[0];
     const { name: nameList } = field[0];
     const name = nameList[0];
     const newData = dataSource.map((item) => {

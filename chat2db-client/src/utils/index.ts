@@ -123,14 +123,15 @@ export function approximateList<T, K extends keyof T>(
 
 // 获取var变量的值
 export const callVar = (css: string) => {
-  return getComputedStyle(document.documentElement).getPropertyValue(css).trim();
+  return getComputedStyle(document.documentElement).getPropertyValue(css)
+.trim();
 };
 
 // 给我一个 obj[]， 和 obj的 key 和 value，给你返index
-export function findObjListValue<T, K extends keyof T>(list: T[], key: K, value: any) {
+export function findObjListValue<T extends Record<string, any>, K extends keyof T>(list: T[], key: K, value: any) {
   let flag = -1;
   list.forEach((t: T, index) => {
-    Object.keys(t).forEach((j: K) => {
+    (Object.keys(t) as K[]).forEach((j: K) => {
       if (j === key && t[j] === value) {
         flag = index;
       }

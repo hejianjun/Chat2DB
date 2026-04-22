@@ -61,7 +61,7 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     onOpen?.();
   });
 
-  eventSource.addEventListener('message', (event: MessageEvent) => {
+  eventSource.addEventListener('message', (event: any) => {
     console.log('[SSE] Message received:', event.data);
     const data = event.data;
     if (data === '[DONE]') {
@@ -80,7 +80,7 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     }
   });
 
-  eventSource.addEventListener('state', (event: MessageEvent) => {
+  eventSource.addEventListener('state', (event: any) => {
     console.log('[SSE] State event:', event.data);
     try {
       const { state, message } = JSON.parse(event.data);
@@ -96,7 +96,7 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     eventSource.close();
   });
 
-  eventSource.addEventListener('tables_selected', (event: MessageEvent) => {
+  eventSource.addEventListener('tables_selected', (event: any) => {
     try {
       const { tables } = JSON.parse(event.data);
       onTablesSelected?.(tables);
@@ -105,7 +105,7 @@ const connectToEventSource = (options: EventSourceOptions): (() => void) => {
     }
   });
 
-  eventSource.addEventListener('schema_fetched', (event: MessageEvent) => {
+  eventSource.addEventListener('schema_fetched', (event: any) => {
     try {
       const { ddl } = JSON.parse(event.data);
       onSchemaFetched?.(ddl);
