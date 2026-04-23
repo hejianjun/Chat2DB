@@ -39,7 +39,7 @@ export const dataType = () => {
 };
 
 export const setValue = () => {
-  return chain(wordSym, '=', [stringSym, numberSym])();
+  return chain(stringOrWord, '=', [stringSym, numberSym])();
 };
 
 export const setValueList = () => {

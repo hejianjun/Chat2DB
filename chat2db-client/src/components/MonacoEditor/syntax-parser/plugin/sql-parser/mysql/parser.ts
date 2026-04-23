@@ -260,7 +260,7 @@ const tableOption = () => {
 };
 
 const primaryKeyList = () => {
-  return chain(wordSym, optional(',', primaryKeyList))();
+  return chain(stringOrWord, optional(',', primaryKeyList))();
 };
 
 const tableName = () => {
@@ -316,7 +316,7 @@ const selectFieldsInfo = () => {
 };
 
 const selectFields = () => {
-  return chain(wordSym, many(',', wordSym))();
+  return chain(stringOrWord, many(',', stringOrWord))();
 };
 
 // ----------------------------------- groupBy -----------------------------------
@@ -442,7 +442,7 @@ const variableAssignment = () => {
 };
 
 const variableLeftValue = () => {
-  return chain(wordSym, many('.', wordSym))();
+  return chain(stringOrWord, many('.', stringOrWord))();
 };
 
 // ----------------------------------- Expression -----------------------------------
@@ -576,7 +576,7 @@ const dotStringOrWordOrNumber = () => {
   return chain('.', [
     stringSym,
     numberSym,
-    chain(wordSym)(ast => {
+    chain(stringOrWord)(ast => {
       return {
         type: 'identifier',
         variant: 'columnAfterGroup',
