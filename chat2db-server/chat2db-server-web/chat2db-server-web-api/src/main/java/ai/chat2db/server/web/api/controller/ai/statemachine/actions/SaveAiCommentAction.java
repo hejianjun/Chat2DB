@@ -4,12 +4,16 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
+import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import com.alibaba.fastjson2.annotation.JSONField;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.statemachine.StateContext;
+import org.springframework.statemachine.action.Action;
 import org.springframework.stereotype.Component;
 
 import com.alibaba.fastjson2.JSONArray;
@@ -25,12 +29,13 @@ import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Slf4j
-public class SaveAiCommentAction {
+public class SaveAiCommentAction extends BaseChatAction {
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
 
-    public void execute(ChatContext ctx) {
+    public void execute(StateContext<ChatState, ChatEvent> context) {
+        ChatContext ctx = getChatContext(context);
         log.info("[SaveAiCommentAction] execute called for uid: {}", ctx.getUid());
 
         String promptType = ctx.getRequest().getPromptType();

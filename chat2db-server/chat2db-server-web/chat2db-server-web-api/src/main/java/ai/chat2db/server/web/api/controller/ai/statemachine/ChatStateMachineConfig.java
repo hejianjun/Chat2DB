@@ -40,8 +40,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
     @Autowired
     private SaveAiCommentAction saveAiCommentAction;
 
-    private final ExecutorService aiCommentSaveExecutor = Executors.newFixedThreadPool(3);
-
     @Override
     public void configure(StateMachineStateConfigurer<ChatState, ChatEvent> states) throws Exception {
         states
@@ -96,6 +94,7 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
             .and()
             .withExternal()
                 .source(ChatState.STREAMING).target(ChatState.COMPLETED)
+                .action(saveAiCommentAction)
                 .event(ChatEvent.STREAM_FINISHED)
             .and()
             .withExternal()
@@ -111,8 +110,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
     public void configure(org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer<ChatState, ChatEvent> config) throws Exception {
         config.withConfiguration()
             .listener(new StateMachineListenerAdapter<ChatState, ChatEvent>() {
-                private StateMachine<ChatState, ChatEvent> stateMachine;
-                
                 @Override
                 public void stateChanged(org.springframework.statemachine.state.State<ChatState, ChatEvent> from, org.springframework.statemachine.state.State<ChatState, ChatEvent> to) {
                     log.info("[StateMachine] State changed: {} -> {}",
@@ -122,7 +119,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
 
                 @Override
                 public void stateMachineStarted(StateMachine<ChatState, ChatEvent> sm) {
-                    this.stateMachine = sm;
                     log.info("[StateMachine] StateMachine started with id: {}, initial state: {}",
                         sm.getId(),
                         sm.getState() != null ? sm.getState().getId() : "null");
@@ -138,22 +134,6 @@ public class ChatStateMachineConfig extends StateMachineConfigurerAdapter<ChatSt
                 @Override
                 public void stateEntered(org.springframework.statemachine.state.State<ChatState, ChatEvent> state) {
                     log.info("[StateMachine] State entered: {}", state.getId());
-                    
-                    if (state.getId() == ChatState.COMPLETED && stateMachine != null) {
-                        ChatContext ctx = (ChatContext) stateMachine.getExtendedState().getVariables().get("chatContext");
-                        String promptType = ctx != null ? ctx.getRequest().getPromptType() : null;
-                        if (ctx != null && (PromptType.NL_2_COMMENT.getCode().equals(promptType)
-                                || PromptType.NL_2_COMMENT_BATCH.getCode().equals(promptType))) {
-                            log.info("[StateMachine] Triggering SaveAiCommentAction for uid: {}", ctx.getUid());
-                            aiCommentSaveExecutor.submit(() -> {
-                                try {
-                                    saveAiCommentAction.execute(ctx);
-                                } catch (Exception e) {
-                                    log.error("[StateMachine] SaveAiCommentAction failed for uid: {}", ctx.getUid(), e);
-                                }
-                            });
-                        }
-                    }
                 }
 
                 @Override
