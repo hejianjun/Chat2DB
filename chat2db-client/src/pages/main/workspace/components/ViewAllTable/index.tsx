@@ -231,24 +231,17 @@ export default memo<IProps>((props) => {
     });
   };
 
-  // 监听allTable的高度的变化
+  // 监听tableBox的尺寸变化
   useEffect(() => {
     const resizeObserver = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       setAllTableWidth(width);
       setAllTableHeight(height);
     });
-    resizeObserver.observe(tableBoxRef.current!);
-  }, []);
-
-  // 监听allTable的宽度的变化
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setAllTableWidth(width);
-      setAllTableHeight(height);
-    });
-    resizeObserver.observe(tableBoxRef.current!);
+    if (tableBoxRef.current) {
+      resizeObserver.observe(tableBoxRef.current);
+    }
+    return () => resizeObserver.disconnect();
   }, []);
 
   const onSearch = (value: string) => {
