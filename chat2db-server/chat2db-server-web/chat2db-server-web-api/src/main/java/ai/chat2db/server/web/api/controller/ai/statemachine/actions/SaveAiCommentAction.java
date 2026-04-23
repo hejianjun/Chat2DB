@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.alibaba.fastjson2.annotation.JSONField;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Data;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,7 +62,7 @@ public class SaveAiCommentAction {
     }
 
     private void executeSingle(ChatContext ctx, Long dataSourceId, String databaseName,
-                                String schemaName, String content) {
+                               String schemaName, String content) {
         AiCommentResult result = parseCommentResult(content);
         if (result == null) {
             log.warn("[SaveAiCommentAction] Failed to parse comment result for uid: {}", ctx.getUid());
@@ -86,7 +89,7 @@ public class SaveAiCommentAction {
     }
 
     private void executeBatch(ChatContext ctx, Long dataSourceId, String databaseName,
-                               String schemaName, String content) {
+                              String schemaName, String content) {
         List<BatchTableComment> batchResult = parseBatchCommentResult(content);
         if (CollectionUtils.isEmpty(batchResult)) {
             log.warn("[SaveAiCommentAction] Failed to parse batch comment result for uid: {}", ctx.getUid());
@@ -143,7 +146,7 @@ public class SaveAiCommentAction {
     }
 
     private void saveBatchTableAiComments(Long dataSourceId, String databaseName, String schemaName,
-                                           List<BatchTableComment> batchComments) {
+                                          List<BatchTableComment> batchComments) {
         for (BatchTableComment btc : batchComments) {
             if (StringUtils.isBlank(btc.getTableName()) || StringUtils.isBlank(btc.getTableComment())) {
                 continue;
@@ -159,19 +162,7 @@ public class SaveAiCommentAction {
         }
 
         try {
-            JSONObject obj = JSONObject.parseObject(json);
-            AiCommentResult result = new AiCommentResult();
-
-            String tableComment = obj.getString("table_comment");
-            result.setTableComment(tableComment);
-
-            JSONArray columnComments = obj.getJSONArray("column_comments");
-            if (columnComments != null && !columnComments.isEmpty()) {
-                List<ColumnComment> comments = columnComments.toJavaList(ColumnComment.class);
-                result.setColumnComments(comments);
-            }
-
-            return result;
+            return JSONObject.parseObject(json, AiCommentResult.class);
         } catch (Exception e) {
             log.error("[SaveAiCommentAction] Failed to parse JSON: {}", content, e);
             return null;
@@ -204,7 +195,7 @@ public class SaveAiCommentAction {
     }
 
     private void saveTableAiComment(Long dataSourceId, String databaseName, String schemaName,
-                                     String tableName, String aiComment) {
+                                    String tableName, String aiComment) {
         try {
             LuceneIndexManager<Table> manager = managerFactory.getManager(dataSourceId);
 
@@ -222,7 +213,7 @@ public class SaveAiCommentAction {
     }
 
     private void saveColumnAiComments(Long dataSourceId, String databaseName, String schemaName,
-                                        String tableName, List<ColumnComment> columnComments) {
+                                      String tableName, List<ColumnComment> columnComments) {
         try {
             LuceneIndexManager<TableColumn> manager = managerFactory.getManager(dataSourceId);
 
@@ -247,66 +238,27 @@ public class SaveAiCommentAction {
         }
     }
 
+    @Data
     private static class AiCommentResult {
+        @JSONField(name = "table_comment")
         private String tableComment;
+        @JSONField(name = "column_comments")
         private List<ColumnComment> columnComments;
-
-        public String getTableComment() {
-            return tableComment;
-        }
-
-        public void setTableComment(String tableComment) {
-            this.tableComment = tableComment;
-        }
-
-        public List<ColumnComment> getColumnComments() {
-            return columnComments;
-        }
-
-        public void setColumnComments(List<ColumnComment> columnComments) {
-            this.columnComments = columnComments;
-        }
     }
 
+    @Data
     private static class ColumnComment {
+        @JSONField(name = "column_name")
         private String columnName;
+        @JSONField(name = "comment")
         private String comment;
-
-        public String getColumnName() {
-            return columnName;
-        }
-
-        public void setColumnName(String columnName) {
-            this.columnName = columnName;
-        }
-
-        public String getComment() {
-            return comment;
-        }
-
-        public void setComment(String comment) {
-            this.comment = comment;
-        }
     }
 
+    @Data
     private static class BatchTableComment {
+        @JSONField(name = "table_name")
         private String tableName;
+        @JSONField(name = "table_comment")
         private String tableComment;
-
-        public String getTableName() {
-            return tableName;
-        }
-
-        public void setTableName(String tableName) {
-            this.tableName = tableName;
-        }
-
-        public String getTableComment() {
-            return tableComment;
-        }
-
-        public void setTableComment(String tableComment) {
-            this.tableComment = tableComment;
-        }
     }
 }
