@@ -5,20 +5,6 @@ package ai.chat2db.server.web.api.controller.ai.statemachine;
  * 定义了AI对话过程中可能发生的各种事件
  */
 public enum ChatEvent {
-    /** 请求将自然语言转换为SQL */
-    REQUEST_NL_TO_SQL,
-    /** 请求解释SQL */
-    REQUEST_EXPLAIN_SQL,
-    /** 请求优化SQL */
-    REQUEST_OPTIMIZE_SQL,
-    /** 请求转换SQL */
-    REQUEST_CONVERT_SQL,
-    /** 请求文本生成 */
-    REQUEST_TEXT_GENERATION,
-    /** 请求生成标题 */
-    REQUEST_GENERATE_TITLE,
-    /** 请求猜测注释 */
-    REQUEST_GUESS_COMMENT,
     /** 表已提供 */
     TABLES_PROVIDED,
     /** 表未提供 */
