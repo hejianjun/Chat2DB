@@ -77,7 +77,7 @@ const WorkspaceTabs = memo(() => {
     getOpenConsoleList();
   }, []);
 
-  // consoleList 先转换为通用的 workspaceTabList
+  // consoleList 先转换为通用的 workspaceTabList，同时保留非 consoleList 管理的本地 tab
   useEffect(() => {
     const _workspaceTabItems =
       consoleList?.map((item) => {
@@ -97,7 +97,18 @@ const WorkspaceTabs = memo(() => {
           },
         };
       }) || [];
-    setWorkspaceTabList(_workspaceTabItems);
+
+    const currentWorkspaceTabList = useWorkspaceStore.getState().workspaceTabList;
+    const localTabs = (currentWorkspaceTabList || []).filter(
+      (tab) => !_workspaceTabItems.some((ct) => ct.id === tab.id),
+    );
+
+    console.log('[WorkspaceTabs] consoleList changed, merging tabs:', {
+      consoleTabs: _workspaceTabItems.map((t) => ({ id: t.id, type: t.type, title: t.title })),
+      localTabs: localTabs.map((t) => ({ id: t.id, type: t.type, title: t.title })),
+    });
+
+    setWorkspaceTabList([..._workspaceTabItems, ...localTabs]);
   }, [consoleList]);
 
   // 关闭tab
@@ -110,6 +121,13 @@ const WorkspaceTabs = memo(() => {
     historyService.updateSavedConsole(p).then(() => {
       indexedDB.deleteData('chat2db', 'workspaceConsoleDDL', key);
     });
+
+    const { consoleList: currentConsoleList } = useWorkspaceStore.getState();
+    if (currentConsoleList) {
+      useWorkspaceStore.setState({
+        consoleList: currentConsoleList.filter((item) => item.id !== key),
+      });
+    }
   };
 
   const createNewConsole = () => {
@@ -156,9 +174,13 @@ const WorkspaceTabs = memo(() => {
 
   // 切换tab
   const onTabChange = (key: string | null) => {
-    setActiveConsoleId(key);
-    
+    console.log('[WorkspaceTabs] Active tab changed:', key);
     const tab = workspaceTabList?.find((item) => String(item.id) === String(key));
+    console.log('[WorkspaceTabs] Active tab details:', tab ? { id: tab.id, type: tab.type, title: tab.title } : null);
+    console.log('[WorkspaceTabs] Current workspaceTabList:', workspaceTabList?.map((t) => ({ id: t.id, type: t.type, title: t.title })));
+
+    setActiveConsoleId(key);
+
     const environment = getConnectionEnvironment(tab?.uniqueData?.dataSourceId);
     
     if (isReleaseEnvironment(environment)) {
