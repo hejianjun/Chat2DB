@@ -297,7 +297,14 @@ const createViewStatement = () => {
 
 // ----------------------------------- Insert statement -----------------------------------
 const insertStatement = () => {
-  return chain('insert', optional('ignore'), 'into', tableName, optional(selectFieldsInfo), [selectStatement])(ast => {
+  return chain(
+    'insert',
+    optional('ignore'),
+    'into',
+    tableName,
+    optional(selectFieldsInfo),
+    [selectStatement, valuesClause],
+  )(ast => {
     return {
       type: 'statement',
       variant: 'insert',
@@ -309,6 +316,18 @@ const insertStatement = () => {
       result: ast[5],
     };
   });
+};
+
+const valuesClause = () => {
+  return chain('values', valueList, many(',', valueList))();
+};
+
+const valueList = () => {
+  return chain('(', valueItem, many(',', valueItem), ')')();
+};
+
+const valueItem = () => {
+  return chain([stringSym, numberSym, wordSym, chain('null')()])();
 };
 
 const selectFieldsInfo = () => {
@@ -370,7 +389,7 @@ const limitClause = () => {
 
 // ----------------------------------- Function -----------------------------------
 const functionChain = () => {
-  return chain([castFunction, normalFunction, ifFunction])(ast => {
+  return chain([castFunction, normalFunction, ifFunction, groupConcatFunction])(ast => {
     return ast[0];
   });
 };
@@ -381,6 +400,27 @@ const ifFunction = () => {
       type: 'function',
       name: 'if',
       args: [ast[2], ast[4], ast[6]],
+    };
+  });
+};
+
+const groupConcatFunction = () => {
+  return chain(
+    'group_concat',
+    '(',
+    optional('distinct'),
+    functionFields,
+    optional(chain('order', 'by', orderByExpressionList)()),
+    optional(chain('separator', stringSym)()),
+    ')',
+  )(ast => {
+    return {
+      type: 'function',
+      name: 'group_concat',
+      args: ast[3],
+      distinct: ast[2],
+      orderBy: ast[4],
+      separator: ast[5],
     };
   });
 };
