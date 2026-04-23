@@ -632,7 +632,7 @@ public class SQLExecutor implements CommandExecutor {
         executeResult.setOriginalSql(originalSql);
 
         boolean supportJsqlParser = !DataSourceTypeEnum.MONGODB.getCode().equals(type);
-        if (supportJsqlParser) {
+        if (supportJsqlParser && SqlTypeEnum.SELECT.getCode().equals(sqlType)) {
             try {
                 SqlUtils.buildCanEditResult(originalSql, dbType, executeResult);
             } catch (Exception e) {
