@@ -1,32 +1,150 @@
+
 .erDiagramContainer {
-  position: relative;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f7fa;
 }
 
-.buttonContainer {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+.toolbar {
+  padding: 12px 16px;
+  background-color: white;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reactFlowContainer {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 1000;
 }
 
+/* 表节点样式 */
+.tableNode {
+  border: 2px solid #d9d9d9;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  transition: all 0.2s;
+}
+
+.selected {
+  border-color: #1890ff;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25);
+}
+
+.tableHeader {
+  padding: 10px 14px;
+  background-color: #1890ff;
+  color: white;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tableName {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tableComment {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.icon {
+  font-size: 16px;
+}
+
+.expandButton {
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.expandButton:hover {
+  opacity: 1;
+}
+
+.tableBody {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tableColumn {
+  padding: 6px 12px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.pk {
+  background-color: rgba(255, 215, 0, 0.1);
+}
+
+.fk {
+  background-color: rgba(135, 206, 250, 0.1);
+}
+
+.columnIcons {
+  display: flex;
+  gap: 2px;
+}
+
+.pkIcon,
+.fkIcon {
+  font-size: 12px;
+}
+
+.columnName {
+  flex: 1;
+  font-weight: 500;
+  color: #262626;
+}
+
+.columnType {
+  color: #595959;
+  font-family: monospace;
+}
+
+.columnNullable {
+  font-size: 10px;
+  color: #8c8c8c;
+}
+
+.handle {
+  width: 10px;
+  height: 10px;
+  background-color: #1890ff;
+  border: 2px solid white;
+}
+
+/* 向后兼容的旧样式 */
+.buttonContainer {
+  padding: 8px 16px;
+}
+
 .chartContainer {
-  width: 100%; /* 宽度占满 */
-  height: calc(100vh - 40px); /* 高度全屏 */
-}
-
-// 可选的标题样式
-.title {
-  font-size: 18px;
-  font-weight: bold;
-  text-align: center;
-  margin-bottom: 10px; // 标题与图表之间的间距
-}
-
-// 可选的 tooltip 样式
-.tooltip {
-  background-color: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  padding: 5px;
-  border-radius: 4px;
+  flex: 1;
 }
