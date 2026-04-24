@@ -24,7 +24,7 @@ export default {
   'workspace.table.export.all.insert': 'Sonuç kümesini INSERT SQL olarak dışa aktar',
   'workspace.table.export.cur.insert': 'Geçerli sayfa sonucunu INSERT SQL olarak dışa aktar',
   'workspace.table.export.progress.title': 'Dışa aktarılıyor...',
-  'workspace.table.export.progress.total': 'Toplam satır',
+  'workspace.table.export.progress.rows': 'Dışa aktarılan satır',
   'workspace.tree.view': 'Görüntüle',
   'workspace.tree.trigger': 'Tetikleyici',
   'workspace.tree.function': 'Fonksiyon',

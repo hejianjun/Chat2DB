@@ -15,7 +15,6 @@ export interface ITask {
   taskProgress: string;
   taskName: string;
   downloadUrl: string;
-  totalCount: number;
 }
 
 export interface IExportResultDataParams {

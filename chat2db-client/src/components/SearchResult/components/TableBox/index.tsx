@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dropdown, Input, MenuProps, message, Modal, Space, Popover, Spin, Button, Progress } from 'antd';
+import { Dropdown, Input, MenuProps, message, Modal, Space, Popover, Spin, Button } from 'antd';
 import { BaseTable, ArtColumn, useTablePipeline, features, SortItem } from 'ali-react-table';
 import styled from 'styled-components';
 import classnames from 'classnames';
@@ -148,7 +148,6 @@ export default function TableBox(props: ITableProps) {
   const [columnResize, setColumnResize] = useState<number[]>([0]);
   const [exportProgress, setExportProgress] = useState<number>(0);
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
-  const [exportTotalCount, setExportTotalCount] = useState<number>(0);
   const exportPollingRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleExportSQLResult = async (exportType: ExportTypeEnum, exportSize: ExportSizeEnum) => {
@@ -160,7 +159,6 @@ export default function TableBox(props: ITableProps) {
       exportSize,
     };
     setExportProgress(0);
-    setExportTotalCount(0);
     setExportModalVisible(true);
 
     try {
@@ -181,9 +179,8 @@ export default function TableBox(props: ITableProps) {
       try {
         const task: ITask = await taskService.getTask({ id: taskId });
         if (task) {
-          const progress = Math.round(parseFloat(task.taskProgress || '0') * 100);
-          setExportProgress(progress);
-          setExportTotalCount(task.totalCount || 0);
+          const processedCount = parseInt(task.taskProgress || '0', 10);
+          setExportProgress(processedCount);
 
           if (task.taskStatus === 'FINISH') {
             clearInterval(exportPollingRef.current!);
@@ -1171,7 +1168,7 @@ export default function TableBox(props: ITableProps) {
         title={i18n('workspace.table.export.progress.title')}
         open={exportModalVisible}
         footer={null}
-        closable={exportProgress >= 100}
+        closable={false}
         onCancel={() => {
           if (exportPollingRef.current) {
             clearInterval(exportPollingRef.current);
@@ -1182,9 +1179,8 @@ export default function TableBox(props: ITableProps) {
         width={400}
       >
         <div style={{ marginBottom: 8 }}>
-          {exportTotalCount > 0 && `${i18n('workspace.table.export.progress.total')}: ${exportTotalCount}`}
+          {i18n('workspace.table.export.progress.rows')}: {exportProgress}
         </div>
-        <Progress percent={exportProgress} status={exportProgress >= 100 ? 'success' : 'active'} />
       </Modal>
       <Modal
         title={viewTableCellData?.name}

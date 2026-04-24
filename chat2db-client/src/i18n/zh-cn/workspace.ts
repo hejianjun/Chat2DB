@@ -42,7 +42,7 @@ export default {
   'workspace.table.export.all.insert': '导出结果集 insert sql',
   'workspace.table.export.cur.insert': '导出当前页结果集 insert sql',
   'workspace.table.export.progress.title': '正在导出...',
-  'workspace.table.export.progress.total': '总行数',
+  'workspace.table.export.progress.rows': '已导出行数',
   'workspace.tree.view': '视图',
   'workspace.tree.trigger': '触发器',
   'workspace.tree.function': '函数',
