@@ -98,6 +98,7 @@ export default {
   'common.text.noTableFoundDown': 'Switch databases at the top',
   'common.text.noTables': 'No tables to guess comments',
   'common.text.aiCommentGenerated': 'AI comments generated and saved to index',
+  'common.text.allTablesHaveComments': 'All tables already have comments',
   'common.title.preview': 'Preview',
   'common.title.errorMessage': 'Error message',
   'common.label.comment': 'Comment',

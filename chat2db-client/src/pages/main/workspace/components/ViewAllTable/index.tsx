@@ -252,6 +252,8 @@ export default memo<IProps>((props) => {
     });
   };
 
+  const pendingBatchesRef = React.useRef<string[][]>([]);
+
   const handleBatchCommentGenerated = useCallback((result: IBatchTableCommentResult) => {
     if (result.tables && result.tables.length > 0) {
       message.success(i18n('common.text.aiCommentGenerated'));
@@ -281,19 +283,48 @@ export default memo<IProps>((props) => {
         return newData;
       });
     }
-  }, [form]);
+
+    if (pendingBatchesRef.current.length > 0) {
+      const nextBatch = pendingBatchesRef.current.shift()!;
+      setTimeout(() => {
+        setPendingAiChat({
+          dataSourceId: Number(uniqueData.dataSourceId),
+          databaseName: uniqueData.databaseName,
+          schemaName: uniqueData.schemaName,
+          tableNames: nextBatch,
+          message: '请为这些表生成合适的中文注释',
+          promptType: 'NL_2_COMMENT_BATCH',
+          onBatchCommentGenerated: handleBatchCommentGenerated,
+        });
+        setCurrentWorkspaceExtend('ai');
+      }, 500);
+    }
+  }, [form, uniqueData]);
 
   const openAiChatForGuess = useCallback(() => {
     if (!tableData || tableData.length === 0) {
       message.warning(i18n('common.text.noTables'));
       return;
     }
-    const tableNames = tableData.map(t => t.name);
+    const tableNamesWithoutComment = tableData
+      .filter((t) => !t.comment || !t.comment.trim())
+      .map((t) => t.name);
+    if (tableNamesWithoutComment.length === 0) {
+      message.warning(i18n('common.text.allTablesHaveComments'));
+      return;
+    }
+    const BATCH_SIZE = 20;
+    const batches: string[][] = [];
+    for (let i = 0; i < tableNamesWithoutComment.length; i += BATCH_SIZE) {
+      batches.push(tableNamesWithoutComment.slice(i, i + BATCH_SIZE));
+    }
+    pendingBatchesRef.current = batches.slice(1);
+    const firstBatch = batches[0];
     setPendingAiChat({
       dataSourceId: Number(uniqueData.dataSourceId),
       databaseName: uniqueData.databaseName,
       schemaName: uniqueData.schemaName,
-      tableNames,
+      tableNames: firstBatch,
       message: '请为这些表生成合适的中文注释',
       promptType: 'NL_2_COMMENT_BATCH',
       onBatchCommentGenerated: handleBatchCommentGenerated,

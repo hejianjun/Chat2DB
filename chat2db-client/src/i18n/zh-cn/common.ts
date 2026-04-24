@@ -96,6 +96,7 @@ export default {
   'common.text.noTableFoundDown': '你可以在顶部切换数据库',
   'common.text.noTables': '当前没有表可以猜测注释',
   'common.text.aiCommentGenerated': 'AI 注释已生成并写入索引',
+  'common.text.allTablesHaveComments': '所有表已有注释，无需生成',
   'common.text.updateNow': '立即更新',
   'common.title.preview': '预览',
   'common.title.errorMessage': '错误信息',
