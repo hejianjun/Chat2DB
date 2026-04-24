@@ -23,6 +23,7 @@ export default {
   'workspace.table.export.cur.csv': '現在のページの結果セットをcsvでエクスポート',
   'workspace.table.export.all.insert': '結果セットをinsert sqlでエクスポート',
   'workspace.table.export.cur.insert': '現在のページの結果セットをinsert sqlでエクスポート',
+  'workspace.table.export.progress.title': 'エクスポート中...',
   'workspace.tree.view': 'ビュー',
   'workspace.tree.trigger': 'トリガー',
   'workspace.tree.function': '関数',

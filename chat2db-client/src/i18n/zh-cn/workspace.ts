@@ -41,6 +41,7 @@ export default {
   'workspace.table.export.cur.csv': '导出当前页结果集 csv',
   'workspace.table.export.all.insert': '导出结果集 insert sql',
   'workspace.table.export.cur.insert': '导出当前页结果集 insert sql',
+  'workspace.table.export.progress.title': '正在导出...',
   'workspace.tree.view': '视图',
   'workspace.tree.trigger': '触发器',
   'workspace.tree.function': '函数',

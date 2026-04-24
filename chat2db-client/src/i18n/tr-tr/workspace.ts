@@ -23,6 +23,7 @@ export default {
   'workspace.table.export.cur.csv': 'Geçerli sayfa sonucunu CSV olarak dışa aktar',
   'workspace.table.export.all.insert': 'Sonuç kümesini INSERT SQL olarak dışa aktar',
   'workspace.table.export.cur.insert': 'Geçerli sayfa sonucunu INSERT SQL olarak dışa aktar',
+  'workspace.table.export.progress.title': 'Dışa aktarılıyor...',
   'workspace.tree.view': 'Görüntüle',
   'workspace.tree.trigger': 'Tetikleyici',
   'workspace.tree.function': 'Fonksiyon',

@@ -1,44 +1,63 @@
-/**
- * 文件下载 
- * @param url 
- * @param params 
- */
-export function downloadFile(url: string, params: any) {
-  // 创建POST请求
+export interface IDownloadOptions {
+  onProgress?: (percent: number) => void;
+}
+
+export function downloadFile(url: string, params: any, options?: IDownloadOptions) {
+  const { onProgress } = options || {};
+
   fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json', // 或者根据服务端的要求设置其他的内容类型
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(params), // 将参数转换为JSON字符串
+    body: JSON.stringify(params),
   })
     .then((response) => {
-      // 从content-disposition头中获取文件名
       const contentDisposition = response.headers.get('content-disposition');
       const filename = contentDisposition ? decodeURIComponent(contentDisposition.split("''")[1]) : 'file.txt';
 
-      // 获取返回的Blob数据
-      return response.blob().then((blob) => ({ blob, filename }));
+      const contentLength = response.headers.get('content-length');
+      const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+      if (!response.body) {
+        return response.blob().then((blob) => ({ blob, filename }));
+      }
+
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      return new Promise<{ blob: Blob; filename: string }>((resolve) => {
+        const pump = (): Promise<void | { blob: Blob; filename: string }> =>
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              const blob = new Blob(chunks);
+              resolve({ blob, filename });
+              return;
+            }
+            chunks.push(value);
+            received += value.length;
+            if (total > 0 && onProgress) {
+              onProgress(Math.round((received / total) * 100));
+            }
+            return pump();
+          });
+        pump();
+      });
     })
     .then(({ blob, filename }) => {
-      // 创建一个代表Blob对象的URL
       const blobUrl = URL.createObjectURL(blob);
-
-      // 创建一个隐藏的 <a> 标签，并设置其 href 属性
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = blobUrl;
-
-      // 使用从响应头解析的文件名
       a.download = filename;
-
-      // 将 <a> 标签附加到 DOM，并触发点击事件
       document.body.appendChild(a);
       a.click();
-
-      // 清理：从 DOM 中移除 <a> 标签，并释放Blob URL
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
+      if (onProgress) {
+        onProgress(100);
+      }
     })
     .catch((error) => {
       console.error('下载文件失败:', error);

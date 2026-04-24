@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dropdown, Input, MenuProps, message, Modal, Space, Popover, Spin, Button } from 'antd';
+import { Dropdown, Input, MenuProps, message, Modal, Space, Popover, Spin, Button, Progress } from 'antd';
 import { BaseTable, ArtColumn, useTablePipeline, features, SortItem } from 'ali-react-table';
 import styled from 'styled-components';
 import classnames from 'classnames';
@@ -146,6 +146,8 @@ export default function TableBox(props: ITableProps) {
   const [tableLoading, setTableLoading] = useState<boolean>(false);
   // 列宽数组
   const [columnResize, setColumnResize] = useState<number[]>([0]);
+  const [exportProgress, setExportProgress] = useState<number>(0);
+  const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
   // 表格的宽度
   // const [tableBoxWidth, setTableBoxWidth] = useState<number>(0);
 
@@ -157,7 +159,18 @@ export default function TableBox(props: ITableProps) {
       exportType,
       exportSize,
     };
-    downloadFile(window._BaseURL + '/api/rdb/dml/export', params);
+    setExportProgress(0);
+    setExportModalVisible(true);
+    downloadFile(window._BaseURL + '/api/rdb/dml/export', params, {
+      onProgress: (percent) => {
+        setExportProgress(percent);
+        if (percent >= 100) {
+          setTimeout(() => {
+            setExportModalVisible(false);
+          }, 500);
+        }
+      },
+    });
   };
 
   useEffect(() => {
@@ -1108,6 +1121,16 @@ export default function TableBox(props: ITableProps) {
   return (
     <div className={classnames(className, styles.tableBox, { [styles.noDataTableBox]: !tableData.length })}>
       {renderContent()}
+      <Modal
+        title={i18n('workspace.table.export.progress.title')}
+        open={exportModalVisible}
+        footer={null}
+        closable={exportProgress >= 100}
+        onCancel={() => setExportModalVisible(false)}
+        width={400}
+      >
+        <Progress percent={exportProgress} status={exportProgress >= 100 ? 'success' : 'active'} />
+      </Modal>
       <Modal
         title={viewTableCellData?.name}
         open={!!viewTableCellData?.name}
