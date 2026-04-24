@@ -81,4 +81,6 @@ public class Task implements Serializable {
      * task content
      */
     private byte[] content;
+
+    private Integer totalCount;
 }

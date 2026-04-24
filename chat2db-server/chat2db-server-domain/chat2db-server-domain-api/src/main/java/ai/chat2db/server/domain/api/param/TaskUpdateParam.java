@@ -25,14 +25,8 @@ public class TaskUpdateParam implements Serializable {
      */
     private String taskStatus;
 
-    /**
-     * task progress
-     */
     private String taskProgress;
 
-    /**
-     * task name
-     */
     private String taskName;
 
     /**

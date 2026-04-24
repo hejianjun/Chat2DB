@@ -15,16 +15,18 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.io.File;
 import java.net.MalformedURLException;
+import java.nio.file.Paths;
 
 @ConnectionInfoAspect
 @RequestMapping("/api/task")
-@Controller
+@RestController
 @Slf4j
 public class TaskController {
 
@@ -42,6 +44,12 @@ public class TaskController {
         return WebPageResult.of(task.getData(), 100L, 1, 10);
     }
 
+    @GetMapping("/get/{id}")
+    public DataResult<Task> get(@PathVariable Long id) {
+        DataResult<Task> task = taskService.get(id);
+        return task;
+    }
+
     @GetMapping("/download/{id}")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
         DataResult<Task> task = taskService.get(id);
@@ -54,22 +62,31 @@ public class TaskController {
             throw new RuntimeException("task is not belong to user");
         }
 
-        Resource resource = null;
+        String downloadUrl = task.getData().getDownloadUrl();
+        if(downloadUrl == null || downloadUrl.isEmpty()){
+            log.error("download url is null");
+            throw new RuntimeException("download url is null");
+        }
+
+        File file = new File(downloadUrl);
+        if (!file.exists() || !file.canRead()) {
+            log.error("file not exists or not readable: {}", downloadUrl);
+            throw new RuntimeException("Could not read the file: " + downloadUrl);
+        }
+
+        Resource resource;
         try {
-            resource = new UrlResource("file://"+task.getData().getDownloadUrl());
+            resource = new UrlResource(file.toURI());
         } catch (MalformedURLException e) {
+            log.error("malformed url: {}", downloadUrl, e);
             throw new RuntimeException(e);
         }
 
-        if (resource.exists() || resource.isReadable()) {
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(resource);
-        } else {
-            throw new RuntimeException("Could not read the file!");
-        }
-
+        String filename = file.getName();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
     }
 
 

@@ -43,6 +43,8 @@ public class TaskServiceImpl implements TaskService {
         TaskDO taskDO = new TaskDO();
         taskDO.setId(param.getId());
         taskDO.setTaskStatus(param.getTaskStatus());
+        taskDO.setTaskProgress(param.getTaskProgress());
+        taskDO.setDownloadUrl(param.getDownloadUrl());
         taskDO.setContent(param.getContent());
         MapperUtils.getTaskMapper().updateById(taskDO);
         return ActionResult.isSuccess();

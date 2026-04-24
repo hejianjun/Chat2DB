@@ -14,7 +14,6 @@ import styles from './index.less';
 
 // 工具函数
 import { compareStrings } from '@/utils/sort';
-import { downloadFile } from '@/utils/file';
 import { transformInputValue } from '../../utils';
 
 // 类型定义
@@ -25,6 +24,7 @@ import { ExportSizeEnum, ExportTypeEnum } from '@/typings/resultTable';
 
 // api
 import sqlService, { IExportParams, IExecuteSqlParams } from '@/service/sql';
+import taskService, { ITask } from '@/service/task';
 
 // store
 import { setFocusedContent } from '@/store/common/copyFocusedContent';
@@ -148,8 +148,8 @@ export default function TableBox(props: ITableProps) {
   const [columnResize, setColumnResize] = useState<number[]>([0]);
   const [exportProgress, setExportProgress] = useState<number>(0);
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
-  // 表格的宽度
-  // const [tableBoxWidth, setTableBoxWidth] = useState<number>(0);
+  const [exportTotalCount, setExportTotalCount] = useState<number>(0);
+  const exportPollingRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleExportSQLResult = async (exportType: ExportTypeEnum, exportSize: ExportSizeEnum) => {
     const params: IExportParams = {
@@ -160,17 +160,63 @@ export default function TableBox(props: ITableProps) {
       exportSize,
     };
     setExportProgress(0);
+    setExportTotalCount(0);
     setExportModalVisible(true);
-    downloadFile(window._BaseURL + '/api/rdb/dml/export', params, {
-      onProgress: (percent) => {
-        setExportProgress(percent);
-        if (percent >= 100) {
-          setTimeout(() => {
+
+    try {
+      const taskId = await taskService.exportResultData(params);
+      startExportPolling(taskId);
+    } catch (error) {
+      message.error(i18n('common.text.exportFailed'));
+      setExportModalVisible(false);
+    }
+  };
+
+  const startExportPolling = (taskId: number) => {
+    if (exportPollingRef.current) {
+      clearInterval(exportPollingRef.current);
+    }
+
+    exportPollingRef.current = setInterval(async () => {
+      try {
+        const task: ITask = await taskService.getTask({ id: taskId });
+        if (task) {
+          const progress = Math.round(parseFloat(task.taskProgress || '0') * 100);
+          setExportProgress(progress);
+          setExportTotalCount(task.totalCount || 0);
+
+          if (task.taskStatus === 'FINISH') {
+            clearInterval(exportPollingRef.current!);
+            exportPollingRef.current = null;
+            downloadExportFile(taskId);
+          } else if (task.taskStatus === 'ERROR') {
+            clearInterval(exportPollingRef.current!);
+            exportPollingRef.current = null;
+            message.error(i18n('common.text.exportFailed'));
             setExportModalVisible(false);
-          }, 500);
+          }
         }
-      },
-    });
+      } catch (error) {
+        clearInterval(exportPollingRef.current!);
+        exportPollingRef.current = null;
+        message.error(i18n('common.text.exportFailed'));
+        setExportModalVisible(false);
+      }
+    }, 500);
+  };
+
+  const downloadExportFile = (taskId: number) => {
+    const downloadUrl = `${window._BaseURL}/api/task/download/${taskId}`;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => {
+      setExportModalVisible(false);
+    }, 1000);
   };
 
   useEffect(() => {
@@ -1126,9 +1172,18 @@ export default function TableBox(props: ITableProps) {
         open={exportModalVisible}
         footer={null}
         closable={exportProgress >= 100}
-        onCancel={() => setExportModalVisible(false)}
+        onCancel={() => {
+          if (exportPollingRef.current) {
+            clearInterval(exportPollingRef.current);
+            exportPollingRef.current = null;
+          }
+          setExportModalVisible(false);
+        }}
         width={400}
       >
+        <div style={{ marginBottom: 8 }}>
+          {exportTotalCount > 0 && `${i18n('workspace.table.export.progress.total')}: ${exportTotalCount}`}
+        </div>
         <Progress percent={exportProgress} status={exportProgress >= 100 ? 'success' : 'active'} />
       </Modal>
       <Modal

@@ -98,4 +98,6 @@ public class TaskDO implements Serializable {
      * task content
      */
     private byte[] content;
+
+    private Integer totalCount;
 }

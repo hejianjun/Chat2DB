@@ -20,6 +20,8 @@ import ai.chat2db.server.web.api.controller.rdb.factory.ExportServiceFactory;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
 import ai.chat2db.spi.jdbc.DefaultValueHandler;
+import ai.chat2db.spi.model.ExecuteResult;
+import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
@@ -59,6 +61,7 @@ import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -66,6 +69,8 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Component
 public class TaskBizService {
+
+    private static final int EXPORT_PAGE_SIZE = 200;
 
     /**
      * Format insert statement
@@ -93,13 +98,15 @@ public class TaskBizService {
         DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
         String tableName = getTableName(request, sql, dbType);
         File file = createTempFile(tableName, request.getExportType());
-        DataResult<Long> dataResult = createTask(tableName, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), tableName);
+        
+        int totalCount = getTotalCount(sql);
+        DataResult<Long> dataResult = createTask(tableName, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), tableName, totalCount);
 
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
-            doExport(sql, file, dbType, tableName, request.getExportType());
+            doExportWithProgress(sql, file, dbType, tableName, request.getExportType(), totalCount, dataResult.getData());
         }).whenComplete((aVoid, throwable) -> {
             updateStatus(dataResult.getData(), file, throwable);
             removeContext();
@@ -109,7 +116,7 @@ public class TaskBizService {
 
     public DataResult<Long> exportSchemaDoc(DataExportRequest request) {
         File file = createTempFile(request.getDatabaseName(), request.getExportType());
-        DataResult<Long> dataResult = createTask(null, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), "schema_doc");
+        DataResult<Long> dataResult = createTask(null, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), "schema_doc", 0);
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
         CompletableFuture.runAsync(() -> {
@@ -165,7 +172,7 @@ public class TaskBizService {
         Chat2DBContext.putContext(connectInfo);
     }
 
-    private DataResult<Long> createTask(String tableName, String databaseName, String schemaName, Long datasourceId, String taskName) {
+    private DataResult<Long> createTask(String tableName, String databaseName, String schemaName, Long datasourceId, String taskName, int totalCount) {
         TaskCreateParam param = new TaskCreateParam();
         param.setTaskName("export_" + taskName);
         param.setTaskType(TaskTypeEnum.DOWNLOAD_TABLE_DATA.name());
@@ -174,7 +181,8 @@ public class TaskBizService {
         param.setTableName(tableName);
         param.setDataSourceId(datasourceId);
         param.setUserId(ContextUtils.getUserId());
-        param.setTaskProgress("0.1");
+        param.setTaskProgress("0");
+        param.setTotalCount(totalCount);
         return taskService.create(param);
     }
 
@@ -201,6 +209,165 @@ public class TaskBizService {
             }
         } catch (Exception e) {
             log.error("export error", e);
+            throw new BusinessException("dataSource.exportError");
+        }
+    }
+
+    private int getTotalCount(String sql) {
+        try {
+            String countSql = "SELECT COUNT(*) FROM (" + sql + ") AS count_table";
+            return SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), countSql, rs -> {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+                return 0;
+            });
+        } catch (Exception e) {
+            log.warn("get total count error", e);
+            return 0;
+        }
+    }
+
+    private void doExportWithProgress(String sql, File file, DbType dbType, String tableName, String exportType, int totalCount, Long taskId) {
+        try {
+            if (totalCount <= 0 || ExportSizeEnum.CURRENT_PAGE.getCode().equals(exportType)) {
+                doExport(sql, file, dbType, tableName, exportType);
+                return;
+            }
+            
+            if (ExportTypeEnum.CSV.getCode().equals(exportType)) {
+                doExportCsvWithProgress(sql, file, totalCount, taskId);
+            } else {
+                doExportInsertWithProgress(sql, file, dbType, tableName, totalCount, taskId);
+            }
+        } catch (Exception e) {
+            log.error("export error", e);
+            throw new BusinessException("dataSource.exportError");
+        }
+    }
+
+    private void updateProgress(Long taskId, int processedCount, int totalCount) {
+        if (totalCount <= 0) {
+            return;
+        }
+        double progress = (double) processedCount / totalCount;
+        TaskUpdateParam updateParam = new TaskUpdateParam();
+        updateParam.setId(taskId);
+        updateParam.setTaskProgress(String.format("%.2f", progress));
+        taskService.updateStatus(updateParam);
+    }
+
+    private void doExportCsvWithProgress(String sql, File file, int totalCount, Long taskId) {
+        RdbDmlExportController.ExcelWrapper excelWrapper = new RdbDmlExportController.ExcelWrapper();
+        try {
+            ExcelWriterBuilder excelWriterBuilder = EasyExcel.write(file)
+                    .charset(StandardCharsets.UTF_8)
+                    .excelType(ExcelTypeEnum.CSV);
+            excelWrapper.setExcelWriterBuilder(excelWriterBuilder);
+            
+            int processedCount = 0;
+            int pageNo = 1;
+            List<Header> headers = null;
+            
+            while (processedCount < totalCount) {
+                int offset = (pageNo - 1) * EXPORT_PAGE_SIZE;
+                String pageSql = Chat2DBContext.getSqlBuilder().pageLimit(sql, offset, pageNo, EXPORT_PAGE_SIZE);
+                
+                ExecuteResult result = SQLExecutor.getInstance().execute(
+                        pageSql, Chat2DBContext.getConnection(), true, 0, EXPORT_PAGE_SIZE, new DefaultValueHandler());
+                
+                if (headers == null && result.getHeaderList() != null) {
+                    headers = result.getHeaderList();
+                    excelWriterBuilder.head(
+                            EasyCollectionUtils.toList(headers, header -> Lists.newArrayList(header.getName())));
+                    excelWrapper.setExcelWriter(excelWriterBuilder.build());
+                    excelWrapper.setWriteSheet(EasyExcel.writerSheet(0).build());
+                }
+                
+                if (result.getDataList() == null || result.getDataList().isEmpty()) {
+                    break;
+                }
+                
+                for (List<String> dataList : result.getDataList()) {
+                    List<List<String>> writeDataList = Lists.newArrayList();
+                    writeDataList.add(dataList);
+                    excelWrapper.getExcelWriter().write(writeDataList, excelWrapper.getWriteSheet());
+                    processedCount++;
+                    
+                    if (processedCount % EXPORT_PAGE_SIZE == 0) {
+                        updateProgress(taskId, processedCount, totalCount);
+                    }
+                }
+                
+                if (result.getDataList().size() < EXPORT_PAGE_SIZE) {
+                    break;
+                }
+                pageNo++;
+            }
+            
+            updateProgress(taskId, processedCount, totalCount);
+        } catch (SQLException e) {
+            log.error("export csv error", e);
+            throw new BusinessException("dataSource.exportError");
+        } finally {
+            if (excelWrapper.getExcelWriter() != null) {
+                excelWrapper.getExcelWriter().finish();
+            }
+        }
+    }
+
+    private void doExportInsertWithProgress(String sql, File file, DbType dbType, String tableName, int totalCount, Long taskId) throws IOException {
+        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8.name())) {
+            RdbDmlExportController.InsertWrapper insertWrapper = new RdbDmlExportController.InsertWrapper();
+            
+            int processedCount = 0;
+            int pageNo = 1;
+            List<Header> headers = null;
+            
+            while (processedCount < totalCount) {
+                int offset = (pageNo - 1) * EXPORT_PAGE_SIZE;
+                String pageSql = Chat2DBContext.getSqlBuilder().pageLimit(sql, offset, pageNo, EXPORT_PAGE_SIZE);
+                
+                ExecuteResult result = SQLExecutor.getInstance().execute(
+                        pageSql, Chat2DBContext.getConnection(), true, 0, EXPORT_PAGE_SIZE, new DefaultValueHandler());
+                
+                if (headers == null && result.getHeaderList() != null) {
+                    headers = result.getHeaderList();
+                    insertWrapper.setHeaderList(
+                            EasyCollectionUtils.toList(headers, header -> new SQLIdentifierExpr(header.getName())));
+                }
+                
+                if (result.getDataList() == null || result.getDataList().isEmpty()) {
+                    break;
+                }
+                
+                for (List<String> dataList : result.getDataList()) {
+                    SQLInsertStatement sqlInsertStatement = new SQLInsertStatement();
+                    sqlInsertStatement.setDbType(dbType);
+                    sqlInsertStatement.setTableSource(new SQLExprTableSource(tableName));
+                    sqlInsertStatement.getColumns().addAll(insertWrapper.getHeaderList());
+                    SQLInsertStatement.ValuesClause valuesClause = new SQLInsertStatement.ValuesClause();
+                    for (String s : dataList) {
+                        valuesClause.addValue(s);
+                    }
+                    sqlInsertStatement.setValues(valuesClause);
+                    printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + ";");
+                    processedCount++;
+                    
+                    if (processedCount % EXPORT_PAGE_SIZE == 0) {
+                        updateProgress(taskId, processedCount, totalCount);
+                    }
+                }
+                
+                if (result.getDataList().size() < EXPORT_PAGE_SIZE) {
+                    break;
+                }
+                pageNo++;
+            }
+            
+            updateProgress(taskId, processedCount, totalCount);
+        } catch (SQLException e) {
+            log.error("export insert error", e);
             throw new BusinessException("dataSource.exportError");
         }
     }

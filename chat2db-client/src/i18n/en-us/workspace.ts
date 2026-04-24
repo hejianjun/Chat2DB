@@ -42,6 +42,7 @@ export default {
   'workspace.table.export.all.insert': 'Export result set insert sql',
   'workspace.table.export.cur.insert': 'Export result of current page set insert sql',
   'workspace.table.export.progress.title': 'Exporting...',
+  'workspace.table.export.progress.total': 'Total rows',
   'workspace.tree.view': 'View',
   'workspace.tree.trigger': 'Trigger',
   'workspace.tree.function': 'Function',

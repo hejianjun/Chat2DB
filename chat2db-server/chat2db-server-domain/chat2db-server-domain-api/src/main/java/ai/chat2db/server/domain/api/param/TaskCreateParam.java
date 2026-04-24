@@ -50,5 +50,6 @@ public class TaskCreateParam implements Serializable {
      */
     private String taskType;
 
+    private Integer totalCount;
 
 }
