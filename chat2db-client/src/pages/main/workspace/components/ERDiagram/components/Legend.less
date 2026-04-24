@@ -1,0 +1,49 @@
+.legend {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
+  color: #595959;
+}
+
+.legendTitle {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #262626;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.legendLine {
+  width: 24px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.realLine {
+  background: #8c8c8c;
+}
+
+.virtualLine {
+  background: #faad14;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #faad14 0px,
+    #faad14 5px,
+    transparent 5px,
+    transparent 8px
+  );
+  background-color: transparent;
+}

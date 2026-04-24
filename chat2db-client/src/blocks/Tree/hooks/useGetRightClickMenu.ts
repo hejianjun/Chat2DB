@@ -157,8 +157,8 @@ export const useGetRightClickMenu = (props: IProps) => {
       },
       // 添加查看 ER 图
       [OperationColumn.ViewERDiagram]: {
-        text: i18n('workspace.menu.viewERDiagram'), // 确保在 i18n 中添加对应的翻译
-        icon: '\u2721', // 选择一个合适的图标
+        text: i18n('workspace.menu.viewERDiagram'),
+        icon: '\ue611',
         handle: () => {
           addWorkspaceTab({
             id: uuid(),
@@ -497,13 +497,13 @@ export const getRightClickMenu = (props: IProps) => {
     },
     // 添加查看 ER 图
     [OperationColumn.ViewERDiagram]: {
-      text: i18n('workspace.menu.viewERDiagram'), // 确保在 i18n 中添加对应的翻译
-      icon: '\u2721', // 选择一个合适的图标
+      text: i18n('workspace.menu.viewERDiagram'),
+      icon: '\ue611',
       handle: () => {
         addWorkspaceTab({
           id: uuid(),
           type: WorkspaceTabType.ViewERDiagram,
-          title: `${treeNodeData.extraParams!.databaseName!}-ER图`,
+          title: `${treeNodeData.extraParams!.databaseName!}-ER`,
           uniqueData: {
             dataSourceId: treeNodeData.extraParams!.dataSourceId!,
             dataSourceName: treeNodeData.extraParams!.dataSourceName!,

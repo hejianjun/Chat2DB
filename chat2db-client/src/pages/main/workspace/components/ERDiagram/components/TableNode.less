@@ -1,0 +1,77 @@
+.tableNode {
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  min-width: 120px;
+  max-width: 220px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #1890ff;
+    box-shadow: 0 2px 12px rgba(24, 144, 255, 0.2);
+  }
+}
+
+.tableHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #1890ff, #096dd9);
+  border-radius: 5px 5px 0 0;
+  color: #fff;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tableIcon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.tableName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.tableBody {
+  padding: 4px 10px 6px;
+}
+
+.tableComment {
+  color: #8c8c8c;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 2px;
+}
+
+.columnCount {
+  color: #bfbfbf;
+  font-size: 10px;
+}
+
+.handle {
+  width: 6px !important;
+  height: 6px !important;
+  background: #1890ff !important;
+  border: 1px solid #fff !important;
+}
+
+.highlighted {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.3);
+}
+
+.dimmed {
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}

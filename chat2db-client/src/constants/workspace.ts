@@ -51,8 +51,8 @@ export const workspaceTabConfig: {
   [WorkspaceTabType.ViewAllTable]: {
     icon: '\ue611'
   },
-  [WorkspaceTabType.ViewERDiagram]: { // 添加查看 ER 图的配置
-    icon: '\u2721' // 选择一个合适的图标
+  [WorkspaceTabType.ViewERDiagram]: {
+    icon: '\ue611'
   },
 }
 

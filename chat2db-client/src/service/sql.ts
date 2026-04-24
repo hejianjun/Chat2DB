@@ -68,32 +68,58 @@ export interface IConnectConsoleParams {
   databaseName: string;
 }
 
-// 定义返回值类型
-interface INode {
+/** ER图节点，代表一张数据库表 */
+export interface IErNode {
+  /** 节点唯一标识 */
   id: string;
-  label: string;
+  /** 表名 */
+  name: string;
+  /** 表注释 */
+  comment?: string;
+  /** 表的列数量 */
+  columnCount?: number;
 }
 
-interface IEdge {
+/** ER图边，代表表之间的外键关系 */
+export interface IErEdge {
+  /** 边唯一标识 */
   id: string;
+  /** 源表名（拥有外键的表） */
   source: string;
+  /** 目标表名（被引用的表） */
   target: string;
+  /** 源表的外键列名 */
+  sourceColumn: string;
+  /** 目标表被引用的列名 */
+  targetColumn: string;
+  /** 关系描述 */
   label: string;
+  /** 是否为虚拟外键 */
+  virtual: boolean;
 }
 
-interface IErDiagram {
-  nodes: INode[];
-  edges: IEdge[];
+/** ER图数据，包含节点和边 */
+export interface IErDiagram {
+  nodes: IErNode[];
+  edges: IErEdge[];
 }
 
+/** ER图查询参数 */
 export interface IErParams {
+  /** 数据源ID */
   dataSourceId: number;
+  /** 数据库名 */
   databaseName: string;
+  /** Schema名 */
   schemaName?: string;
-  refresh: boolean;
+  /** 表名过滤条件 */
+  tableNameFilter?: string;
+  /** 是否包含虚拟外键 */
+  includeVirtualFk?: boolean;
 }
-// 创建请求
-const getErDiagram = createRequest<IErParams, IErDiagram>('/api/ai/er/diagram', { method: 'get' });
+
+/** 获取ER图数据接口 */
+const getErDiagram = createRequest<IErParams, IErDiagram>('/api/rdb/er/diagram', { method: 'get' });
 
 const getTableList = createRequest<IGetTableListParams, IPageResponse<ITable>>('/api/rdb/table/list', { method: 'get' });
 
