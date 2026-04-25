@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.task.biz;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.metadata.data.ReadCellData;
 import com.alibaba.excel.read.listener.ReadListener;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,11 +27,14 @@ public class CsvImportStrategy implements ImportStrategy {
 
             EasyExcel.read(file, new ReadListener<Map<Integer, String>>() {
                 @Override
-                public void invoke(Map<Integer, String> data, AnalysisContext context) {
-                    if (data.size() != importContext.getColumnCount()) {
-                        return;
+                public void invokeHead(Map<Integer, ReadCellData<?>> headMap, AnalysisContext context)  {
+                    if (headMap.size() != importContext.getColumnCount()) {
+                        throw new BusinessException("dataSource.importColumnMismatch");
                     }
+                }
 
+                @Override
+                public void invoke(Map<Integer, String> data, AnalysisContext context) {
                     try {
                         for (int i = 0; i < importContext.getColumnCount(); i++) {
                             ps.setObject(i + 1, data.get(i));

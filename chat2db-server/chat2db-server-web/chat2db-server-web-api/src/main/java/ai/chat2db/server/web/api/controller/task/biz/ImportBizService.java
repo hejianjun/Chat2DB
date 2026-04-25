@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
@@ -103,6 +104,7 @@ public class ImportBizService {
         if (throwable != null) {
             log.error("import error", throwable);
             updateParam.setTaskStatus(TaskStatusEnum.ERROR.name());
+            updateParam.setContent(throwable.getMessage().getBytes(StandardCharsets.UTF_8));
         } else {
             updateParam.setTaskStatus(TaskStatusEnum.FINISH.name());
         }

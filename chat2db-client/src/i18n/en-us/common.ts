@@ -73,6 +73,7 @@ export default {
   'common.text.export': 'Export',
   'common.text.exportFailed': 'Export failed',
   'common.text.importFailed': 'Import failed',
+  'common.text.importColumnMismatch': 'File column count does not match table column count',
   'common.text.importSuccess': 'Import success',
   'common.text.importing': 'Importing...',
   'common.text.selectFile': 'Select file',

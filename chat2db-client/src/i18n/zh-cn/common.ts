@@ -72,6 +72,7 @@ export default {
   'common.text.export': '导出',
   'common.text.exportFailed': '导出失败',
   'common.text.importFailed': '导入失败',
+  'common.text.importColumnMismatch': '文件列数与表字段数不一致',
   'common.text.importSuccess': '导入成功',
   'common.text.importing': '正在导入...',
   'common.text.selectFile': '选择文件',
