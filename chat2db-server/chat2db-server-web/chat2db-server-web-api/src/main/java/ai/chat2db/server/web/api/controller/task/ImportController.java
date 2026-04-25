@@ -4,11 +4,12 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.task.biz.ImportBizService;
 import ai.chat2db.server.web.api.controller.task.request.DataImportRequest;
-import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,8 +37,8 @@ public class ImportController {
      */
     @PostMapping("/import_data")
     public DataResult<Long> importData(
-            @Valid MultipartFile file,
-            @Valid DataImportRequest request) {
+            @RequestPart("file") MultipartFile file,
+            @ModelAttribute DataImportRequest request) {
         return importBizService.importData(file, request);
     }
 
