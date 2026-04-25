@@ -357,8 +357,8 @@ public class TableServiceImpl implements TableService {
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
-        param.setLastDocId(luceneMgr.getLastDocId());
         long total = luceneMgr.getTotal();
+        log.info("total:{}", total);
         for (Table table : tables) {
             TableQueryParam queryParam = TableQueryParam.builder()
                     .dataSourceId(param.getDataSourceId())
@@ -386,6 +386,7 @@ public class TableServiceImpl implements TableService {
         if (param.getLastDocId() == null) {
             tables = pinTable(tables, param);
         }
+        param.setLastDocId(luceneMgr.getLastDocId());
 
         return PageResult.of(tables, total, param);
     }
