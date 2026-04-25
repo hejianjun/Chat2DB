@@ -335,10 +335,11 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
     operationColumn: [
       OperationColumn.OpenTable,
       OperationColumn.CreateConsole,
+      OperationColumn.EditTable,
       OperationColumn.Pin,
       OperationColumn.ViewDDL,
-      OperationColumn.EditTable,
       OperationColumn.CopyName,
+      OperationColumn.ImportData,
       OperationColumn.Refresh,
       OperationColumn.DeleteTable,
       OperationColumn.TruncateTable,

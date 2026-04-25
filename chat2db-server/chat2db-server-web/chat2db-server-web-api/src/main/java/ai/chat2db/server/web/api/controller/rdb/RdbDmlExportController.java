@@ -22,7 +22,6 @@ import com.alibaba.druid.sql.ast.statement.SQLInsertStatement;
 import com.alibaba.druid.sql.ast.statement.SQLInsertStatement.ValuesClause;
 import com.alibaba.druid.sql.visitor.VisitorFeature;
 import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.support.ExcelTypeEnum;
 import com.alibaba.excel.write.builder.ExcelWriterBuilder;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -35,6 +34,7 @@ import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
 import ai.chat2db.server.tools.common.util.EasyEnumUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
+import ai.chat2db.server.web.api.model.ExcelWrapper;
 import ai.chat2db.spi.jdbc.DefaultValueHandler;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.SQLExecutor;
@@ -119,7 +119,6 @@ public class RdbDmlExportController {
             ExcelWriterBuilder excelWriterBuilder = EasyExcel.write(response.getOutputStream())
                 .charset(StandardCharsets.UTF_8)
                 .excelType(ExcelTypeEnum.CSV);
-            excelWrapper.setExcelWriterBuilder(excelWriterBuilder);
             SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, headerList -> {
                 excelWriterBuilder.head(
                     EasyCollectionUtils.toList(headerList, header -> Lists.newArrayList(header.getName())));
@@ -170,16 +169,6 @@ public class RdbDmlExportController {
     @AllArgsConstructor
     public static class InsertWrapper {
         private List<SQLIdentifierExpr> headerList;
-    }
-
-    @Data
-    @SuperBuilder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ExcelWrapper {
-        private ExcelWriterBuilder excelWriterBuilder;
-        private ExcelWriter excelWriter;
-        private WriteSheet writeSheet;
     }
 
 }

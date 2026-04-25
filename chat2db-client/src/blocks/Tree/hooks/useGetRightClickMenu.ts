@@ -372,6 +372,26 @@ export const useGetRightClickMenu = (props: IProps) => {
           deleteVirtualForeignKey(treeNodeData, loadData);
         },
       },
+
+      // 导入数据
+      [OperationColumn.ImportData]: {
+        text: i18n('workspace.menu.importData'),
+        icon: '\ue60c',
+        handle: () => {
+          const { openImportDataModal } = useWorkspaceStore.getState();
+          openImportDataModal?.({
+            tableName: treeNodeData.name,
+            dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+            databaseName: treeNodeData.extraParams?.databaseName,
+            schemaName: treeNodeData.extraParams?.schemaName,
+            executedCallback: () => {
+              loadData?.({
+                refresh: true,
+              });
+            },
+          });
+        },
+      },
     };
 
     // 根据配置生成右键菜单
@@ -694,6 +714,26 @@ export const getRightClickMenu = (props: IProps) => {
       icon: '\ue6a7',
       handle: () => {
         deleteVirtualForeignKey(treeNodeData, loadData);
+      },
+    },
+
+    // 导入数据
+    [OperationColumn.ImportData]: {
+      text: i18n('workspace.menu.importData'),
+      icon: '\ue60c',
+      handle: () => {
+        const { openImportDataModal } = useWorkspaceStore.getState();
+        openImportDataModal?.({
+          tableName: treeNodeData.name,
+          dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          databaseName: treeNodeData.extraParams?.databaseName,
+          schemaName: treeNodeData.extraParams?.schemaName,
+          executedCallback: () => {
+            loadData?.({
+              refresh: true,
+            });
+          },
+        });
       },
     },
   };

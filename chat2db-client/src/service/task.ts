@@ -27,10 +27,21 @@ export interface IExportResultDataParams {
   schemaName?: string;
 }
 
+export interface IImportDataParams {
+  file: File;
+  tableName: string;
+  fileType: string;
+  dataSourceId?: number;
+  databaseName?: string;
+  schemaName?: string;
+}
+
 const exportResultData = createRequest<IExportResultDataParams, number>('/api/export/export_data', { method: 'post' });
+const importData = createRequest<IImportDataParams, number>('/api/import/import_data', { method: 'post' });
 const getTask = createRequest<{ id: number }, ITask>('/api/task/get/:id', { method: 'get' });
 
 export default {
   exportResultData,
+  importData,
   getTask,
 };

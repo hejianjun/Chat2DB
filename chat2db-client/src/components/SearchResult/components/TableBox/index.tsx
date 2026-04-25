@@ -40,7 +40,7 @@ import MyPagination from '../Pagination';
 import StatusBar from '../StatusBar';
 import RightClickMenu, { AllSupportedMenusType } from '../RightClickMenu';
 
-// 自定义hooks
+// 自定义 hooks
 import useCurdTableData from '../../hooks/useCurdTableData';
 import useMultipleSelect from '../../hooks/useMultipleSelect';
 import usePasteData from '../../hooks/usePasteData';
@@ -261,7 +261,6 @@ export default function TableBox(props: ITableProps) {
       {
         label: i18n('workspace.table.export.all.csv'),
         key: '1',
-        // icon: <UserOutlined />,
         onClick: () => {
           handleExportSQLResult(ExportTypeEnum.CSV, ExportSizeEnum.ALL);
         },
@@ -269,7 +268,6 @@ export default function TableBox(props: ITableProps) {
       {
         label: i18n('workspace.table.export.all.insert'),
         key: '2',
-        // icon: <UserOutlined />,
         onClick: () => {
           handleExportSQLResult(ExportTypeEnum.INSERT, ExportSizeEnum.ALL);
         },
@@ -277,7 +275,6 @@ export default function TableBox(props: ITableProps) {
       {
         label: i18n('workspace.table.export.cur.csv'),
         key: '3',
-        // icon: <UserOutlined />,
         onClick: () => {
           handleExportSQLResult(ExportTypeEnum.CSV, ExportSizeEnum.CURRENT_PAGE);
         },
@@ -285,7 +282,6 @@ export default function TableBox(props: ITableProps) {
       {
         label: i18n('workspace.table.export.cur.insert'),
         key: '4',
-        // icon: <UserOutlined />,
         onClick: () => {
           handleExportSQLResult(ExportTypeEnum.INSERT, ExportSizeEnum.CURRENT_PAGE);
         },

@@ -12,17 +12,18 @@ import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
-import ai.chat2db.server.web.api.controller.rdb.RdbDmlExportController;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.doc.DatabaseExportService;
 import ai.chat2db.server.web.api.controller.rdb.doc.conf.ExportOptions;
 import ai.chat2db.server.web.api.controller.rdb.factory.ExportServiceFactory;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
+import ai.chat2db.server.web.api.model.ExcelWrapper;
 import ai.chat2db.spi.jdbc.DefaultValueHandler;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import ai.chat2db.spi.sql.SQLExecutor;
@@ -40,7 +41,6 @@ import com.alibaba.druid.sql.ast.statement.SQLInsertStatement;
 import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
 import com.alibaba.druid.sql.visitor.VisitorFeature;
 import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.support.ExcelTypeEnum;
 import com.alibaba.excel.write.builder.ExcelWriterBuilder;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -53,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -61,6 +62,7 @@ import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -70,6 +72,7 @@ import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -145,7 +148,6 @@ public class TaskBizService {
             Class<?> targetClass = ExportServiceFactory.get(request.getExportType());
             Constructor<?> constructor = targetClass.getDeclaredConstructor();
             DatabaseExportService databaseExportService = (DatabaseExportService) constructor.newInstance();
-            // 设置数据集合
             databaseExportService.setExportList(tableVOS);
             databaseExportService.generate(request.getDatabaseName(), new FileOutputStream(file), new ExportOptions());
         } catch (Exception e) {
@@ -215,7 +217,7 @@ public class TaskBizService {
     }
 
     private void doExportCsvStreaming(String sql, File file, Long taskId) {
-        RdbDmlExportController.ExcelWrapper excelWrapper = new RdbDmlExportController.ExcelWrapper();
+        ExcelWrapper excelWrapper = new ExcelWrapper();
         DefaultValueHandler valueHandler = new DefaultValueHandler();
         Connection connection = Chat2DBContext.getConnection();
 

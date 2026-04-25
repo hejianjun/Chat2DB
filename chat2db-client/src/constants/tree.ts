@@ -50,4 +50,5 @@ export enum OperationColumn {
   ViewERDiagram = 'viewERDiagram', // 查看 ER 图
   DeleteVirtualKey = 'deleteVirtualKey', // 删除虚拟外键
   TruncateTable = 'truncateTable', // 截断表
+  ImportData = 'importData', // 导入数据
 }
