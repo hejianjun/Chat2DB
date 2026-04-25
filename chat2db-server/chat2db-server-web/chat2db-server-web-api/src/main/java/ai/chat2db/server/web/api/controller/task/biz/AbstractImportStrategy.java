@@ -64,7 +64,7 @@ public abstract class AbstractImportStrategy implements ImportStrategy {
                     }
                 }
             }).sheet().doRead();
-        } catch (Exception e) {
+        } catch (SQLException e) {
             log.error("import data error, strategy: {}", this.getClass().getSimpleName(), e);
             throw new BusinessException("dataSource.importError", new Object[]{file}, e);
         }
