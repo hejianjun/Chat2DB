@@ -142,12 +142,6 @@ public class TaskBizService {
             tableSelector.setIndexList(true);
             PageResult<Table> tableDTOPageResult = tableService.pageQuery(queryParam, tableSelector);
             List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
-            TableQueryParam param = rdbWebConverter.tableRequest2param(request);
-            for (TableVO tableVO : tableVOS) {
-                param.setTableName(tableVO.getName());
-                tableVO.setColumnList(tableService.queryColumns(param));
-                tableVO.setIndexList(tableService.queryIndexes(param));
-            }
             Class<?> targetClass = ExportServiceFactory.get(request.getExportType());
             Constructor<?> constructor = targetClass.getDeclaredConstructor();
             DatabaseExportService databaseExportService = (DatabaseExportService) constructor.newInstance();
@@ -191,7 +185,6 @@ public class TaskBizService {
     private void updateStatus(Long id, File file, Throwable throwable) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(id);
-        updateParam.setTaskProgress("1");
         updateParam.setDownloadUrl(file.getAbsolutePath());
         if (throwable != null) {
             log.error("export error", throwable);
@@ -352,23 +345,5 @@ public class TaskBizService {
             tableName = StringUtils.join(Lists.newArrayList(request.getDatabaseName(), request.getSchemaName()), "_");
         }
         return tableName;
-    }
-
-    @Data
-    @SuperBuilder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class InsertWrapper {
-        private List<SQLIdentifierExpr> headerList;
-    }
-
-    @Data
-    @SuperBuilder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ExcelWrapper {
-        private ExcelWriterBuilder excelWriterBuilder;
-        private ExcelWriter excelWriter;
-        private WriteSheet writeSheet;
     }
 }
