@@ -354,54 +354,6 @@ public class TaskBizService {
         return tableName;
     }
 
-    private void doExportCsv(String sql, File file) {
-        RdbDmlExportController.ExcelWrapper excelWrapper = new RdbDmlExportController.ExcelWrapper();
-        try {
-            ExcelWriterBuilder excelWriterBuilder = EasyExcel.write(file)
-                    .charset(StandardCharsets.UTF_8)
-                    .excelType(ExcelTypeEnum.CSV);
-            excelWrapper.setExcelWriterBuilder(excelWriterBuilder);
-            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql, headerList -> {
-                excelWriterBuilder.head(
-                        EasyCollectionUtils.toList(headerList, header -> Lists.newArrayList(header.getName())));
-                excelWrapper.setExcelWriter(excelWriterBuilder.build());
-                excelWrapper.setWriteSheet(EasyExcel.writerSheet(0).build());
-            }, dataList -> {
-                List<List<String>> writeDataList = Lists.newArrayList();
-                writeDataList.add(dataList);
-                excelWrapper.getExcelWriter().write(writeDataList, excelWrapper.getWriteSheet());
-            }, false, new DefaultValueHandler());
-        } finally {
-            if (excelWrapper.getExcelWriter() != null) {
-                excelWrapper.getExcelWriter().finish();
-            }
-        }
-    }
-
-    private void doExportInsert(String sql, File file, DbType dbType,
-                                String tableName)
-            throws IOException {
-        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8.name())) {
-            RdbDmlExportController.InsertWrapper insertWrapper = new RdbDmlExportController.InsertWrapper();
-            SQLExecutor.getInstance().execute(Chat2DBContext.getConnection(), sql,
-                    headerList -> insertWrapper.setHeaderList(
-                            EasyCollectionUtils.toList(headerList, header -> new SQLIdentifierExpr(header.getName())))
-                    , dataList -> {
-                        SQLInsertStatement sqlInsertStatement = new SQLInsertStatement();
-                        sqlInsertStatement.setDbType(dbType);
-                        sqlInsertStatement.setTableSource(new SQLExprTableSource(tableName));
-                        sqlInsertStatement.getColumns().addAll(insertWrapper.getHeaderList());
-                        SQLInsertStatement.ValuesClause valuesClause = new SQLInsertStatement.ValuesClause();
-                        for (String s : dataList) {
-                            valuesClause.addValue(s);
-                        }
-                        sqlInsertStatement.setValues(valuesClause);
-
-                        printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + ";");
-                    }, false, new DefaultValueHandler());
-        }
-    }
-
     @Data
     @SuperBuilder
     @NoArgsConstructor
