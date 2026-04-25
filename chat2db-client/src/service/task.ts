@@ -15,6 +15,7 @@ export interface ITask {
   taskProgress: string;
   taskName: string;
   downloadUrl: string;
+  content?: string;
 }
 
 export interface IExportResultDataParams {

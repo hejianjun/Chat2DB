@@ -112,28 +112,23 @@ public class ImportBizService {
     }
 
     private void doImportData(File file, DataImportRequest request, Long taskId) {
-        try {
-            String fileType = request.getFileType().toUpperCase();
+        String fileType = request.getFileType().toUpperCase();
 
-            List<String> headerList = getColumnList(request);
+        List<String> headerList = getColumnList(request);
 
-            ImportStrategy strategy = strategyFactory.getStrategy(fileType);
+        ImportStrategy strategy = strategyFactory.getStrategy(fileType);
 
-            Connection connection = Chat2DBContext.getConnection();
-            ImportContext importContext = ImportContext.builder()
-                    .taskId(taskId)
-                    .tableName(request.getTableName())
-                    .headerList(headerList)
-                    .columnCount(headerList.size())
-                    .connection(connection)
-                    .progressUpdater(count -> updateProgressCount(taskId, count))
-                    .build();
+        Connection connection = Chat2DBContext.getConnection();
+        ImportContext importContext = ImportContext.builder()
+                .taskId(taskId)
+                .tableName(request.getTableName())
+                .headerList(headerList)
+                .columnCount(headerList.size())
+                .connection(connection)
+                .progressUpdater(count -> updateProgressCount(taskId, count))
+                .build();
 
-            strategy.importData(file, importContext);
-        } catch (Exception e) {
-            log.error("import data error", e);
-            throw new BusinessException("dataSource.importError");
-        }
+        strategy.importData(file, importContext);
     }
 
     private List<String> getColumnList(DataImportRequest request) {

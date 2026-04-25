@@ -115,8 +115,16 @@ const ImportDataModal = () => {
           } else if (task.taskStatus === 'ERROR') {
             clearInterval(pollingRef.current!);
             pollingRef.current = null;
-            addLog('Import failed');
-            message.error(i18n('common.text.importFailed'));
+            let errorMsg = i18n('common.text.importFailed');
+            if (task.content) {
+              try {
+                errorMsg = decodeURIComponent(escape(atob(task.content)));
+              } catch (e) {
+                errorMsg = task.content;
+              }
+            }
+            addLog(`Error: ${errorMsg}`);
+            message.error(errorMsg);
             setImporting(false);
           }
         }
