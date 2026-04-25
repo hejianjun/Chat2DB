@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.io.File;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
@@ -24,15 +24,15 @@ public class ExcelImportStrategy implements ImportStrategy {
         try {
             PreparedStatement ps = prepareInsertStatement(importContext);
 
-            EasyExcel.read(file, new ReadListener<List<Object>>() {
+            EasyExcel.read(file, new ReadListener<Map<Integer, String>>() {
                 @Override
-                public void invoke(List<Object> data, AnalysisContext context) {
+                public void invoke(Map<Integer, String> data, AnalysisContext context) {
                     if (data.size() != importContext.getColumnCount()) {
                         return;
                     }
 
                     try {
-                        for (int i = 0; i < data.size(); i++) {
+                        for (int i = 0; i < importContext.getColumnCount(); i++) {
                             ps.setObject(i + 1, data.get(i));
                         }
                         ps.addBatch();

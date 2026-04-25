@@ -52,9 +52,30 @@ public class ImportBizService {
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
+        // 同步保存文件到安全位置，避免异步执行时临时文件被清理
+        File safeFile;
+        try {
+            String originalFilename = file.getOriginalFilename();
+            if (originalFilename == null) {
+                originalFilename = "import_file";
+            }
+            safeFile = FileUtil.createTempFile(originalFilename, "", true);
+            file.transferTo(safeFile);
+        } catch (Exception e) {
+            log.error("save upload file error", e);
+            throw new BusinessException("dataSource.importError");
+        }
+
+        final File finalSafeFile = safeFile;
+
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
-            doImportData(file, request, dataResult.getData());
+            try {
+                doImportData(finalSafeFile, request, dataResult.getData());
+            } finally {
+                // 确保清理临时文件
+                FileUtil.del(finalSafeFile);
+            }
         }).whenComplete((aVoid, throwable) -> {
             updateImportStatus(dataResult.getData(), throwable);
             removeContext();
@@ -88,11 +109,9 @@ public class ImportBizService {
         taskService.updateStatus(updateParam);
     }
 
-    private void doImportData(MultipartFile file, DataImportRequest request, Long taskId) {
+    private void doImportData(File file, DataImportRequest request, Long taskId) {
         try {
             String fileType = request.getFileType().toUpperCase();
-            File tempFile = FileUtil.createTempFile(file.getOriginalFilename(), "", true);
-            file.transferTo(tempFile);
 
             List<String> headerList = getColumnList(request);
 
@@ -108,9 +127,7 @@ public class ImportBizService {
                     .progressUpdater(count -> updateProgressCount(taskId, count))
                     .build();
 
-            strategy.importData(tempFile, importContext);
-
-            FileUtil.del(tempFile);
+            strategy.importData(file, importContext);
         } catch (Exception e) {
             log.error("import data error", e);
             throw new BusinessException("dataSource.importError");
