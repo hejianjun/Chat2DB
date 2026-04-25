@@ -76,8 +76,6 @@ import java.util.concurrent.CompletableFuture;
 @Component
 public class TaskBizService {
 
-    private static final int EXPORT_PAGE_SIZE = 200;
-
     /**
      * Format insert statement
      */
@@ -257,10 +255,7 @@ public class TaskBizService {
                 writeDataList.add(row);
                 excelWrapper.getExcelWriter().write(writeDataList, excelWrapper.getWriteSheet());
                 processedCount++;
-
-                if (processedCount % EXPORT_PAGE_SIZE == 0) {
-                    updateProgressCount(taskId, processedCount);
-                }
+                updateProgressCount(taskId, processedCount);
             }
 
             updateProgressCount(taskId, processedCount);
@@ -278,7 +273,7 @@ public class TaskBizService {
         DefaultValueHandler valueHandler = new DefaultValueHandler();
         Connection connection = Chat2DBContext.getConnection();
 
-        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8.name());
+        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8);
              PreparedStatement ps = createStreamStatement(connection, sql);
              ResultSet rs = ps.executeQuery()) {
 
@@ -303,10 +298,7 @@ public class TaskBizService {
                 sqlInsertStatement.setValues(valuesClause);
                 printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + ";");
                 processedCount++;
-
-                if (processedCount % EXPORT_PAGE_SIZE == 0) {
-                    updateProgressCount(taskId, processedCount);
-                }
+                updateProgressCount(taskId, processedCount);
             }
 
             updateProgressCount(taskId, processedCount);
