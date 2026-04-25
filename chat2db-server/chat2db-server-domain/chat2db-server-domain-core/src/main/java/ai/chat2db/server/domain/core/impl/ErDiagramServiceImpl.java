@@ -56,7 +56,6 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 .dataSourceId(param.getDataSourceId())
                 .databaseName(param.getDatabaseName())
                 .schemaName(param.getSchemaName())
-                .refresh(true)
                 .pageNo(1)
                 .pageSize(Integer.MAX_VALUE)
                 .build();
