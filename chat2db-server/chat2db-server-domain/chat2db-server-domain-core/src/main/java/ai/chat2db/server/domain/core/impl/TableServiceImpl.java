@@ -383,7 +383,7 @@ public class TableServiceImpl implements TableService {
                 table.setVirtualForeignKeyList(virtualForeignKeys);
             }
         }
-        if (param.getPageNo() < 1) {
+        if (param.getLastDocId() == null) {
             tables = pinTable(tables, param);
         }
 
