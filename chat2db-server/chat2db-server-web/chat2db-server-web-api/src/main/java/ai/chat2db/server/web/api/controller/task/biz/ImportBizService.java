@@ -8,6 +8,7 @@ import ai.chat2db.server.domain.api.param.TaskUpdateParam;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.repository.Dbutils;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -104,7 +105,11 @@ public class ImportBizService {
         if (throwable != null) {
             log.error("import error", throwable);
             updateParam.setTaskStatus(TaskStatusEnum.ERROR.name());
-            updateParam.setContent(throwable.getMessage().getBytes(StandardCharsets.UTF_8));
+            if (throwable instanceof BusinessException businessException) {
+                updateParam.setContent(I18nUtils.getMessage(businessException.getCode(), businessException.getArgs()).getBytes(StandardCharsets.UTF_8));
+            } else {
+                updateParam.setContent(throwable.getMessage().getBytes(StandardCharsets.UTF_8));
+            }
         } else {
             updateParam.setTaskStatus(TaskStatusEnum.FINISH.name());
         }
