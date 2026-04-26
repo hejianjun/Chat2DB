@@ -12,17 +12,15 @@ import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
-import ai.chat2db.server.web.api.controller.rdb.doc.DatabaseExportService;
 import ai.chat2db.server.web.api.controller.rdb.doc.conf.ExportOptions;
-import ai.chat2db.server.web.api.controller.rdb.factory.ExportServiceFactory;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
-import ai.chat2db.spi.model.ExecuteResult;
+import ai.chat2db.server.web.api.controller.task.biz.doc.SchemaDocExportContext;
+import ai.chat2db.server.web.api.controller.task.biz.doc.SchemaDocExportStrategy;
+import ai.chat2db.server.web.api.controller.task.biz.doc.SchemaDocExportStrategyFactory;
 import ai.chat2db.spi.model.Table;
-import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
-import ai.chat2db.spi.sql.SQLExecutor;
 import ai.chat2db.spi.util.JdbcUtils;
 import ai.chat2db.spi.util.SqlUtils;
 import cn.hutool.core.date.DatePattern;
@@ -37,11 +35,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -63,6 +58,9 @@ public class TaskBizService {
 
     @Autowired
     private ExportStrategyFactory exportStrategyFactory;
+
+    @Autowired
+    private SchemaDocExportStrategyFactory schemaDocExportStrategyFactory;
 
     public DataResult<Long> exportResultData(DataExportRequest request) {
         String sql = ExportSizeEnum.CURRENT_PAGE.getCode().equals(request.getExportSize()) ? request.getSql() : request.getOriginalSql();
@@ -111,13 +109,18 @@ public class TaskBizService {
             tableSelector.setIndexList(true);
             PageResult<Table> tableDTOPageResult = tableService.pageQuery(queryParam, tableSelector);
             List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
-            Class<?> targetClass = ExportServiceFactory.get(request.getExportType());
-            Constructor<?> constructor = targetClass.getDeclaredConstructor();
-            DatabaseExportService databaseExportService = (DatabaseExportService) constructor.newInstance();
-            databaseExportService.setExportList(tableVOS);
-            databaseExportService.generate(request.getDatabaseName(), new FileOutputStream(file), new ExportOptions());
+
+            SchemaDocExportContext context = SchemaDocExportContext.builder()
+                    .tables(tableVOS)
+                    .databaseName(request.getDatabaseName())
+                    .file(file)
+                    .exportOptions(new ExportOptions())
+                    .build();
+
+            SchemaDocExportStrategy strategy = schemaDocExportStrategyFactory.getStrategy(request.getExportType());
+            strategy.export(context);
         } catch (Exception e) {
-            log.error("export error", e);
+            log.error("export schema doc error", e);
             throw new BusinessException("dataSource.exportError");
         }
     }
@@ -204,6 +207,8 @@ public class TaskBizService {
             return FileUtil.createTempFile(fileName, ExportFileSuffix.PDF.getSuffix(), true);
         } else if (ExportTypeEnum.HTML.getCode().equals(exportType)) {
             return FileUtil.createTempFile(fileName, ExportFileSuffix.HTML.getSuffix(), true);
+        } else if (ExportTypeEnum.SQL.getCode().equals(exportType)) {
+            return FileUtil.createTempFile(fileName, ExportFileSuffix.SQL.getSuffix(), true);
         }
         return FileUtil.createTempFile(fileName, ".txt", true);
     }

@@ -52,4 +52,5 @@ export enum OperationColumn {
   TruncateTable = 'truncateTable', // 截断表
   ImportData = 'importData', // 导入数据
   ExportData = 'exportData', // 导出数据
+  ExportSchemaDoc = 'exportSchemaDoc', // 导出数据结构
 }

@@ -287,6 +287,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
       OperationColumn.CreateConsole,
       OperationColumn.ViewAllTable,
       OperationColumn.ViewERDiagram,
+      OperationColumn.ExportSchemaDoc,
       OperationColumn.CreateTable,
       OperationColumn.Refresh,
     ],

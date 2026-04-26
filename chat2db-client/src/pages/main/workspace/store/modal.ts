@@ -3,6 +3,7 @@ import { DatabaseTypeCode } from '@/constants';
 import { CreateType } from '@/components/CreateDatabase';
 import { IImportDataModalParams } from '@/components/ImportDataModal';
 import { IExportDataModalParams } from '@/components/ExportDataModal';
+import { IExportSchemaDocModalParams } from '@/components/ExportSchemaDocModal';
 
 export interface IModalStore {
   openCreateDatabaseModal: ((params: {
@@ -16,12 +17,14 @@ export interface IModalStore {
   }) => void) | null;
   openImportDataModal: ((params: IImportDataModalParams) => void) | null;
   openExportDataModal: ((params: IExportDataModalParams) => void) | null;
+  openExportSchemaDocModal: ((params: IExportSchemaDocModalParams) => void) | null;
 }
 
 export const initModalStore: IModalStore = {
   openCreateDatabaseModal: null,
   openImportDataModal: null,
   openExportDataModal: null,
+  openExportSchemaDocModal: null,
 };
 
 export const setOpenCreateDatabaseModal = (fn: any) => {
@@ -34,4 +37,8 @@ export const setOpenImportDataModal = (fn: any) => {
 
 export const setOpenExportDataModal = (fn: any) => {
   useWorkspaceStore.setState({ openExportDataModal: fn });
+};
+
+export const setOpenExportSchemaDocModal = (fn: any) => {
+  useWorkspaceStore.setState({ openExportSchemaDocModal: fn });
 };

@@ -37,7 +37,15 @@ export interface IImportDataParams {
   schemaName?: string;
 }
 
+export interface IExportSchemaDocParams {
+  exportType: string;
+  dataSourceId?: number;
+  databaseName?: string;
+  schemaName?: string;
+}
+
 const exportResultData = createRequest<IExportResultDataParams, number>('/api/export/export_data', { method: 'post' });
+const exportSchemaDoc = createRequest<IExportSchemaDocParams, number>('/api/export/export_doc', { method: 'post' });
 const getTask = createRequest<{ id: number }, ITask>('/api/task/get/:id', { method: 'get' });
 
 const importData = (params: IImportDataParams) => {
@@ -65,6 +73,7 @@ const importData = (params: IImportDataParams) => {
 
 export default {
   exportResultData,
+  exportSchemaDoc,
   importData,
   getTask,
 };

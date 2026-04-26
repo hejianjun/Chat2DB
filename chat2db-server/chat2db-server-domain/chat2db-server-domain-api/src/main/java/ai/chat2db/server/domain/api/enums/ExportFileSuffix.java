@@ -19,7 +19,9 @@ public enum ExportFileSuffix {
     //html
     HTML(".html"),
     //pdf
-    PDF(".pdf");
+    PDF(".pdf"),
+    //sql
+    SQL(".sql");
 
     private String suffix;
 
