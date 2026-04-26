@@ -376,7 +376,7 @@ export const useGetRightClickMenu = (props: IProps) => {
       // 导入数据
       [OperationColumn.ImportData]: {
         text: i18n('workspace.menu.importData'),
-        icon: '\ue60c',
+        icon: '\ue653',
         handle: () => {
           const { openImportDataModal } = useWorkspaceStore.getState();
           openImportDataModal?.({
@@ -396,7 +396,7 @@ export const useGetRightClickMenu = (props: IProps) => {
       // 导出数据
       [OperationColumn.ExportData]: {
         text: i18n('workspace.menu.exportData'),
-        icon: '\ue615',
+        icon: '\ue613',
         handle: () => {
           const { openExportDataModal } = useWorkspaceStore.getState();
           openExportDataModal?.({
@@ -735,7 +735,7 @@ export const getRightClickMenu = (props: IProps) => {
     // 导入数据
     [OperationColumn.ImportData]: {
       text: i18n('workspace.menu.importData'),
-      icon: '\ue60c',
+      icon: '\ue653',
       handle: () => {
         const { openImportDataModal } = useWorkspaceStore.getState();
         openImportDataModal?.({
@@ -755,7 +755,7 @@ export const getRightClickMenu = (props: IProps) => {
     // 导出数据
     [OperationColumn.ExportData]: {
       text: i18n('workspace.menu.exportData'),
-      icon: '\ue615',
+      icon: '\ue613',
       handle: () => {
         const { openExportDataModal } = useWorkspaceStore.getState();
         openExportDataModal?.({
