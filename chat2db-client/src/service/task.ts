@@ -39,6 +39,7 @@ export interface IImportDataParams {
 
 export interface IExportSchemaDocParams {
   exportType: string;
+  exportSize: string;
   dataSourceId?: number;
   databaseName?: string;
   schemaName?: string;

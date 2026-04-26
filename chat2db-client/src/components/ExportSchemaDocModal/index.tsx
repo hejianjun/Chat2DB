@@ -50,6 +50,7 @@ const ExportSchemaDocModal = () => {
     try {
       const taskId = await taskService.exportSchemaDoc({
         exportType,
+        exportSize: 'ALL',
         dataSourceId: params.dataSourceId,
         databaseName: params.databaseName,
         schemaName: params.schemaName,
