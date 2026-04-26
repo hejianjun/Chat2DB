@@ -29,7 +29,9 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -65,7 +67,7 @@ public class ImportBizService {
             file.transferTo(safeFile);
         } catch (Exception e) {
             log.error("save upload file error", e);
-            throw new BusinessException("dataSource.importError");
+            throw new BusinessException("dataSource.importError", new Object[]{e.getMessage()}, e);
         }
 
         final File finalSafeFile = safeFile;
@@ -105,7 +107,7 @@ public class ImportBizService {
         if (throwable != null) {
             log.error("import error", throwable);
             updateParam.setTaskStatus(TaskStatusEnum.ERROR.name());
-            if (throwable instanceof BusinessException businessException) {
+            if (throwable.getCause() instanceof BusinessException businessException) {
                 updateParam.setContent(I18nUtils.getMessage(businessException.getCode(), businessException.getArgs()).getBytes(StandardCharsets.UTF_8));
             } else {
                 updateParam.setContent(throwable.getMessage().getBytes(StandardCharsets.UTF_8));
@@ -124,15 +126,21 @@ public class ImportBizService {
         ImportStrategy strategy = strategyFactory.getStrategy(fileType);
 
         Connection connection = Chat2DBContext.getConnection();
+
+        Map<String, Integer> columnOrderMap = new HashMap<>();
+        for (int i = 0; i < headerList.size(); i++) {
+            columnOrderMap.put(headerList.get(i), i);
+        }
+
         ImportContext importContext = ImportContext.builder()
                 .taskId(taskId)
                 .tableName(request.getTableName())
                 .headerList(headerList)
+                .columnOrderMap(columnOrderMap)
                 .columnCount(headerList.size())
                 .connection(connection)
                 .progressUpdater(count -> updateProgressCount(taskId, count))
                 .build();
-
         strategy.importData(file, importContext);
     }
 
@@ -170,4 +178,5 @@ public class ImportBizService {
         Dbutils.setSession();
         Chat2DBContext.putContext(connectInfo);
     }
+
 }
