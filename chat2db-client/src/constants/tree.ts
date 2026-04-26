@@ -51,4 +51,5 @@ export enum OperationColumn {
   DeleteVirtualKey = 'deleteVirtualKey', // 删除虚拟外键
   TruncateTable = 'truncateTable', // 截断表
   ImportData = 'importData', // 导入数据
+  ExportData = 'exportData', // 导出数据
 }

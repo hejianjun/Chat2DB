@@ -392,6 +392,21 @@ export const useGetRightClickMenu = (props: IProps) => {
           });
         },
       },
+
+      // 导出数据
+      [OperationColumn.ExportData]: {
+        text: i18n('workspace.menu.exportData'),
+        icon: '\ue615',
+        handle: () => {
+          const { openExportDataModal } = useWorkspaceStore.getState();
+          openExportDataModal?.({
+            tableName: treeNodeData.name,
+            dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+            databaseName: treeNodeData.extraParams?.databaseName,
+            schemaName: treeNodeData.extraParams?.schemaName,
+          });
+        },
+      },
     };
 
     // 根据配置生成右键菜单
@@ -733,6 +748,21 @@ export const getRightClickMenu = (props: IProps) => {
               refresh: true,
             });
           },
+        });
+      },
+    },
+
+    // 导出数据
+    [OperationColumn.ExportData]: {
+      text: i18n('workspace.menu.exportData'),
+      icon: '\ue615',
+      handle: () => {
+        const { openExportDataModal } = useWorkspaceStore.getState();
+        openExportDataModal?.({
+          tableName: treeNodeData.name,
+          dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          databaseName: treeNodeData.extraParams?.databaseName,
+          schemaName: treeNodeData.extraParams?.schemaName,
         });
       },
     },

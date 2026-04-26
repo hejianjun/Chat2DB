@@ -11,17 +11,13 @@ import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
-import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.doc.DatabaseExportService;
 import ai.chat2db.server.web.api.controller.rdb.doc.conf.ExportOptions;
 import ai.chat2db.server.web.api.controller.rdb.factory.ExportServiceFactory;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
-import ai.chat2db.server.web.api.model.ExcelWrapper;
-import ai.chat2db.spi.jdbc.DefaultValueHandler;
 import ai.chat2db.spi.model.ExecuteResult;
-import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
@@ -35,20 +31,8 @@ import cn.hutool.core.lang.Assert;
 import com.alibaba.druid.DbType;
 import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLStatement;
-import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
-import com.alibaba.druid.sql.ast.statement.SQLExprTableSource;
-import com.alibaba.druid.sql.ast.statement.SQLInsertStatement;
 import com.alibaba.druid.sql.ast.statement.SQLSelectStatement;
-import com.alibaba.druid.sql.visitor.VisitorFeature;
-import com.alibaba.excel.EasyExcel;
-import com.alibaba.excel.support.ExcelTypeEnum;
-import com.alibaba.excel.write.builder.ExcelWriterBuilder;
-import com.alibaba.excel.write.metadata.WriteSheet;
 import com.google.common.collect.Lists;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.experimental.SuperBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,41 +41,19 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Component
 public class TaskBizService {
 
-    /**
-     * Format insert statement
-     */
-    private static final SQLUtils.FormatOption INSERT_FORMAT_OPTION = new SQLUtils.FormatOption(true, false);
-
-    static {
-        INSERT_FORMAT_OPTION.config(VisitorFeature.OutputNameQuote, true);
-    }
-
-
     @Autowired
     private TaskService taskService;
-
 
     @Autowired
     private TableService tableService;
@@ -99,17 +61,21 @@ public class TaskBizService {
     @Autowired
     private RdbWebConverter rdbWebConverter;
 
+    @Autowired
+    private ExportStrategyFactory exportStrategyFactory;
+
     public DataResult<Long> exportResultData(DataExportRequest request) {
         String sql = ExportSizeEnum.CURRENT_PAGE.getCode().equals(request.getExportSize()) ? request.getSql() : request.getOriginalSql();
         Assert.notBlank(sql, "dataSource.sqlEmpty");
         DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
         String tableName = getTableName(request, sql, dbType);
         File file = createTempFile(tableName, request.getExportType());
-        
+
         DataResult<Long> dataResult = createTask(tableName, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), tableName);
 
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
             doExportStreaming(sql, file, dbType, tableName, request.getExportType(), dataResult.getData());
@@ -156,7 +122,6 @@ public class TaskBizService {
         }
     }
 
-
     private void removeContext() {
         Dbutils.removeSession();
         ContextUtils.removeContext();
@@ -198,109 +163,18 @@ public class TaskBizService {
     }
 
     private void doExportStreaming(String sql, File file, DbType dbType, String tableName, String exportType, Long taskId) {
-        try {
-            if (ExportTypeEnum.CSV.getCode().equals(exportType)) {
-                doExportCsvStreaming(sql, file, taskId);
-            } else {
-                doExportInsertStreaming(sql, file, dbType, tableName, taskId);
-            }
-        } catch (Exception e) {
-            log.error("export error", e);
-            throw new BusinessException("dataSource.exportError");
-        }
-    }
+        ExportStrategy strategy = exportStrategyFactory.getStrategy(exportType);
 
-    private PreparedStatement createStreamStatement(Connection connection, String sql) throws SQLException {
-        PreparedStatement ps = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-        ps.setFetchSize(Integer.MIN_VALUE);
-        return ps;
-    }
+        ExportContext exportContext = ExportContext.builder()
+                .sql(sql)
+                .file(file)
+                .dbType(dbType)
+                .tableName(tableName)
+                .taskId(taskId)
+                .progressUpdater(count -> updateProgressCount(taskId, count))
+                .build();
 
-    private void doExportCsvStreaming(String sql, File file, Long taskId) {
-        ExcelWrapper excelWrapper = new ExcelWrapper();
-        DefaultValueHandler valueHandler = new DefaultValueHandler();
-        Connection connection = Chat2DBContext.getConnection();
-
-        try (PreparedStatement ps = createStreamStatement(connection, sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            ResultSetMetaData metaData = rs.getMetaData();
-            int col = metaData.getColumnCount();
-
-            List<String> headerNames = new ArrayList<>(col);
-            for (int i = 1; i <= col; i++) {
-                headerNames.add(metaData.getColumnLabel(i));
-            }
-
-            ExcelWriterBuilder excelWriterBuilder = EasyExcel.write(file)
-                    .charset(StandardCharsets.UTF_8)
-                    .excelType(ExcelTypeEnum.CSV);
-            excelWriterBuilder.head(
-                    EasyCollectionUtils.toList(headerNames, name -> Lists.newArrayList(name)));
-            excelWrapper.setExcelWriter(excelWriterBuilder.build());
-            excelWrapper.setWriteSheet(EasyExcel.writerSheet(0).build());
-
-            int processedCount = 0;
-            while (rs.next()) {
-                List<String> row = new ArrayList<>(col);
-                for (int i = 1; i <= col; i++) {
-                    row.add(valueHandler.getString(rs, i, false));
-                }
-                List<List<String>> writeDataList = Lists.newArrayList();
-                writeDataList.add(row);
-                excelWrapper.getExcelWriter().write(writeDataList, excelWrapper.getWriteSheet());
-                processedCount++;
-                updateProgressCount(taskId, processedCount);
-            }
-
-            updateProgressCount(taskId, processedCount);
-        } catch (SQLException e) {
-            log.error("export csv streaming error", e);
-            throw new BusinessException("dataSource.exportError");
-        } finally {
-            if (excelWrapper.getExcelWriter() != null) {
-                excelWrapper.getExcelWriter().finish();
-            }
-        }
-    }
-
-    private void doExportInsertStreaming(String sql, File file, DbType dbType, String tableName, Long taskId) throws IOException {
-        DefaultValueHandler valueHandler = new DefaultValueHandler();
-        Connection connection = Chat2DBContext.getConnection();
-
-        try (PrintWriter printWriter = new PrintWriter(file, StandardCharsets.UTF_8);
-             PreparedStatement ps = createStreamStatement(connection, sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            ResultSetMetaData metaData = rs.getMetaData();
-            int col = metaData.getColumnCount();
-
-            List<SQLIdentifierExpr> headerList = new ArrayList<>(col);
-            for (int i = 1; i <= col; i++) {
-                headerList.add(new SQLIdentifierExpr(metaData.getColumnLabel(i)));
-            }
-
-            int processedCount = 0;
-            while (rs.next()) {
-                SQLInsertStatement sqlInsertStatement = new SQLInsertStatement();
-                sqlInsertStatement.setDbType(dbType);
-                sqlInsertStatement.setTableSource(new SQLExprTableSource(tableName));
-                sqlInsertStatement.getColumns().addAll(headerList);
-                SQLInsertStatement.ValuesClause valuesClause = new SQLInsertStatement.ValuesClause();
-                for (int i = 1; i <= col; i++) {
-                    valuesClause.addValue(valueHandler.getString(rs, i, false));
-                }
-                sqlInsertStatement.setValues(valuesClause);
-                printWriter.println(SQLUtils.toSQLString(sqlInsertStatement, dbType, INSERT_FORMAT_OPTION) + ";");
-                processedCount++;
-                updateProgressCount(taskId, processedCount);
-            }
-
-            updateProgressCount(taskId, processedCount);
-        } catch (SQLException e) {
-            log.error("export insert streaming error", e);
-            throw new BusinessException("dataSource.exportError");
-        }
+        strategy.exportData(exportContext);
     }
 
     private void updateProgressCount(Long taskId, int processedCount) {
@@ -309,7 +183,6 @@ public class TaskBizService {
         updateParam.setTaskProgress(String.valueOf(processedCount));
         taskService.updateStatus(updateParam);
     }
-
 
     private File createTempFile(String tableName, String exportType) {
         String fileName = URLEncoder.encode(

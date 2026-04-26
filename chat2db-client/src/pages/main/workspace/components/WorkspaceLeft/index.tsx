@@ -6,6 +6,7 @@ import TableList from '../TableList';
 import WorkspaceLeftHeader from '../WorkspaceLeftHeader';
 import CreateDatabase from '@/components/CreateDatabase';
 import ImportDataModal from '@/components/ImportDataModal';
+import ExportDataModal from '@/components/ExportDataModal';
 import Iconfont from '@/components/Iconfont';
 import { useConnectionStore } from '@/pages/main/store/connection';
 import { setMainPageActiveTab } from '@/pages/main/store/main';
@@ -44,6 +45,7 @@ const WorkspaceLeft = memo(() => {
       </div>
       <CreateDatabase />
       <ImportDataModal />
+      <ExportDataModal />
     </>
   );
 });
