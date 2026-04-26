@@ -102,8 +102,6 @@ public class TaskBizService {
     private void doExportDoc(DataExportRequest request, File file) {
         try {
             TablePageQueryParam queryParam = rdbWebConverter.tablePageRequest2param(request);
-            queryParam.setPageNo(1);
-            queryParam.setPageSize(Integer.MAX_VALUE);
             TableSelector tableSelector = new TableSelector();
             tableSelector.setColumnList(true);
             tableSelector.setIndexList(true);
