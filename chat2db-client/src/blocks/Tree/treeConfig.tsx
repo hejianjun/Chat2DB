@@ -21,6 +21,13 @@ export const switchIcon: Partial<{ [key in TreeNodeType]: { icon: string; unfold
     icon: '\ueabe',
     unfoldIcon: '\ueabf',
   },
+  [TreeNodeType.DEPRECATED_TABLES]: {
+    icon: '\ue73c',
+    unfoldIcon: '\ueabf',
+  },
+  [TreeNodeType.DEPRECATED_TABLE]: {
+    icon: '\ue63e',
+  },
   [TreeNodeType.COLUMNS]: {
     icon: '\ueabe',
     unfoldIcon: '\ueabf',
@@ -212,6 +219,13 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           },
           {
             uuid: uuid(),
+            key: `${preCode}-deprecated-tables`,
+            name: 'recycleBin',
+            treeNodeType: TreeNodeType.DEPRECATED_TABLES,
+            extraParams: parentData.extraParams,
+          },
+          {
+            uuid: uuid(),
             key: `${preCode}-views`,
             name: 'view',
             treeNodeType: TreeNodeType.VIEWS,
@@ -293,6 +307,77 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
     ],
   },
 
+  [TreeNodeType.DEPRECATED_TABLES]: {
+    icon: '\ue73c',
+    getChildren: (params, options) => {
+      const _extraParams = params.extraParams;
+      delete params.extraParams;
+      params.pageSize = 1000;
+      return new Promise((r, j) => {
+        mysqlServer
+          .getDeprecatedTableList(params, options)
+          .then((res) => {
+            const tableList: ITreeNode[] = res.data?.map((t: any) => {
+              return {
+                uuid: uuid(),
+                name: t.name,
+                treeNodeType: TreeNodeType.DEPRECATED_TABLE,
+                key: t.name,
+                comment: t.comment,
+                extraParams: {
+                  ..._extraParams,
+                  tableName: t.name,
+                },
+              };
+            });
+            r({
+              data: tableList,
+              pageNo: res.pageNo,
+              pageSize: res.pageSize,
+              total: res.total,
+              hasNextPage: res.hasNextPage,
+            } as any);
+          })
+          .catch((error) => {
+            j(error);
+          });
+      });
+    },
+    operationColumn: [
+      OperationColumn.CreateConsole,
+      OperationColumn.Refresh,
+    ],
+  },
+
+  [TreeNodeType.DEPRECATED_TABLE]: {
+    icon: '\ue63e',
+    getChildren: (params) => {
+      return new Promise((r: (value: ITreeNode[]) => void) => {
+        const { dataSourceId, databaseName, schemaName, tableName } = params.extraParams!;
+        const preCode = [dataSourceId, databaseName, schemaName, tableName].join('-');
+        const list = [
+          {
+            uuid: uuid(),
+            key: `${preCode}-columns`,
+            name: 'columns',
+            treeNodeType: TreeNodeType.COLUMNS,
+            extraParams: params.extraParams,
+          },
+        ];
+
+        r(list);
+      });
+    },
+    operationColumn: [
+      OperationColumn.OpenTable,
+      OperationColumn.CreateConsole,
+      OperationColumn.ViewDDL,
+      OperationColumn.CopyName,
+      OperationColumn.Refresh,
+      OperationColumn.RestoreTable,
+    ],
+  },
+
   [TreeNodeType.TABLE]: {
     icon: '\ue63e',
     getChildren: (params) => {
@@ -345,6 +430,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
       OperationColumn.Refresh,
       OperationColumn.DeleteTable,
       OperationColumn.TruncateTable,
+      OperationColumn.DeprecatedTable,
     ],
   },
 

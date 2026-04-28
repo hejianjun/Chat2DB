@@ -23,6 +23,8 @@ export enum TreeNodeType {
   TRIGGER = 'trigger',  // trigger
   V_KEYS = 'vKeys',
   V_KEY = 'vKey',
+  DEPRECATED_TABLES = 'deprecatedTables',
+  DEPRECATED_TABLE = 'deprecatedTable',
 }
 
 // 树右键支持的功能
@@ -53,4 +55,6 @@ export enum OperationColumn {
   ImportData = 'importData', // 导入数据
   ExportData = 'exportData', // 导出数据
   ExportSchemaDoc = 'exportSchemaDoc', // 导出数据结构
+  DeprecatedTable = 'deprecatedTable', // 废弃表
+  RestoreTable = 'restoreTable', // 恢复废弃表
 }

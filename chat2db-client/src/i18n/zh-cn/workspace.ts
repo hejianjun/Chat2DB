@@ -35,6 +35,8 @@ export default {
   'workspace.menu.importData': '导入数据',
   'workspace.menu.exportData': '导出数据',
   'workspace.menu.exportSchemaDoc': '导出数据结构',
+  'workspace.menu.deprecatedTable': '废弃表',
+  'workspace.menu.restoreTable': '恢复废弃表',
   'workspace.menu.deleteTablePlaceHolder': '请输入你要删除的表名',
   'workspace.menu.truncateTable': '截断表',
   'workspace.tips.affirmDeleteTable': '输入的表名与要删除的表名不一致，请再次确认',

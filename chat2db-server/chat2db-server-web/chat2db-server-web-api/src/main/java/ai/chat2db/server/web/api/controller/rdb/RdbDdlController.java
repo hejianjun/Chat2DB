@@ -19,6 +19,7 @@ import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.domain.api.service.TableService;
@@ -31,6 +32,7 @@ import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequest;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DeprecatedTableRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.KeyDeleteRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableBriefQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableCreateDdlQueryRequest;
@@ -248,5 +250,49 @@ public class RdbDdlController {
     public ActionResult deleteVirtualForeignKey(@Valid @RequestBody KeyDeleteRequest request) {
         DropKeyParam dropParam = rdbWebConverter.keyDelete2dropParm(request);
         return tableService.deleteVirtualForeignKey(dropParam);
+    }
+
+    /**
+     * 废弃表
+     *
+     * @param request
+     * @return
+     */
+    @PostMapping("/deprecated")
+    public ActionResult deprecated(@Valid @RequestBody DeprecatedTableRequest request) {
+        DeprecatedTableParam param = rdbWebConverter.deprecatedTableRequest2param(request);
+        return tableService.deprecatedTable(param);
+    }
+
+    /**
+     * 取消废弃表
+     *
+     * @param request
+     * @return
+     */
+    @PostMapping("/cancel_deprecated")
+    public ActionResult cancelDeprecated(@Valid @RequestBody DeprecatedTableRequest request) {
+        DeprecatedTableParam param = rdbWebConverter.deprecatedTableRequest2param(request);
+        return tableService.deleteDeprecatedTable(param);
+    }
+
+    /**
+     * 查询回收站中的废弃表列表
+     *
+     * @param request
+     * @return
+     */
+    @GetMapping("/deprecated_list")
+    public WebPageResult<TableVO> deprecatedList(@Valid TableBriefQueryRequest request) {
+        TablePageQueryParam queryParam = rdbWebConverter.tablePageRequest2param(request);
+        TableSelector tableSelector = new TableSelector();
+        tableSelector.setColumnList(false);
+        tableSelector.setIndexList(false);
+
+        PageResult<Table> tableDTOPageResult = tableService.pageQueryDeprecated(queryParam, tableSelector);
+        List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tableDTOPageResult.getData());
+
+        return WebPageResult.of(tableVOS, tableDTOPageResult.getTotal(), request.getPageNo(),
+            request.getPageSize());
     }
 }

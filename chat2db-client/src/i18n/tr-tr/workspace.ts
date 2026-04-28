@@ -15,6 +15,8 @@ export default {
   'workspace.menu.viewAllTable': 'Tüm Tabloları Görüntüle',
   'workspace.menu.createDatabase': 'Veritabanı Oluştur',
   'workspace.menu.createSchema': 'Şema Oluştur',
+  'workspace.menu.deprecatedTable': 'Tabloyu Kullanımdan Kaldır',
+  'workspace.menu.restoreTable': 'Kullanımdan Kaldırılan Tabloyu Geri Yükle',
   'workspace.menu.deleteTablePlaceHolder': 'Silmek istediğiniz tablonun adını giriniz',
   'workspace.tips.affirmDeleteTable': 'Girdiğiniz tablo adı, silmek istediğiniz tablo adı ile aynı değil, lütfen tekrar doğrulayın',
   'workspace.table.total': 'Toplam',

@@ -22,6 +22,7 @@ import { deleteTable } from '../functions/deleteTable';
 import { truncateTable } from '../functions/truncateTable';
 import { openFunction, openProcedure, openTrigger, openView } from '../functions/openAsyncSql';
 import { handelPinTable } from '../functions/pinTable';
+import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecatedTable';
 import { viewDDL } from '../functions/viewDDL';
 
 // ----- utils -----
@@ -421,6 +422,34 @@ export const useGetRightClickMenu = (props: IProps) => {
           });
         },
       },
+
+      // 废弃表
+      [OperationColumn.DeprecatedTable]: {
+        text: i18n('workspace.menu.deprecatedTable'),
+        icon: '\ue73c',
+        handle: () => {
+          deprecatedTable({
+            treeNodeData,
+            loadData: () => {
+              loadData({ treeNodeData: treeNodeData.parentNode });
+            }
+          });
+        },
+      },
+
+      // 恢复废弃表
+      [OperationColumn.RestoreTable]: {
+        text: i18n('workspace.menu.restoreTable'),
+        icon: '\ue63e',
+        handle: () => {
+          restoreDeprecatedTable({
+            treeNodeData,
+            loadData: () => {
+              loadData({ treeNodeData: treeNodeData.parentNode });
+            }
+          });
+        },
+      },
     };
 
     // 根据配置生成右键菜单
@@ -791,6 +820,34 @@ export const getRightClickMenu = (props: IProps) => {
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
           databaseName: treeNodeData.extraParams?.databaseName,
           schemaName: treeNodeData.extraParams?.schemaName,
+        });
+      },
+    },
+
+    // 废弃表
+    [OperationColumn.DeprecatedTable]: {
+      text: i18n('workspace.menu.deprecatedTable'),
+      icon: '\ue73c',
+      handle: () => {
+        deprecatedTable({
+          treeNodeData,
+          loadData: () => {
+            loadData({ treeNodeData: treeNodeData.parentNode });
+          }
+        });
+      },
+    },
+
+    // 恢复废弃表
+    [OperationColumn.RestoreTable]: {
+      text: i18n('workspace.menu.restoreTable'),
+      icon: '\ue63e',
+      handle: () => {
+        restoreDeprecatedTable({
+          treeNodeData,
+          loadData: () => {
+            loadData({ treeNodeData: treeNodeData.parentNode });
+          }
         });
       },
     },

@@ -35,6 +35,9 @@ export default {
   'workspace.menu.importData': 'Import Data',
   'workspace.menu.exportData': 'Export Data',
   'workspace.menu.exportSchemaDoc': 'Export Schema Doc',
+  'workspace.menu.truncateTable': 'Truncate Table',
+  'workspace.menu.deprecatedTable': 'Deprecate Table',
+  'workspace.menu.restoreTable': 'Restore Deprecated Table',
   'workspace.menu.deleteTablePlaceHolder': 'Please enter the name of the table you want to delete',
   'workspace.tips.affirmDeleteTable':
     'The table name you entered is not the same as the table name you want to delete, please confirm again',

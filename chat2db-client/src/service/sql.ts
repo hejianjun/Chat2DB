@@ -241,6 +241,12 @@ const addTablePin = createRequest<IUniversalTableParams, void>('/api/pin/table/a
 
 const deleteTablePin = createRequest<IUniversalTableParams, void>('/api/pin/table/delete', { method: 'post' });
 
+const deprecatedTable = createRequest<IUniversalTableParams, void>('/api/rdb/ddl/deprecated', { method: 'post' });
+
+const restoreDeprecatedTable = createRequest<IUniversalTableParams, void>('/api/rdb/ddl/cancel_deprecated', { method: 'post' });
+
+const getDeprecatedTableList = createRequest<IGetTableListParams, IPageResponse<ITable>>('/api/rdb/ddl/deprecated_list', { method: 'get' });
+
 /** 获取当前执行SQL 所有行 */
 const getDMLCount = createRequest<IExecuteSqlParams, number>('/api/rdb/dml/count', { method: 'post' });
 
@@ -480,6 +486,9 @@ export default {
   getDatabaseSchemaList,
   addTablePin,
   deleteTablePin,
+  deprecatedTable,
+  restoreDeprecatedTable,
+  getDeprecatedTableList,
   getDMLCount,
   // exportResultTable
   getAllTableList,

@@ -15,6 +15,8 @@ export default {
   'workspace.menu.viewAllTable': 'すべてのテーブルを見る',
   'workspace.menu.createDatabase': 'データベースを作成',
   'workspace.menu.createSchema': 'スキーマを作成',
+  'workspace.menu.deprecatedTable': 'テーブルを非推奨にする',
+  'workspace.menu.restoreTable': '非推奨テーブルを復元',
   'workspace.menu.deleteTablePlaceHolder': '削除するテーブル名を入力してください',
   'workspace.tips.affirmDeleteTable': '入力したテーブル名と削除するテーブル名が一致しません。再確認してください',
   'workspace.table.total': '合計',

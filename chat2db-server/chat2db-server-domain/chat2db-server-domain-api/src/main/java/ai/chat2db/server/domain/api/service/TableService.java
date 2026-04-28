@@ -3,6 +3,7 @@ package ai.chat2db.server.domain.api.service;
 import java.util.List;
 
 import ai.chat2db.server.domain.api.model.TreeNode;
+import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
 import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
@@ -106,6 +107,14 @@ public interface TableService {
      */
     PageResult<Table> pageQuery(TablePageQueryParam param, TableSelector selector);
 
+    /**
+     * 分页查询已废弃的表信息（回收站）
+     *
+     * @param param
+     * @return
+     */
+    PageResult<Table> pageQueryDeprecated(TablePageQueryParam param, TableSelector selector);
+
 
     /**
      * 查询表信息
@@ -163,5 +172,26 @@ public interface TableService {
      * @return
      */
     List<TreeNode> searchTreeNodes(TreeSearchParam param);
+
+    /**
+     * Deprecated table
+     * @param param
+     * @return
+     */
+    ActionResult deprecatedTable(DeprecatedTableParam param);
+
+    /**
+     * Delete deprecated table
+     * @param param
+     * @return
+     */
+    ActionResult deleteDeprecatedTable(DeprecatedTableParam param);
+
+    /**
+     * Query user deprecated tables
+     * @param param
+     * @return
+     */
+    ListResult<String> queryDeprecatedTables(DeprecatedTableParam param);
 
 }

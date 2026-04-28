@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import com.google.common.collect.Lists;
 
 import ai.chat2db.server.domain.api.model.TreeNode;
+import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
 import ai.chat2db.server.domain.api.param.PinTableParam;
@@ -37,6 +38,7 @@ import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.param.TreeSearchParam;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
+import ai.chat2db.server.domain.api.service.DeprecatedTableService;
 import ai.chat2db.server.domain.api.service.PinService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
@@ -82,6 +84,9 @@ public class TableServiceImpl implements TableService {
 
     @Autowired
     private PinTableConverter pinTableConverter;
+
+    @Autowired
+    private DeprecatedTableService deprecatedTableService;
 
     @Autowired
     @Qualifier("indexUpdateExecutor")
@@ -385,6 +390,7 @@ public class TableServiceImpl implements TableService {
         }
         if (param.getLastDocId() == null) {
             tables = pinTable(tables, param);
+            tables = deprecatedTable(tables, param);
         }
         param.setLastDocId(luceneMgr.getLastDocId());
 
@@ -469,6 +475,79 @@ public class TableServiceImpl implements TableService {
             }
         }
         return tables;
+    }
+
+    private List<Table> deprecatedTable(List<Table> list, TablePageQueryParam param) {
+        if (CollectionUtils.isEmpty(list)) {
+            return Lists.newArrayList();
+        }
+        DeprecatedTableParam deprecatedTableParam = new DeprecatedTableParam();
+        deprecatedTableParam.setDataSourceId(param.getDataSourceId());
+        deprecatedTableParam.setDatabaseName(param.getDatabaseName());
+        deprecatedTableParam.setSchemaName(param.getSchemaName());
+        deprecatedTableParam.setUserId(ContextUtils.getUserId());
+        ListResult<String> listResult = deprecatedTableService.queryDeprecatedTables(deprecatedTableParam);
+        if (!listResult.success() || CollectionUtils.isEmpty(listResult.getData())) {
+            return list;
+        }
+        Set<String> deprecatedTableNames = new java.util.HashSet<>(listResult.getData());
+        List<Table> filteredTables = new ArrayList<>();
+        for (Table table : list) {
+            if (table != null && !deprecatedTableNames.contains(table.getName())) {
+                filteredTables.add(table);
+            }
+        }
+        return filteredTables;
+    }
+
+    @Override
+    public PageResult<Table> pageQueryDeprecated(TablePageQueryParam param, TableSelector selector) {
+        DeprecatedTableParam deprecatedTableParam = new DeprecatedTableParam();
+        deprecatedTableParam.setDataSourceId(param.getDataSourceId());
+        deprecatedTableParam.setDatabaseName(param.getDatabaseName());
+        deprecatedTableParam.setSchemaName(param.getSchemaName());
+        deprecatedTableParam.setUserId(ContextUtils.getUserId());
+        ListResult<String> listResult = deprecatedTableService.queryDeprecatedTables(deprecatedTableParam);
+        if (!listResult.success() || CollectionUtils.isEmpty(listResult.getData())) {
+            return PageResult.of(Lists.newArrayList(), 0L, param);
+        }
+        Set<String> deprecatedTableNames = new java.util.HashSet<>(listResult.getData());
+        List<Table> allTables = queryAllTables(param);
+        List<Table> deprecatedTables = new ArrayList<>();
+        for (Table table : allTables) {
+            if (table != null && deprecatedTableNames.contains(table.getName())) {
+                table.setDeprecated(true);
+                deprecatedTables.add(table);
+            }
+        }
+        return PageResult.of(deprecatedTables, (long) deprecatedTables.size(), param);
+    }
+
+    private List<Table> queryAllTables(TablePageQueryParam param) {
+        LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
+        Long version = luceneMgr.getMaxVersion(param);
+        if (needRefreshCache(param, version)) {
+            loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
+        }
+        return luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
+    }
+
+    @Override
+    public ActionResult deprecatedTable(DeprecatedTableParam param) {
+        param.setUserId(ContextUtils.getUserId());
+        return deprecatedTableService.deprecatedTable(param);
+    }
+
+    @Override
+    public ActionResult deleteDeprecatedTable(DeprecatedTableParam param) {
+        param.setUserId(ContextUtils.getUserId());
+        return deprecatedTableService.deleteDeprecatedTable(param);
+    }
+
+    @Override
+    public ListResult<String> queryDeprecatedTables(DeprecatedTableParam param) {
+        param.setUserId(ContextUtils.getUserId());
+        return deprecatedTableService.queryDeprecatedTables(param);
     }
 
     @Override

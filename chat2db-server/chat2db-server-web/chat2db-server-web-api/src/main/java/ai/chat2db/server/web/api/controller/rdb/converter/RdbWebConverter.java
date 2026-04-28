@@ -8,6 +8,7 @@ import org.mapstruct.Mapping;
 import org.mapstruct.Mappings;
 
 import ai.chat2db.server.domain.api.param.DlCountParam;
+import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.param.DlExecuteParam;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
@@ -21,9 +22,13 @@ import ai.chat2db.server.domain.api.param.UpdateSelectResultParam;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.data.source.vo.DatabaseVO;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.ColumnRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DatabaseCreateRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlCountRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlExportRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DeprecatedTableRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DmlRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DmlTableRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.KeyDeleteRequest;
@@ -311,4 +316,6 @@ public abstract class RdbWebConverter {
     public abstract SchemaQueryParam chatQueryRequest2schemaParam(ChatQueryRequest queryRequest);
 
     public abstract TableQueryParam chatQueryRequest2Param(ChatQueryRequest queryRequest);
+
+    public abstract DeprecatedTableParam deprecatedTableRequest2param(DeprecatedTableRequest request);
 }

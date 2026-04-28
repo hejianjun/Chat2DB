@@ -86,6 +86,11 @@ public class Table implements IndexModel {
     private boolean pinned;
 
     /**
+     * 是否已废弃
+     */
+    private boolean deprecated;
+
+    /**
      * ddl
      */
     private String ddl;
