@@ -38,7 +38,7 @@ import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
-import org.wltea.analyzer.lucene.IKAnalyzer;
+
 
 import com.alibaba.fastjson2.JSONObject;
 import com.google.common.collect.Sets;
@@ -88,7 +88,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     public LuceneIndexManager(@NotNull Long id) {
         String indexPath = getIndexPath(id);
         this.index = FSDirectory.open(Paths.get(indexPath));
-        this.analyzer = new IKAnalyzer();
+        this.analyzer = new MixedAnalyzer();
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
         this.writer = new IndexWriter(index, config);
         this.reader = DirectoryReader.open(writer);

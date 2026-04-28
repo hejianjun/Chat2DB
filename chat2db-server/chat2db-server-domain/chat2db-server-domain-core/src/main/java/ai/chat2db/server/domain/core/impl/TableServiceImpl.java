@@ -645,12 +645,6 @@ public class TableServiceImpl implements TableService {
             return null;
         }
 
-        // 二次验证表名匹配（防止大小写不一致导致的误关联）
-        Set<String> currentTables = SetUtils.hashSet(StringUtils.split(targetTable.getName(), "_"));
-        Set<String> targetTables = SetUtils.hashSet(StringUtils.split(currentTable.getName(), "_"));
-        if (!currentTables.containsAll(targetTables)) {
-            return null;
-        }
         String referencedColumnName = "id";
         for (TableColumn tableColumn : targetTable.getColumnList()) {
             if (columnName.equalsIgnoreCase(tableColumn.getName())) {
