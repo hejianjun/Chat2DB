@@ -26,7 +26,6 @@ export default {
   'workspace.erDiagram.filterPlaceholder': '过滤表名...',
   'workspace.erDiagram.legend': '图例',
   'workspace.erDiagram.realFk': '外键',
-  'workspace.erDiagram.virtualFk': '虚拟外键',
   'workspace.erDiagram.loading': '正在加载 ER 图...',
   'workspace.erDiagram.noData': '未找到表关系数据',
   'workspace.menu.createDatabase': '创建数据库',
