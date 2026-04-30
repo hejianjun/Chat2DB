@@ -832,7 +832,12 @@ export const getRightClickMenu = (props: IProps) => {
         deprecatedTable({
           treeNodeData,
           loadData: () => {
-            loadData({ treeNodeData: treeNodeData.parentNode });
+            // 如果有 parentNode，刷新父节点；否则刷新当前节点
+            if (treeNodeData.parentNode?.loadData) {
+              loadData({ treeNodeData: treeNodeData.parentNode });
+            } else {
+              loadData({ refresh: true });
+            }
           }
         });
       },
@@ -846,7 +851,12 @@ export const getRightClickMenu = (props: IProps) => {
         restoreDeprecatedTable({
           treeNodeData,
           loadData: () => {
-            loadData({ treeNodeData: treeNodeData.parentNode });
+            // 如果有 parentNode，刷新父节点；否则刷新当前节点
+            if (treeNodeData.parentNode?.loadData) {
+              loadData({ treeNodeData: treeNodeData.parentNode });
+            } else {
+              loadData({ refresh: true });
+            }
           }
         });
       },

@@ -25,10 +25,15 @@ export const TruncateModalContent = (params: { treeNodeData: any; openModal: any
       tableName: treeNodeData.name,
     };
     mysqlService.truncateTable(p).then(() => {
-      loadData({
-        refresh: true,
-        treeNodeData: treeNodeData.parentNode
-      });
+      // 如果有 parentNode，刷新父节点；否则刷新当前节点
+      if (treeNodeData.parentNode?.loadData) {
+        loadData({
+          refresh: true,
+          treeNodeData: treeNodeData.parentNode
+        });
+      } else {
+        loadData({ refresh: true });
+      }
       openModal(false);
     })
 .catch((error) => {

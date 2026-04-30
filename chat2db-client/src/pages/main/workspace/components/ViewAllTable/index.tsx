@@ -15,6 +15,7 @@ import Iconfont from '@/components/Iconfont';
 import { getRightClickMenu } from '@/blocks/Tree/hooks/useGetRightClickMenu';
 import MenuLabel from '@/components/MenuLabel';
 import { setCurrentWorkspaceGlobalExtend, setPendingAiChat, setCurrentWorkspaceExtend, IBatchTableCommentResult } from '@/pages/main/workspace/store/common';
+import { deprecatedTable } from '@/blocks/Tree/functions/deprecatedTable';
 
 // ----- store -----
 import { addWorkspaceTab } from '@/pages/main/workspace/store/console';
@@ -115,7 +116,12 @@ export default memo<IProps>((props) => {
   const getDropdownsItems = (record) => {
     const rightClickMenu = getRightClickMenu({
       treeNodeData: record,
-      loadData: () => { },
+      loadData: () => {
+        getTable({
+          pageNo: currentPageNo,
+          pageSize: 1000,
+        });
+      },
     });
     const dropdownsItems: any = rightClickMenu.map((item) => {
       return {
@@ -136,6 +142,8 @@ export default memo<IProps>((props) => {
       OperationColumn.ViewDDL,
       OperationColumn.EditTable,
       OperationColumn.CopyName,
+      OperationColumn.DeprecatedTable,
+      OperationColumn.TruncateTable,
     ];
 
     return dropdownsItems.filter((item) => excludeList.includes(item.type));

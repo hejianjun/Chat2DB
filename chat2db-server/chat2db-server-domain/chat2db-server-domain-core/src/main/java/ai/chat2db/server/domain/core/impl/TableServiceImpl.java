@@ -717,6 +717,7 @@ public class TableServiceImpl implements TableService {
         for (Table matchedTable : matchedTables) {
             if (!currentTable.getName().equals(matchedTable.getName())) {
                 targetTable = matchedTable;
+                break;
             }
         }
 
@@ -728,7 +729,8 @@ public class TableServiceImpl implements TableService {
         for (TableColumn tableColumn : targetTable.getColumnList()) {
             if (columnName.equalsIgnoreCase(tableColumn.getName())) {
                 referencedColumnName = tableColumn.getName();
-            } else if (Boolean.TRUE.equals(tableColumn.getPrimaryKey())) {
+                break;
+            } else if (referencedColumnName.equals("id") && Boolean.TRUE.equals(tableColumn.getPrimaryKey())) {
                 referencedColumnName = tableColumn.getName();
             }
         }
