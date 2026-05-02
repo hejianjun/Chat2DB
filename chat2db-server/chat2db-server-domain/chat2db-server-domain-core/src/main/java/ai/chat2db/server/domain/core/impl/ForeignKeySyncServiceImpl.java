@@ -45,6 +45,21 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return Dbutils.getMapper(VirtualForeignKeyMapper.class);
     }
 
+    /**
+     * 同步数据库表的外键定义到本地H2数据库
+     * 该方法执行以下操作：
+     * 1. 从数据库元数据中获取当前表的所有外键定义
+     * 2. 从本地H2数据库查询已存储的外键记录
+     * 3. 比较差异：添加数据库中存在但本地不存在的外键
+     * 4. 删除本地存在但数据库中已不存在的外键
+     * 5. 更新同步时间戳和版本号
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return SyncResult 同步结果对象，包含新增、删除和保留的外键数量
+     */
     @Override
     public SyncResult syncForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         try {
@@ -98,6 +113,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         }
     }
 
+    /**
+     * 查询指定表的所有外键（包括真实外键和虚拟外键）
+     * 该方法合并查询本地H2数据库中存储的真实外键和用户定义的虚拟外键
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return List<ForeignKey> 包含所有外键的列表
+     */
     @Override
     public List<ForeignKey> listAllForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         List<ForeignKey> result = new ArrayList<>();
@@ -115,6 +140,14 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return result;
     }
 
+    /**
+     * 创建虚拟外键
+     * 虚拟外键是用户手动定义的逻辑外键关系，不实际存在于数据库中
+     * 该方法会检查虚拟外键是否已存在，避免重复创建
+     * 
+     * @param param 创建虚拟外键的参数对象
+     * @return DataResult<VirtualForeignKey> 创建结果，包含成功或失败信息
+     */
     @Override
     public DataResult<VirtualForeignKey> createVirtualFK(CreateVirtualFKParam param) {
         LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
@@ -155,6 +188,13 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return DataResult.of(vk);
     }
 
+    /**
+     * 更新虚拟外键信息
+     * 该方法支持更新虚拟外键的注释、引用表、引用列和名称等属性
+     * 
+     * @param param 更新虚拟外键的参数对象
+     * @return DataResult<VirtualForeignKey> 更新结果，包含成功或失败信息
+     */
     @Override
     public DataResult<VirtualForeignKey> updateVirtualFK(UpdateVirtualFKParam param) {
         VirtualForeignKeyDO existing = getVFKMapper().selectById(param.getId());
@@ -193,6 +233,13 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return DataResult.of(vk);
     }
 
+    /**
+     * 删除虚拟外键
+     * 该方法根据ID删除指定的虚拟外键记录
+     * 
+     * @param id 虚拟外键的ID
+     * @return ActionResult 删除操作结果，包含成功或失败信息
+     */
     @Override
     public ActionResult deleteVirtualFK(Long id) {
         VirtualForeignKeyDO existing = getVFKMapper().selectById(id);
@@ -203,6 +250,13 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return ActionResult.isSuccess();
     }
 
+    /**
+     * 删除真实外键（物理外键）
+     * 该方法不仅从本地H2数据库删除外键记录，还会生成对应的DROP FOREIGN KEY SQL语句
+     * 
+     * @param id 真实外键的ID
+     * @return DataResult<String> 包含DROP SQL语句的结果，或错误信息
+     */
     @Override
     public DataResult<String> deleteRealFK(Long id) {
         ForeignKeyDO existing = getFKMapper().selectById(id);
@@ -233,6 +287,14 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return DataResult.of(dropFKSql);
     }
 
+    /**
+     * 生成外键的DDL语句（CREATE/ALTER/DROP）
+     * 该方法比较新旧表结构，生成必要的外键变更SQL语句
+     * 
+     * @param oldTable 旧表结构（可为空）
+     * @param newTable 新表结构（可为空）
+     * @return List<String> 包含所有需要执行的DDL语句的列表
+     */
     @Override
     public List<String> generateForeignKeyDDL(Table oldTable, Table newTable) {
         List<String> ddlList = new ArrayList<>();
@@ -270,6 +332,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return ddlList;
     }
 
+    /**
+     * 查询指定表的真实外键（物理外键）
+     * 该方法仅查询数据库中实际存在的外键，不包含虚拟外键
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return List<ForeignKey> 真实外键列表
+     */
     @Override
     public List<ForeignKey> queryRealForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         List<ForeignKeyDO> doList = queryRealFKsFromH2(dataSourceId, databaseName, schemaName, tableName);
@@ -278,6 +350,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 查询指定表的虚拟外键
+     * 该方法查询用户手动定义的虚拟外键，不包含数据库中真实存在的外键
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return List<VirtualForeignKey> 虚拟外键列表
+     */
     @Override
     public List<VirtualForeignKey> queryVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         List<VirtualForeignKeyDO> doList = queryVirtualFKsFromH2(dataSourceId, databaseName, schemaName, tableName);
@@ -286,6 +368,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 从H2数据库查询真实外键记录
+     * 根据数据源ID和表信息查询本地存储的真实外键
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return List<ForeignKeyDO> 真实外键实体列表
+     */
     private List<ForeignKeyDO> queryRealFKsFromH2(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         LambdaQueryWrapper<ForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ForeignKeyDO::getDataSourceId, dataSourceId)
@@ -295,6 +387,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return getFKMapper().selectList(wrapper);
     }
 
+    /**
+     * 从H2数据库查询虚拟外键记录
+     * 根据数据源ID和表信息查询本地存储的虚拟外键
+     * 
+     * @param dataSourceId 数据源ID
+     * @param databaseName 数据库名称（可为空）
+     * @param schemaName 数据库模式名称（可为空）
+     * @param tableName 表名称
+     * @return List<VirtualForeignKeyDO> 虚拟外键实体列表
+     */
     private List<VirtualForeignKeyDO> queryVirtualFKsFromH2(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VirtualForeignKeyDO::getDataSourceId, dataSourceId)
@@ -304,6 +406,13 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return getVFKMapper().selectList(wrapper);
     }
 
+    /**
+     * 将外键信息插入到H2数据库
+     * 将从数据库元数据获取的外键信息转换为实体并保存到本地H2数据库
+     * 
+     * @param fk 外键模型对象
+     * @param dataSourceId 数据源ID
+     */
     private void insertForeignKey(ForeignKey fk, Long dataSourceId) {
         ForeignKeyDO entity = new ForeignKeyDO();
         entity.setDataSourceId(dataSourceId);
