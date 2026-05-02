@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS `foreign_key` (
     `sync_version` varchar(64) DEFAULT NULL COMMENT '同步版本号',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_fk` (`data_source_id`,`database_name`,`schema_name`,`table_name`,`column_name`,`referenced_table`,`referenced_column`),
-    INDEX `idx_data_source` (`data_source_id`),
-    INDEX `idx_referenced` (`data_source_id`,`referenced_table`)
+    INDEX `idx_fk_data_source` (`data_source_id`),
+    INDEX `idx_fk_referenced` (`data_source_id`,`referenced_table`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='真实外键存储表';
 
 CREATE TABLE IF NOT EXISTS `virtual_foreign_key` (
@@ -40,6 +40,6 @@ CREATE TABLE IF NOT EXISTS `virtual_foreign_key` (
     `user_id` bigint(20) unsigned NOT NULL DEFAULT 0 COMMENT '创建用户ID',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_vk` (`data_source_id`,`database_name`,`schema_name`,`table_name`,`column_name`,`referenced_table`),
-    INDEX `idx_data_source` (`data_source_id`),
-    INDEX `idx_user_source` (`user_id`,`data_source_id`,`source_type`)
+    INDEX `idx_vk_data_source` (`data_source_id`),
+    INDEX `idx_vk_user_source` (`user_id`,`data_source_id`,`source_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='虚拟外键存储表';
