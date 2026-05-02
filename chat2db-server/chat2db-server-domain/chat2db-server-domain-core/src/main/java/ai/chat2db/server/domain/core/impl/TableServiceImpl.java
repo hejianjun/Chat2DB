@@ -393,12 +393,14 @@ public class TableServiceImpl implements TableService {
                         table.getName()
                 );
                 table.setForeignKeyList(foreignKeys);
-            }
-            if (Boolean.TRUE.equals(selector.getColumnList())
-                    && Boolean.TRUE.equals(selector.getForeignKey())) {
-                List<VirtualForeignKey> virtualForeignKeys = findVirtualForeignKeys(luceneMgr, table);
+                List<VirtualForeignKey> virtualForeignKeys = foreignKeySyncService.queryVirtualForeignKeys(
+                        param.getDataSourceId(),
+                        table.getDatabaseName(),
+                        table.getSchemaName(),
+                        table.getName());
                 table.setVirtualForeignKeyList(virtualForeignKeys);
             }
+
         }
         if (param.getLastDocId() == null) {
             tables = pinTable(tables, param);
