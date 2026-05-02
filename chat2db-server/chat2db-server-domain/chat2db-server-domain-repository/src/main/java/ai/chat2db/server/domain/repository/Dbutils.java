@@ -112,7 +112,20 @@ public class Dbutils {
                     .dataSource(dataSource)
                     .locations("classpath:db/migration")
                     .load();
-            flyway.migrate();
+            try {
+                flyway.migrate();
+            } catch (Exception e) {
+                log.warn("Migration failed, attempting repair: {}", e.getMessage());
+                try {
+                    // 尝试修复并重新迁移
+                    flyway.repair();
+                    flyway.migrate();
+                    log.info("Repair and re-migrate successfully");
+                } catch (Exception repairException) {
+                    log.error("Repair and migrate failed", repairException);
+                    throw repairException;
+                }
+            }
 
 
             configJson.setLatestStartupSuccessVersion(currentVersion);

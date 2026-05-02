@@ -1,6 +1,7 @@
 package ai.chat2db.server.domain.repository.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Getter;
@@ -31,16 +32,22 @@ public class ForeignKeyDO implements Serializable {
 
     private String tableName;
 
+    @TableField("column_name")
     private String columnName;
 
+    @TableField("fk_name")
     private String fkName;
 
+    @TableField("referenced_table")
     private String referencedTable;
 
+    @TableField("referenced_column")
     private String referencedColumnName;
 
+    @TableField("referenced_schema")
     private String referencedSchema;
 
+    @TableField("referenced_database")
     private String referencedDatabase;
 
     private Integer updateRule;

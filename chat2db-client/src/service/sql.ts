@@ -448,6 +448,83 @@ const deleteVirtualForeignKey = createRequest<{
   keyName: string;
 }, void>('/api/rdb/ddl/delete_virtual_foreign_key', { method: 'post' });
 
+/** 外键列表查询参数 */
+export interface IForeignKeyListParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+  tableName?: string;
+}
+
+/** 外键列表响应 */
+export interface IForeignKeyVO {
+  id?: number;
+  name: string;
+  tableName: string;
+  columnName: string;
+  referencedTable: string;
+  referencedColumnName: string;
+  comment?: string;
+  updateRule: number;
+  deleteRule: number;
+  sourceType: 'REAL' | 'VIRTUAL';
+  editable: boolean;
+  virtualProperty?: string;
+}
+
+/** 外键同步参数 */
+export interface IForeignKeySyncParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+  tableName?: string;
+}
+
+/** 外键同步结果 */
+export interface ISyncResult {
+  added: number;
+  deleted: number;
+  unchanged: number;
+}
+
+/** 创建虚拟外键参数 */
+export interface ICreateVirtualFKParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+  tableName: string;
+  columnName: string;
+  referencedTable: string;
+  referencedColumnName: string;
+  comment?: string;
+}
+
+/** 更新虚拟外键参数 */
+export interface IUpdateVirtualFKParams {
+  id: number;
+  vkName?: string;
+  referencedTable?: string;
+  referencedColumnName?: string;
+  comment?: string;
+}
+
+/** 删除外键参数 */
+export interface IDeleteFKParams {
+  id: number;
+  sourceType: 'REAL' | 'VIRTUAL';
+}
+
+/** 删除外键结果 */
+export interface IDeleteFKResult {
+  executedDDL: string | null;
+}
+
+const syncForeignKeys = createRequest<IForeignKeySyncParams, ISyncResult>('/api/rdb/fk/sync', { method: 'post' });
+const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>('/api/rdb/fk/list', { method: 'get' });
+const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', { method: 'post' });
+const updateVirtualForeignKey = createRequest<IUpdateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/update', { method: 'post' });
+const deleteForeignKey = createRequest<IDeleteFKParams, IDeleteFKResult>('/api/rdb/fk/delete', { method: 'post' });
+
 export default {
   searchTree,
   getCreateSchemaSql,
@@ -496,4 +573,9 @@ export default {
   getAiGuess,
   deleteVirtualForeignKey,
   truncateTable,
+  syncForeignKeys,
+  getForeignKeyList,
+  createVirtualForeignKey,
+  updateVirtualForeignKey,
+  deleteForeignKey,
 };

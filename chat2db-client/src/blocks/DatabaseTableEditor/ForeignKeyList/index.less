@@ -50,6 +50,59 @@
   }
 }
 
+.actionBar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.syncButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--color-border);
+  line-height: 30px;
+  padding: 0 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  i {
+    margin-right: 5px;
+  }
+  &:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  &.syncing {
+    cursor: not-allowed;
+    opacity: 0.6;
+    &:hover {
+      color: var(--color-text-secondary);
+      border-color: var(--color-border);
+    }
+  }
+}
+
+.sourceTypeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  &.real {
+    background-color: var(--color-info-bg);
+    color: var(--color-info);
+  }
+  &.virtual {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+  }
+}
+
 .otherInfo {
   flex-shrink: 0;
   margin: 10px -10px 0px;

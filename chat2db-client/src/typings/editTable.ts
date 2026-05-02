@@ -50,14 +50,22 @@ export interface IForeignKeyItemNew {
   editStatus: EditColumnOperationType | null; // 操作类型
 
   key?: string;
+  id?: number; // 后端存储的外键ID
   
   name: string | null; // 外键名称
+  tableName: string | null; // 表名
+  schemaName: string | null; // 模式名
+  databaseName: string | null; // 数据库名
+  column: string | null; // 外键列名
   referencedTable: string | null; // 引用的表名
   referencedColumn: string | null; // 引用的列名
 
   updateRule: number; // 更新规则
   deleteRule: number; // 删除规则
   comment: string | null; // 备注
+  
+  sourceType?: 'REAL' | 'VIRTUAL'; // 外键来源类型
+  editable?: boolean; // 是否可编辑
 }
 
 // 

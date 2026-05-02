@@ -1,29 +1,25 @@
 import React, { useContext, useEffect, useState, useRef, forwardRef, ForwardedRef, useImperativeHandle } from 'react';
 import styles from './index.less';
 import classnames from 'classnames';
-import { MenuOutlined } from '@ant-design/icons';
+import { MenuOutlined, LoadingOutlined, SyncOutlined } from '@ant-design/icons';
 import { DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { Table, Input, Form, Select, Checkbox } from 'antd';
+import { Table, Input, Form, Select, message, Tooltip } from 'antd';
 import { v4 as uuidv4 } from 'uuid';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Context } from '../index';
-import { IForeignKeyItemNew, IForeignKey } from '@/typings'; // 假设你有一个外键的类型定义
+import { IForeignKeyItemNew, IForeignKey } from '@/typings';
 import i18n from '@/i18n';
 import { EditColumnOperationType } from '@/constants';
 import Iconfont from '@/components/Iconfont';
+import sqlService from '@/service/sql';
 
 interface RowProps extends React.HTMLAttributes<HTMLTableRowElement> {
   'data-row-key': string;
 }
 
 interface IProps { }
-
-// 编辑配置
-interface IEditingConfig extends IForeignKey {
-  editKey: string;
-}
 
 export type IForeignKeyListInfo = IForeignKeyItemNew[]; // 外键信息列表类型
 
@@ -83,7 +79,7 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
   const [dataSource, setDataSource] = useState<IForeignKeyItemNew[]>([createInitialData()]);
   const [form] = Form.useForm();
   const [editingData, setEditingData] = useState<IForeignKeyItemNew | null>(null);
-  const [editingConfig, setEditingConfig] = useState<IEditingConfig | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const isEditing = (record: IForeignKeyItemNew) => record.key === editingData?.key;
@@ -292,6 +288,21 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
       },
     },
     {
+      title: i18n('editTable.label.sourceType'),
+      dataIndex: 'sourceType',
+      width: '100px',
+      render: (text: string, record: IForeignKeyItemNew) => {
+        const isVirtual = text === 'VIRTUAL' || record.editable;
+        return (
+          <Tooltip title={isVirtual ? i18n('editTable.tooltip.virtualFK') : i18n('editTable.tooltip.realFK')}>
+            <span className={classnames(styles.sourceTypeBadge, isVirtual ? styles.virtual : styles.real)}>
+              {isVirtual ? 'V' : 'R'}
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+    {
       width: '40px',
       render: (text: string, record: IForeignKeyItemNew) => {
         return (
@@ -339,7 +350,6 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
       list = dataSource.map((i) => {
         if (i.key === record?.key) {
           setEditingData(null);
-          setEditingConfig(null);
           return {
             ...i,
             editStatus: EditColumnOperationType.Delete,
@@ -349,6 +359,29 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
       });
     }
     setDataSource(list);
+  };
+
+  const handleSync = async () => {
+    if (!tableDetails) return;
+    const { dataSourceId, databaseName, schemaName, name: tableName } = tableDetails as any;
+    if (!dataSourceId || !databaseName || !tableName) {
+      message.warning(i18n('editTable.message.syncFKWarning'));
+      return;
+    }
+    setSyncing(true);
+    try {
+      const result = await sqlService.syncForeignKeys({
+        dataSourceId: Number(dataSourceId),
+        databaseName,
+        schemaName,
+        tableName,
+      });
+      message.success(i18n('editTable.message.syncFKSuccess', [result?.added || 0, result?.deleted || 0, result?.unchanged || 0]));
+    } catch (error) {
+      message.error(i18n('editTable.message.syncFKError'));
+    } finally {
+      setSyncing(false);
+    }
   };
 
   useImperativeHandle(ref, () => ({
@@ -393,9 +426,20 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
               />
             </SortableContext>
           </DndContext>
-          <div onClick={addData} className={styles.addColumnButton}>
-            <Iconfont code="&#xe631;" />
-            {i18n('editTable.button.addForeignKey')}
+          <div className={styles.actionBar}>
+            <div onClick={addData} className={styles.addColumnButton}>
+              <Iconfont code="&#xe631;" />
+              {i18n('editTable.button.addForeignKey')}
+            </div>
+            <Tooltip title={i18n('editTable.tooltip.syncFK')}>
+              <div 
+                onClick={!syncing ? handleSync : undefined} 
+                className={classnames(styles.syncButton, syncing && styles.syncing)}
+              >
+                {syncing ? <LoadingOutlined /> : <SyncOutlined />}
+                {i18n('editTable.button.syncForeignKeys')}
+              </div>
+            </Tooltip>
           </div>
         </div>
       </Form>

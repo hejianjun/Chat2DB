@@ -192,15 +192,18 @@ export default function createRequest<P = void, R = void>(url: string, options?:
           const { success, errorCode, errorMessage, errorDetail, solutionLink, data } = res;
           if (!success && errorLevel === 'toast' && !noNeedToastErrorCode.includes(errorCode)) {
             delayTimeFn(() => {
-              window._notificationApi({
-                requestUrl: eventualUrl,
-                requestParams: JSON.stringify(params),
-                errorCode,
-                errorMessage,
-                errorDetail,
-                solutionLink,
-              });
-              // message.error(`${errorCode}: ${errorMessage}`);
+              if (typeof window._notificationApi === 'function') {
+                window._notificationApi({
+                  requestUrl: eventualUrl,
+                  requestParams: JSON.stringify(params),
+                  errorCode,
+                  errorMessage,
+                  errorDetail,
+                  solutionLink,
+                });
+              } else {
+                message.error(`${errorCode}: ${errorMessage}`);
+              }
               reject(`${errorCode}: ${errorMessage}`);
             }, delayTime);
             return;
