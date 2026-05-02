@@ -41,9 +41,13 @@ import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.domain.api.service.DeprecatedTableService;
 import ai.chat2db.server.domain.api.service.PinService;
 import ai.chat2db.server.domain.api.service.TableService;
+import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
 import ai.chat2db.server.domain.core.converter.PinTableConverter;
+import ai.chat2db.server.domain.repository.Dbutils;
+import ai.chat2db.server.domain.repository.entity.VirtualForeignKeyDO;
+import ai.chat2db.server.domain.repository.mapper.VirtualForeignKeyMapper;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -67,6 +71,7 @@ import ai.chat2db.spi.model.TableMeta;
 import ai.chat2db.spi.model.Type;
 import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
@@ -87,6 +92,9 @@ public class TableServiceImpl implements TableService {
 
     @Autowired
     private DeprecatedTableService deprecatedTableService;
+
+    @Autowired
+    private ForeignKeySyncService foreignKeySyncService;
 
     @Autowired
     @Qualifier("indexUpdateExecutor")
@@ -378,8 +386,12 @@ public class TableServiceImpl implements TableService {
                 table.setColumnList(columnList);
             }
             if (Boolean.TRUE.equals(selector.getForeignKey())) {
-                queryParam.setClassType(ForeignKey.class);
-                List<ForeignKey> foreignKeys = getForeignKeys((LuceneIndexManager) luceneMgr, queryParam);
+                List<ForeignKey> foreignKeys = foreignKeySyncService.queryRealForeignKeys(
+                        param.getDataSourceId(),
+                        table.getDatabaseName(),
+                        table.getSchemaName(),
+                        table.getName()
+                );
                 table.setForeignKeyList(foreignKeys);
             }
             if (Boolean.TRUE.equals(selector.getColumnList())
@@ -612,36 +624,12 @@ public class TableServiceImpl implements TableService {
 
     @Override
     public List<ForeignKey> queryForeignKeys(TableQueryParam param) {
-        LuceneIndexManager<ForeignKey> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
-        param.setClassType(ForeignKey.class);
-        return getForeignKeys(luceneIndexManager, param);
-    }
-
-    private List<ForeignKey> getForeignKeys(LuceneIndexManager<ForeignKey> mgr, TableQueryParam param) {
-        // 检查是否需要刷新或Lucene索引是否为空
-        Long version = mgr.getMaxVersion(param);
-        if (param.isRefresh() || version == null) {
-            mgr.getLock().writeLock().lock();
-            try {
-                // 从元数据中查询外键
-                Connection connection = Chat2DBContext.getConnection();
-                MetaData metaSchema = Chat2DBContext.getMetaData();
-                List<ForeignKey> foreignKeys = metaSchema.foreignKeys(connection, param.getDatabaseName(),
-                        param.getSchemaName(),
-                        param.getTableName());
-
-                // 更新Lucene索引
-                mgr.updateDocuments(foreignKeys, version);
-                return foreignKeys;
-            } catch (Exception e) {
-                log.error("getForeignKeys error", e);
-            } finally {
-                mgr.getLock().writeLock().unlock();
-            }
-        }
-
-        // 从Lucene索引中查询外键
-        return mgr.search(param, null, null);
+        return foreignKeySyncService.queryRealForeignKeys(
+                param.getDataSourceId(),
+                param.getDatabaseName(),
+                param.getSchemaName(),
+                param.getTableName()
+        );
     }
 
     /**
@@ -652,26 +640,42 @@ public class TableServiceImpl implements TableService {
      * @return 虚拟外键关系列表（符合命名规范但未显式声明的外键）
      */
     private List<VirtualForeignKey> findVirtualForeignKeys(LuceneIndexManager<Table> luceneIndexManager, Table table) {
-        // 预加载已明确声明的外键列名（用于排除已存在的外键）
+        List<VirtualForeignKey> result = new ArrayList<>();
+
+        List<VirtualForeignKey> storedVirtualFKs = foreignKeySyncService.queryVirtualForeignKeys(
+                table.getDatabaseName() != null ? Long.parseLong(table.getDatabaseName() + "0") : null,
+                table.getDatabaseName(),
+                table.getSchemaName(),
+                table.getName()
+        );
+        if (!CollectionUtils.isEmpty(storedVirtualFKs)) {
+            result.addAll(storedVirtualFKs);
+        }
+
         Set<String> explicitForeignKeys = table.getForeignKeyList().stream()
                 .map(ForeignKey::getColumn)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        // 排除唯一索引
         table.getIndexList().stream()
                 .filter(index -> Boolean.TRUE.equals(index.getUnique()))
                 .map(TableIndex::getColumnList)
                 .flatMap(List::stream)
                 .map(TableIndexColumn::getColumnName)
                 .forEach(explicitForeignKeys::add);
-        return table.getColumnList().stream()
-                // 初步筛选候选列
+
+        Set<String> storedVKColumns = result.stream()
+                .map(VirtualForeignKey::getColumn)
+                .collect(Collectors.toSet());
+
+        List<VirtualForeignKey> inferredFKs = table.getColumnList().stream()
                 .filter(this::isPotentialVirtualKeyCandidate)
-                // 排除已声明外键
                 .filter(column -> !explicitForeignKeys.contains(column.getName()))
+                .filter(column -> !storedVKColumns.contains(column.getName()))
                 .map(column -> analyzeColumnRelation(luceneIndexManager, table, column))
-                // 过滤掉未找到关联表的情况
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+
+        result.addAll(inferredFKs);
+        return result;
     }
 
     /**
@@ -746,38 +750,6 @@ public class TableServiceImpl implements TableService {
                 .referencedColumn(referencedColumnName)
                 .virtualProperty("Inferred from column naming convention")
                 .build();
-    }
-
-    @Override
-    public ActionResult deleteVirtualForeignKey(DropKeyParam param) {
-        LuceneIndexManager<Table> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
-        param.setClassType(Table.class);
-        List<Table> search = luceneIndexManager.search(param, null, null);
-        if (CollectionUtils.isEmpty(search)) {
-            return ActionResult.fail("common.paramError", I18nUtils.getMessage("common.paramError"),
-                    "Lucene not found table");
-        }
-
-        // 处理找到的表
-        for (Table table : search) {
-            if (CollectionUtils.isEmpty(table.getVirtualForeignKeyList())) {
-                continue;
-            }
-            List<VirtualForeignKey> updatedForeignKeys = table.getVirtualForeignKeyList().stream()
-                    .filter(vForeignKey -> !param.getKeyName().equals(vForeignKey.getName()))
-                    .collect(Collectors.toList());
-
-            // 只有在有变化时才更新
-            if (updatedForeignKeys.size() < table.getVirtualForeignKeyList().size()) {
-                table.setVirtualForeignKeyList(updatedForeignKeys);
-                luceneIndexManager.updateDocument(table);
-            } else {
-                return ActionResult.fail("common.paramError", I18nUtils.getMessage("common.paramError"),
-                        "Virtual foreign key not found: " + param.getKeyName());
-            }
-        }
-
-        return ActionResult.isSuccess();
     }
 
     @Override

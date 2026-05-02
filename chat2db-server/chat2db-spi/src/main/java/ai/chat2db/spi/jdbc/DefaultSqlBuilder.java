@@ -13,6 +13,7 @@ import com.google.common.collect.Lists;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.model.Database;
+import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.OrderBy;
 import ai.chat2db.spi.model.ResultOperation;
@@ -227,6 +228,88 @@ public class DefaultSqlBuilder implements SqlBuilder {
     }
 
     protected void modifyForeignKeys(StringBuilder script, Table oldTable, Table newTable) {
+        List<ForeignKey> oldFKs = oldTable != null && oldTable.getForeignKeyList() != null
+                ? oldTable.getForeignKeyList() : Lists.newArrayList();
+        List<ForeignKey> newFKs = newTable != null && newTable.getForeignKeyList() != null
+                ? newTable.getForeignKeyList() : Lists.newArrayList();
+
+        java.util.Map<String, ForeignKey> oldFKMap = oldFKs.stream()
+                .collect(java.util.stream.Collectors.toMap(this::buildFKKey, f -> f, (o1, o2) -> o1));
+        java.util.Map<String, ForeignKey> newFKMap = newFKs.stream()
+                .collect(java.util.stream.Collectors.toMap(this::buildFKKey, f -> f, (o1, o2) -> o1));
+
+        for (ForeignKey newFK : newFKs) {
+            if (!oldFKMap.containsKey(buildFKKey(newFK))) {
+                script.append("\t").append("ADD CONSTRAINT `").append(newFK.getName()).append("` FOREIGN KEY (")
+                        .append("`").append(newFK.getColumn()).append("`) REFERENCES `")
+                        .append(newFK.getReferencedTable()).append("` (`")
+                        .append(newFK.getReferencedColumn()).append("`)");
+                if (newFK.getDeleteRule() == 0) {
+                    script.append(" ON DELETE CASCADE");
+                } else if (newFK.getDeleteRule() == 1) {
+                    script.append(" ON DELETE RESTRICT");
+                } else if (newFK.getDeleteRule() == 2) {
+                    script.append(" ON DELETE SET NULL");
+                }
+                if (newFK.getUpdateRule() == 0) {
+                    script.append(" ON UPDATE CASCADE");
+                } else if (newFK.getUpdateRule() == 1) {
+                    script.append(" ON UPDATE RESTRICT");
+                } else if (newFK.getUpdateRule() == 2) {
+                    script.append(" ON UPDATE SET NULL");
+                }
+                script.append(",\n");
+            }
+        }
+
+        for (ForeignKey oldFK : oldFKs) {
+            if (!newFKMap.containsKey(buildFKKey(oldFK))) {
+                script.append("\t").append("DROP FOREIGN KEY `").append(oldFK.getName()).append("`,\n");
+            }
+        }
+    }
+
+    private String buildFKKey(ForeignKey fk) {
+        return StringUtils.defaultString(fk.getTableName()) + ":"
+                + StringUtils.defaultString(fk.getColumn()) + ":"
+                + StringUtils.defaultString(fk.getReferencedTable()) + ":"
+                + StringUtils.defaultString(fk.getReferencedColumn());
+    }
+
+    public String buildAddForeignKeySql(Table table, ForeignKey fk) {
+        StringBuilder script = new StringBuilder();
+        script.append("ALTER TABLE ");
+        if (StringUtils.isNotBlank(table.getDatabaseName())) {
+            script.append("`").append(table.getDatabaseName()).append("`.`");
+        }
+        script.append("`").append(table.getName()).append("` ADD CONSTRAINT `")
+                .append(fk.getName() != null ? fk.getName() : "FK_" + table.getName() + "_" + fk.getColumn())
+                .append("` FOREIGN KEY (`").append(fk.getColumn())
+                .append("`) REFERENCES `").append(fk.getReferencedTable())
+                .append("` (`").append(fk.getReferencedColumn()).append("`)");
+        if (fk.getDeleteRule() == 0) {
+            script.append(" ON DELETE CASCADE");
+        } else if (fk.getDeleteRule() == 2) {
+            script.append(" ON DELETE SET NULL");
+        }
+        if (fk.getUpdateRule() == 0) {
+            script.append(" ON UPDATE CASCADE");
+        } else if (fk.getUpdateRule() == 2) {
+            script.append(" ON UPDATE SET NULL");
+        }
+        script.append(";");
+        return script.toString();
+    }
+
+    public String buildDropForeignKeySql(Table table, ForeignKey fk) {
+        StringBuilder script = new StringBuilder();
+        script.append("ALTER TABLE ");
+        if (StringUtils.isNotBlank(table.getDatabaseName())) {
+            script.append("`").append(table.getDatabaseName()).append("`.`");
+        }
+        script.append("`").append(table.getName()).append("` DROP FOREIGN KEY `")
+                .append(fk.getName()).append("`;");
+        return script.toString();
     }
 
     protected String buildGenerateReorderColumnSql(Table oldTable, Table newTable) {

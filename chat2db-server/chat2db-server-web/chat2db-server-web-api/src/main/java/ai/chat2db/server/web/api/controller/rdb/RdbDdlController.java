@@ -242,17 +242,6 @@ public class RdbDdlController {
 
 
     /**
-     * 删除虚拟外键
-     * @param request
-     * @return
-     */
-    @PostMapping("/delete_virtual_foreign_key")
-    public ActionResult deleteVirtualForeignKey(@Valid @RequestBody KeyDeleteRequest request) {
-        DropKeyParam dropParam = rdbWebConverter.keyDelete2dropParm(request);
-        return tableService.deleteVirtualForeignKey(dropParam);
-    }
-
-    /**
      * 废弃表
      *
      * @param request

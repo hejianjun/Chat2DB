@@ -81,4 +81,18 @@ public interface SqlBuilder {
      */
     String generateSqlBasedOnResults(String tableName, List<Header> headerList, List<ResultOperation> operations);
 
+    /**
+     * Generate add foreign key sql
+     */
+    default String buildAddForeignKeySql(Table table, ForeignKey fk) {
+        return null;
+    }
+
+    /**
+     * Generate drop foreign key sql
+     */
+    default String buildDropForeignKeySql(Table table, ForeignKey fk) {
+        return null;
+    }
+
 }

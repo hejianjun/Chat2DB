@@ -11,12 +11,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import ai.chat2db.server.domain.api.param.CreateVirtualFKParam;
 import ai.chat2db.server.domain.api.param.DropParam;
 import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
+import ai.chat2db.server.domain.api.param.UpdateVirtualFKParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.domain.api.service.TableService;
@@ -28,7 +30,9 @@ import ai.chat2db.server.tools.base.wrapper.result.web.WebPageResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.BatchTableModifySqlRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.CreateVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlExportRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeySyncRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableBriefQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableCreateDdlQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableDeleteRequest;
@@ -36,9 +40,11 @@ import ai.chat2db.server.web.api.controller.rdb.request.TableDetailQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableModifySqlRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TableUpdateDdlQueryRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.TypeQueryRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.UpdateVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ColumnVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.IndexVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.SqlVO;
+import ai.chat2db.server.web.api.controller.rdb.vo.SyncResult;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
 import ai.chat2db.spi.model.SimpleTable;
 import ai.chat2db.spi.model.Table;
@@ -46,6 +52,7 @@ import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableMeta;
 import ai.chat2db.spi.model.Type;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
@@ -251,6 +258,5 @@ public class TableController {
         DropParam dropParam = rdbWebConverter.tableDelete2dropParam(request);
         return tableService.drop(dropParam);
     }
-
 
 }

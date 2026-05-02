@@ -1,0 +1,115 @@
+package ai.chat2db.server.web.api.controller.rdb;
+
+import ai.chat2db.server.domain.api.param.CreateVirtualFKParam;
+import ai.chat2db.server.domain.api.param.UpdateVirtualFKParam;
+import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
+import ai.chat2db.server.domain.api.service.TableService;
+import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
+import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import ai.chat2db.server.tools.base.wrapper.result.ListResult;
+import ai.chat2db.server.web.api.controller.rdb.request.CreateVirtualFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeyListRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeySyncRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.UpdateVirtualFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.vo.DeleteFKResult;
+import ai.chat2db.server.web.api.controller.rdb.vo.ForeignKeyVO;
+import ai.chat2db.server.web.api.controller.rdb.vo.SyncResult;
+import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.VirtualForeignKey;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Slf4j
+@RequestMapping("/api/rdb/fk")
+@RestController
+public class ForeignKeyController {
+
+    @Autowired
+    private ForeignKeySyncService foreignKeySyncService;
+
+
+    @PostMapping("/sync")
+    public DataResult<SyncResult> sync(@Valid @RequestBody ForeignKeySyncRequest request) {
+        ForeignKeySyncService.SyncResult result = foreignKeySyncService.syncForeignKeys(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName(),
+                request.getTableName()
+        );
+        return DataResult.of(SyncResult.builder()
+                .added(result.getAdded())
+                .deleted(result.getDeleted())
+                .unchanged(result.getUnchanged())
+                .build());
+    }
+
+    @GetMapping("/list")
+    public ListResult<ForeignKeyVO> list(@Valid ForeignKeyListRequest request) {
+        List<ForeignKey> fks = foreignKeySyncService.listAllForeignKeys(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName(),
+                request.getTableName()
+        );
+        List<ForeignKeyVO> voList = fks.stream()
+                .map(fk -> ForeignKeyVO.builder()
+                        .name(fk.getName())
+                        .tableName(fk.getTableName())
+                        .columnName(fk.getColumn())
+                        .referencedTable(fk.getReferencedTable())
+                        .referencedColumnName(fk.getReferencedColumn())
+                        .comment(fk.getComment())
+                        .updateRule(fk.getUpdateRule())
+                        .deleteRule(fk.getDeleteRule())
+                        .sourceType(fk instanceof VirtualForeignKey ? "VIRTUAL" : "REAL")
+                        .editable(fk instanceof VirtualForeignKey)
+                        .build())
+                .collect(Collectors.toList());
+        return ListResult.of(voList);
+    }
+
+    @PostMapping("/virtual/create")
+    public DataResult<VirtualForeignKey> createVirtual(@Valid @RequestBody CreateVirtualFKRequest request) {
+        CreateVirtualFKParam param = CreateVirtualFKParam.builder()
+                .dataSourceId(request.getDataSourceId())
+                .databaseName(request.getDatabaseName())
+                .schemaName(request.getSchemaName())
+                .tableName(request.getTableName())
+                .columnName(request.getColumnName())
+                .referencedTable(request.getReferencedTable())
+                .referencedColumnName(request.getReferencedColumnName())
+                .comment(request.getComment())
+                .build();
+        return foreignKeySyncService.createVirtualFK(param);
+    }
+
+    @PostMapping("/virtual/update")
+    public DataResult<VirtualForeignKey> updateVirtual(@Valid @RequestBody UpdateVirtualFKRequest request) {
+        UpdateVirtualFKParam param = UpdateVirtualFKParam.builder()
+                .id(request.getId())
+                .comment(request.getComment())
+                .referencedTable(request.getReferencedTable())
+                .referencedColumnName(request.getReferencedColumnName())
+                .vkName(request.getVkName())
+                .build();
+        return foreignKeySyncService.updateVirtualFK(param);
+    }
+
+    @PostMapping("/delete")
+    public DataResult<DeleteFKResult> delete(@Valid @RequestBody DeleteFKRequest request) {
+        if ("VIRTUAL".equals(request.getSourceType())) {
+            foreignKeySyncService.deleteVirtualFK(request.getId());
+            return DataResult.of(DeleteFKResult.builder().executedDDL(null).build());
+        } else {
+            DataResult<String> result = foreignKeySyncService.deleteRealFK(request.getId());
+            String ddl = result.getData();
+            return DataResult.of(DeleteFKResult.builder().executedDDL(ddl).build());
+        }
+    }
+}

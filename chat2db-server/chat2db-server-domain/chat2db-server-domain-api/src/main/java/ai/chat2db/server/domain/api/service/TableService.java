@@ -3,6 +3,7 @@ package ai.chat2db.server.domain.api.service;
 import java.util.List;
 
 import ai.chat2db.server.domain.api.model.TreeNode;
+import ai.chat2db.server.domain.api.param.CreateVirtualFKParam;
 import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.param.DropKeyParam;
 import ai.chat2db.server.domain.api.param.DropParam;
@@ -12,6 +13,8 @@ import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.param.TreeSearchParam;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
+import ai.chat2db.server.domain.api.param.UpdateVirtualFKParam;
+import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -24,6 +27,7 @@ import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableMeta;
 import ai.chat2db.spi.model.Type;
+import ai.chat2db.spi.model.VirtualForeignKey;
 
 /**
  * 数据源管理服务
@@ -160,10 +164,6 @@ public interface TableService {
      */
     List<ForeignKey> queryForeignKeys(TableQueryParam param);
 
-    /**
-     * 删除虚拟外键
-     */
-    ActionResult deleteVirtualForeignKey(DropKeyParam param);
 
     /**
      * Search tree nodes for tables.
