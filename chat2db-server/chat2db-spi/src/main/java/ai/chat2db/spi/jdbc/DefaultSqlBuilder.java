@@ -62,6 +62,9 @@ public class DefaultSqlBuilder implements SqlBuilder {
 
         script.append(";");
 
+        if(StringUtils.isNotBlank(table.getAiComment())){
+            script.append(" -- ").append(table.getAiComment());
+        }
         return script.toString();
     }
 

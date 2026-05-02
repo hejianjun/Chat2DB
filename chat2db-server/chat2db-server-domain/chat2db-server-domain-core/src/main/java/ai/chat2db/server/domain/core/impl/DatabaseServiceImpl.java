@@ -227,7 +227,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             return tableNames.stream()
                     .map(tableName -> queryTableDdl(dataSourceId, databaseName, schemaName, tableName))
                     .filter(StringUtils::isNotBlank)
-                    .collect(Collectors.joining(";\n"));
+                    .collect(Collectors.joining("\n"));
         } catch (Exception e) {
             log.error("query tables:{} error, do nothing", tableNames);
         }
