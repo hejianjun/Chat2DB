@@ -642,42 +642,26 @@ public class TableServiceImpl implements TableService {
      * @return 虚拟外键关系列表（符合命名规范但未显式声明的外键）
      */
     private List<VirtualForeignKey> findVirtualForeignKeys(LuceneIndexManager<Table> luceneIndexManager, Table table) {
-        List<VirtualForeignKey> result = new ArrayList<>();
-
-        List<VirtualForeignKey> storedVirtualFKs = foreignKeySyncService.queryVirtualForeignKeys(
-                table.getDatabaseName() != null ? Long.parseLong(table.getDatabaseName() + "0") : null,
-                table.getDatabaseName(),
-                table.getSchemaName(),
-                table.getName()
-        );
-        if (!CollectionUtils.isEmpty(storedVirtualFKs)) {
-            result.addAll(storedVirtualFKs);
-        }
-
+        // 预加载已明确声明的外键列名（用于排除已存在的外键）
         Set<String> explicitForeignKeys = table.getForeignKeyList().stream()
                 .map(ForeignKey::getColumn)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+        // 排除唯一索引
         table.getIndexList().stream()
                 .filter(index -> Boolean.TRUE.equals(index.getUnique()))
                 .map(TableIndex::getColumnList)
                 .flatMap(List::stream)
                 .map(TableIndexColumn::getColumnName)
                 .forEach(explicitForeignKeys::add);
-
-        Set<String> storedVKColumns = result.stream()
-                .map(VirtualForeignKey::getColumn)
-                .collect(Collectors.toSet());
-
-        List<VirtualForeignKey> inferredFKs = table.getColumnList().stream()
+        return table.getColumnList().stream()
+                // 初步筛选候选列
                 .filter(this::isPotentialVirtualKeyCandidate)
+                // 排除已声明外键
                 .filter(column -> !explicitForeignKeys.contains(column.getName()))
-                .filter(column -> !storedVKColumns.contains(column.getName()))
                 .map(column -> analyzeColumnRelation(luceneIndexManager, table, column))
+                // 过滤掉未找到关联表的情况
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-
-        result.addAll(inferredFKs);
-        return result;
     }
 
     /**
