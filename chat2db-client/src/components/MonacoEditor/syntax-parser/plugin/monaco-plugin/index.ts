@@ -296,53 +296,63 @@ export function monacoSqlAutocomplete(
           opts.onParse(parseResult);
 
           if (parseResult.error) {
-            const newReason =
-              parseResult.error.reason === 'incomplete'
-                ? `Incomplete, expect next input: \n${parseResult.error.suggestions
-                    .map((each: any) => {
-                      return each.value;
-                    })
-                    .join('\n')}`
-                : `Wrong input, expect: \n${parseResult.error.suggestions
-                    .map((each: any) => {
-                      return each.value;
-                    })
-                    .join('\n')}`;
+            // Check if input only contains comments and whitespace
+            // Handle both \n and \r\n line endings, and use [\s\S] to match all characters including \r
+            const textWithoutComments = editor.getValue().replace(/((?:#|--)[\s\S]*?(?:\r?\n|$)|\/\*[\s\S]*?(?:\*\/|$))/g, '').trim();
+            
+            // Only show error if there's actual SQL content (not just comments)
+            if (textWithoutComments.length > 0) {
+              const newReason =
+                parseResult.error.reason === 'incomplete'
+                  ? `Incomplete, expect next input: \n${parseResult.error.suggestions
+                      .map((each: any) => {
+                        return each.value;
+                      })
+                      .join('\n')}`
+                  : `Wrong input, expect: \n${parseResult.error.suggestions
+                      .map((each: any) => {
+                        return each.value;
+                      })
+                      .join('\n')}`;
 
-            const errorPosition = parseResult.error.token
-              ? {
-                  startLineNumber: model.getPositionAt(
-                    parseResult.error.token.position[0],
-                  ).lineNumber,
-                  startColumn: model.getPositionAt(
-                    parseResult.error.token.position[0],
-                  ).column,
-                  endLineNumber: model.getPositionAt(
-                    parseResult.error.token.position[1],
-                  ).lineNumber,
-                  endColumn:
-                    model.getPositionAt(parseResult.error.token.position[1])
-                      .column + 1,
-                }
-              : {
-                  startLineNumber: 0,
-                  startColumn: 0,
-                  endLineNumber: 0,
-                  endColumn: 0,
-                };
+              const errorPosition = parseResult.error.token
+                ? {
+                    startLineNumber: model.getPositionAt(
+                      parseResult.error.token.position[0],
+                    ).lineNumber,
+                    startColumn: model.getPositionAt(
+                      parseResult.error.token.position[0],
+                    ).column,
+                    endLineNumber: model.getPositionAt(
+                      parseResult.error.token.position[1],
+                    ).lineNumber,
+                    endColumn:
+                      model.getPositionAt(parseResult.error.token.position[1])
+                        .column + 1,
+                  }
+                : {
+                    startLineNumber: 0,
+                    startColumn: 0,
+                    endLineNumber: 0,
+                    endColumn: 0,
+                  };
 
-            model.getPositionAt(parseResult.error.token);
+              model.getPositionAt(parseResult.error.token);
 
-            monaco.editor.setModelMarkers(model, opts.language, [
-              {
-                ...errorPosition,
-                message: newReason,
-                severity: getSeverityByVersion(
-                  monaco,
-                  opts.monacoEditorVersion,
-                ),
-              },
-            ]);
+              monaco.editor.setModelMarkers(model, opts.language, [
+                {
+                  ...errorPosition,
+                  message: newReason,
+                  severity: getSeverityByVersion(
+                    monaco,
+                    opts.monacoEditorVersion,
+                  ),
+                },
+              ]);
+            } else {
+              // Clear error markers for comment-only input
+              monaco.editor.setModelMarkers(editor.getModel(), opts.language, []);
+            }
           } else {
             monaco.editor.setModelMarkers(editor.getModel(), opts.language, []);
           }

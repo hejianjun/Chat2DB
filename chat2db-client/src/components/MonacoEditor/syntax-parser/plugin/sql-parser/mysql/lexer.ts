@@ -9,8 +9,8 @@ export const sqlTokenizer = createLexer([
   {
     type: 'comment',
     regexes: [
-      /^((?:#|--).*?(?:\n|$))/, // # --
-      /^(\/\*[^]*?(?:\*\/|$))/, // /* */
+      /^((?:#|--)[\s\S]*?(?:\r?\n|$))/, // # --
+      /^(\/\*[\s\S]*?(?:\*\/|$))/, // /* */
     ],
     ignore: true,
   },
