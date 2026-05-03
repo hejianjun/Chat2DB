@@ -19,4 +19,9 @@ public class ErDiagramQueryRequest extends DataSourceBaseRequest {
      * 是否包含虚拟外键（根据命名规范推断的外键），默认为true
      */
     private Boolean includeVirtualFk = true;
+
+    /**
+     * 是否同步数据库真实外键到本地，默认为false
+     */
+    private Boolean syncForeignKeys = false;
 }

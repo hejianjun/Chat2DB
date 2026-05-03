@@ -116,6 +116,8 @@ export interface IErParams {
   tableNameFilter?: string;
   /** 是否包含虚拟外键 */
   includeVirtualFk?: boolean;
+  /** 是否同步数据库真实外键到本地 */
+  syncForeignKeys?: boolean;
 }
 
 /** 获取ER图数据接口 */

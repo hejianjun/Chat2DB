@@ -172,13 +172,14 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
   const [inferring, setInferring] = React.useState(false);
 
   const fetchData = useCallback(
-    () => {
+    (syncForeignKeys?: boolean) => {
       fetchErDiagram({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
         schemaName: uniqueData.schemaName,
         tableNameFilter: filterText || undefined,
         includeVirtualFk,
+        syncForeignKeys,
       });
     },
     [uniqueData, filterText, includeVirtualFk, fetchErDiagram],
@@ -265,15 +266,17 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
             dataSourceId: uniqueData.dataSourceId,
             databaseName: uniqueData.databaseName,
             schemaName: uniqueData.schemaName,
+          }).then(() => {
+            fetchData();
           });
         }
       }
     },
-    [deleteVirtualForeignKey, uniqueData],
+    [deleteVirtualForeignKey, uniqueData, fetchData],
   );
 
   const handleRefresh = useCallback(() => {
-    fetchData();
+    fetchData(true);
   }, [fetchData]);
 
   const handleInferVirtualFk = useCallback(async () => {

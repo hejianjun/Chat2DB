@@ -369,8 +369,8 @@ export const useGetRightClickMenu = (props: IProps) => {
       [OperationColumn.DeleteVirtualKey]: {
         text: i18n('workspace.menu.deleteVirtualKey'),
         icon: '\ue6a7',
-        handle: () => {
-          deleteVirtualForeignKey(treeNodeData, loadData);
+        handle: async () => {
+          await deleteVirtualForeignKey(treeNodeData, loadData);
         },
       },
 
@@ -770,8 +770,8 @@ export const getRightClickMenu = (props: IProps) => {
     [OperationColumn.DeleteVirtualKey]: {
       text: i18n('workspace.menu.deleteVirtualKey'),
       icon: '\ue6a7',
-      handle: () => {
-        deleteVirtualForeignKey(treeNodeData, loadData);
+      handle: async () => {
+        await deleteVirtualForeignKey(treeNodeData, loadData);
       },
     },
 
@@ -885,7 +885,6 @@ export const getRightClickMenu = (props: IProps) => {
 
 const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void) => {
   const { dataSourceId, databaseName, schemaName, tableName } = treeNode.extraParams!;
-  // 确保 databaseName 存在，如果不存在则提供默认值或抛出错误
   if (!databaseName) {
     message.error('数据库名称不能为空');
     return;
@@ -904,7 +903,7 @@ const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void
     });
     
     message.success('删除虚拟外键成功');
-    loadData(); // 刷新树节点
+    loadData?.({ refresh: true });
   } catch (error) {
     message.error('删除虚拟外键失败');
     console.error('删除虚拟外键失败:', error);

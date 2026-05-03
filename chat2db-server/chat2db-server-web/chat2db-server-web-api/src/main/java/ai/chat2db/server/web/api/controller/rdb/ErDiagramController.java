@@ -43,6 +43,7 @@ public class ErDiagramController {
                 .schemaName(request.getSchemaName())
                 .tableNameFilter(request.getTableNameFilter())
                 .includeVirtualFk(request.getIncludeVirtualFk())
+                .syncForeignKeys(request.getSyncForeignKeys())
                 .build();
         return erDiagramService.queryErDiagram(param);
     }

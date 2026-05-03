@@ -40,6 +40,16 @@ public class ErDiagramServiceImpl implements ErDiagramService {
 
     @Override
     public DataResult<ErDiagram> queryErDiagram(ErDiagramQueryParam param) {
+        // 根据参数决定是否同步数据库真实外键到本地H2
+        if (Boolean.TRUE.equals(param.getSyncForeignKeys())) {
+            foreignKeySyncService.syncForeignKeys(
+                    param.getDataSourceId(),
+                    param.getDatabaseName(),
+                    param.getSchemaName(),
+                    null
+            );
+        }
+        
         List<Table> tables = queryTables(param);
         List<ErDiagram.Node> nodes = buildNodes(tables);
         Set<String> tableNameSet = tables.stream().map(Table::getName).collect(Collectors.toSet());

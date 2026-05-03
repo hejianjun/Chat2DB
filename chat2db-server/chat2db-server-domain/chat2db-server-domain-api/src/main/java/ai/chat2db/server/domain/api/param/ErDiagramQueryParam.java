@@ -48,4 +48,9 @@ public class ErDiagramQueryParam extends QueryParam {
      * 是否包含虚拟外键，默认为true
      */
     private Boolean includeVirtualFk;
+
+    /**
+     * 是否同步数据库真实外键到本地，默认为false
+     */
+    private Boolean syncForeignKeys;
 }
