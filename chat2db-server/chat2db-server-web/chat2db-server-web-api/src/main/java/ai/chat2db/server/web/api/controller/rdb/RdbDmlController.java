@@ -20,6 +20,7 @@ import ai.chat2db.server.domain.api.param.OrderByParam;
 import ai.chat2db.server.domain.api.param.UpdateSelectResultParam;
 import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
+import ai.chat2db.server.domain.core.service.VirtualFkSuggestionService;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -36,6 +37,7 @@ import ai.chat2db.server.web.api.util.ApplicationContextUtil;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import ai.chat2db.spi.sql.Chat2DBContext;
 
 /**
@@ -56,6 +58,9 @@ public class RdbDmlController {
     @Autowired
     private DlTemplateService dlTemplateService;
 
+    @Autowired
+    private VirtualFkSuggestionService virtualFkSuggestionService;
+
 
     /**
      * 执行SQL语句，返回所有执行结果
@@ -69,6 +74,20 @@ public class RdbDmlController {
         DlExecuteParam param = rdbWebConverter.request2param(request);
         ListResult<ExecuteResult> resultDTOListResult = dlTemplateService.execute(param);
         List<ExecuteResultVO> resultVOS = rdbWebConverter.dto2vo(resultDTOListResult.getData());
+        
+        // Add Virtual FK suggestions for the first SELECT statement executed
+        // Or if there are multiple SQLs, we could try to parse each one, 
+        // but usually the user executes a query.
+        // Let's just parse the input SQL if it's a single one.
+        String sql = request.getSql();
+        if (sql != null) {
+            List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(sql);
+            if (!suggestions.isEmpty() && !resultVOS.isEmpty()) {
+                // Attach to the first result
+                resultVOS.get(0).setVkSuggestions(suggestions);
+            }
+        }
+        
         return ListResult.of(resultVOS);
     }
 

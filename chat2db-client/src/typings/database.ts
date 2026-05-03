@@ -35,6 +35,17 @@ export interface IManageResultData {
   updateCount?: number; // 如果是修改的话。后端会返回修改的条数
   canEdit?: boolean; // 返回的数据是否可以编辑
   tableName?: string; // 如果可以编辑的话。后端会返回表名称。修改需要给后端传递表名
+  
+  /** 虚拟外键建议列表 */
+  vkSuggestions?: IVirtualFkSuggestion[];
+}
+
+export interface IVirtualFkSuggestion {
+  sourceTable: string;
+  sourceColumn: string;
+  targetTable: string;
+  targetColumn: string;
+  reason?: string;
 }
 
 /** 查询结果 配置属性 */

@@ -4,6 +4,7 @@ import java.util.List;
 
 
 import ai.chat2db.spi.model.Header;
+import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import lombok.Data;
 
 /**
@@ -98,4 +99,9 @@ public class ExecuteResultVO {
      * 表名
      */
     private String tableName;
+
+    /**
+     * 虚拟外键建议列表
+     */
+    private List<VirtualForeignKeySuggestion> vkSuggestions;
 }

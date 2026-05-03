@@ -21,9 +21,9 @@ import StatusBar from './components/StatusBar';
 import styles from './index.less';
 import EmptyImg from '@/assets/img/empty.svg';
 import i18n from '@/i18n';
-import sqlServer, { IExecuteSqlParams } from '@/service/sql';
+import sqlServer, { IExecuteSqlParams, ICreateVirtualFKParams } from '@/service/sql';
 import { v4 as uuidV4 } from 'uuid';
-import { Spin } from 'antd';
+import { Spin, Modal, message } from 'antd';
 
 interface IProps {
   className?: string;
@@ -101,6 +101,51 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
         setResultDataList(sqlResult);
         if(!notChangedSql){
           setNotChangedSql(_sql);
+        }
+
+        // 检查是否有虚拟外键建议
+        const allSuggestions: IVirtualFkSuggestion[] = [];
+        res.forEach((item) => {
+          if (item.vkSuggestions && item.vkSuggestions.length > 0) {
+            allSuggestions.push(...item.vkSuggestions);
+          }
+        });
+
+        if (allSuggestions.length > 0) {
+          const suggestionText = allSuggestions
+            .map((s) => `${s.sourceTable}.${s.sourceColumn} → ${s.targetTable}.${s.targetColumn}`)
+            .join('\n');
+
+          Modal.confirm({
+            title: i18n('workspace.erDiagram.suggestionHint'),
+            content: (
+              <pre style={{ maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
+                {suggestionText}
+              </pre>
+            ),
+            width: 600,
+            okText: i18n('common.button.confirm'),
+            cancelText: i18n('common.button.cancel'),
+            onOk: async () => {
+              try {
+                for (const s of allSuggestions) {
+                  const params: ICreateVirtualFKParams = {
+                    dataSourceId: executeSqlParams.dataSourceId,
+                    databaseName: executeSqlParams.databaseName,
+                    schemaName: executeSqlParams.schemaName,
+                    tableName: s.sourceTable,
+                    columnName: s.sourceColumn,
+                    referencedTable: s.targetTable,
+                    referencedColumnName: s.targetColumn,
+                  };
+                  await sqlServer.createVirtualForeignKey(params);
+                }
+                message.success(i18n('workspace.erDiagram.inferVirtualFkSuccess', allSuggestions.length));
+              } catch (error) {
+                message.error(i18n('workspace.erDiagram.inferVirtualFkError'));
+              }
+            },
+          });
         }
       })
       .finally(() => {

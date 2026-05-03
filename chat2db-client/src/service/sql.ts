@@ -583,4 +583,5 @@ export default {
   deleteVirtualForeignKey,
   truncateTable,
   inferVirtualForeignKeys,
+  createVirtualForeignKey,
 };

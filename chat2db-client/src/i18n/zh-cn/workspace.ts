@@ -24,6 +24,7 @@ export default {
   'workspace.erDiagram.inferVirtualFkNoResult': '未发现新的虚拟外键',
   'workspace.erDiagram.inferVirtualFkError': '推断虚拟外键失败',
   'workspace.erDiagram.confirmDeleteVirtualFk': '确定要删除虚拟外键 "{1}" 吗？',
+  'workspace.erDiagram.suggestionHint': '根据您的SQL语句，检测到以下潜在的表关系：',
   'workspace.erDiagram.zoomIn': '放大',
   'workspace.erDiagram.zoomOut': '缩小',
   'workspace.erDiagram.fitView': '适应画布',

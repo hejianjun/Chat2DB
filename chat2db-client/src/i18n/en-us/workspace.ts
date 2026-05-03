@@ -23,6 +23,7 @@ export default {
   'workspace.erDiagram.inferVirtualFkNoResult': 'No new virtual foreign keys found',
   'workspace.erDiagram.inferVirtualFkError': 'Failed to infer virtual foreign keys',
   'workspace.erDiagram.confirmDeleteVirtualFk': 'Are you sure you want to delete the virtual foreign key "{1}"?',
+  'workspace.erDiagram.suggestionHint': 'Detected potential table relationships based on your SQL:',
   'workspace.erDiagram.zoomIn': 'Zoom In',
   'workspace.erDiagram.zoomOut': 'Zoom Out',
   'workspace.erDiagram.fitView': 'Fit View',
