@@ -126,12 +126,18 @@ export const useGetRightClickMenu = (props: IProps) => {
         text: i18n('workspace.menu.queryConsole'),
         icon: '\ue619',
         handle: () => {
+          const tableName = compatibleDataBaseName(
+            treeNodeData.name!,
+            treeNodeData.extraParams!.databaseType,
+            treeNodeData.extraParams?.schemaName,
+          );
           createConsole({
             dataSourceId: treeNodeData.extraParams!.dataSourceId!,
             dataSourceName: treeNodeData.extraParams!.dataSourceName!,
             databaseType: treeNodeData.extraParams!.databaseType!,
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
+            ddl: `select * from ${tableName}`,
           });
         },
       },
@@ -543,12 +549,18 @@ export const getRightClickMenu = (props: IProps) => {
       text: i18n('workspace.menu.queryConsole'),
       icon: '\ue619',
       handle: () => {
+        const tableName = compatibleDataBaseName(
+          treeNodeData.name!,
+          treeNodeData.extraParams!.databaseType,
+          treeNodeData.extraParams?.schemaName,
+        );
         createConsole({
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
           dataSourceName: treeNodeData.extraParams!.dataSourceName!,
           databaseType: treeNodeData.extraParams!.databaseType!,
           databaseName: treeNodeData.extraParams?.databaseName,
           schemaName: treeNodeData.extraParams?.schemaName,
+          ddl: `select * from ${tableName}`,
         });
       },
     },
