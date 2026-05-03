@@ -1,8 +1,6 @@
 package ai.chat2db.server.domain.core.service;
 
 import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
-import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
@@ -17,16 +15,6 @@ import java.util.*;
 
 @Service
 public class VirtualFkSuggestionService {
-
-    public List<VirtualForeignKeySuggestion> suggest(String sql) {
-        if (sql == null || sql.trim().isEmpty()) return Collections.emptyList();
-        try {
-            Statement stmt = CCJSqlParserUtil.parse(sql);
-            return suggest(stmt);
-        } catch (JSQLParserException e) {
-            return Collections.emptyList();
-        }
-    }
 
     public List<VirtualForeignKeySuggestion> suggest(Statement stmt) {
         List<VirtualForeignKeySuggestion> suggestions = new ArrayList<>();

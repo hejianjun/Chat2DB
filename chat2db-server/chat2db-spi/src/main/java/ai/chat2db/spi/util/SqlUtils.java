@@ -40,20 +40,6 @@ public class SqlUtils {
 
     public static final String DEFAULT_TABLE_NAME = "table1";
 
-    public static void buildCanEditResult(String sql, DbType dbType, ExecuteResult executeResult) {
-        try {
-            Statement statement;
-            if (DbType.sqlserver.equals(dbType)) {
-                statement = CCJSqlParserUtil.parse(sql, ccjSqlParser -> ccjSqlParser.withSquareBracketQuotation(true));
-            } else {
-                statement = CCJSqlParserUtil.parse(sql);
-            }
-            buildCanEditResultFromStatement(statement, sql, dbType, executeResult);
-        } catch (Exception e) {
-            log.error("buildCanEditResult error:", e);
-            executeResult.setCanEdit(false);
-        }
-    }
 
     public static void buildCanEditResultFromStatement(Statement statement, String sql, DbType dbType, ExecuteResult executeResult) {
         try {
