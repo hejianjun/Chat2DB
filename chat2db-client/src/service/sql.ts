@@ -446,7 +446,7 @@ const deleteVirtualForeignKey = createRequest<{
   schemaName?: string;
   tableName: string;
   keyName: string;
-}, void>('/api/rdb/ddl/delete_virtual_foreign_key', { method: 'post' });
+}, void>('/api/rdb/fk/delete_by_name', { method: 'post' });
 
 /** 外键列表查询参数 */
 export interface IForeignKeyListParams {

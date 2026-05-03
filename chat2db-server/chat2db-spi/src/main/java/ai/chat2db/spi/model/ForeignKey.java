@@ -12,6 +12,10 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 public class ForeignKey implements IndexModel {
 
+    /**
+     * 数据库存储的外键ID
+     */
+    private Long id;
 
     // 外键名称
     @JsonAlias({"FK_NAME"})

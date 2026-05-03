@@ -434,6 +434,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
     private ForeignKey convertDOToModel(ForeignKeyDO fk) {
         return ForeignKey.builder()
+                .id(fk.getId())
                 .name(fk.getFkName())
                 .tableName(fk.getTableName())
                 .schemaName(fk.getSchemaName())
@@ -449,6 +450,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
     private VirtualForeignKey convertVirtualDOToModel(VirtualForeignKeyDO vk) {
         return VirtualForeignKey.builder()
+                .id(vk.getId())
                 .name(vk.getVkName())
                 .tableName(vk.getTableName())
                 .schemaName(vk.getSchemaName())

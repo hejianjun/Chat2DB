@@ -49,7 +49,7 @@ export default {
   'editTable.tooltip.virtualFK': 'Virtual foreign key',
   'editTable.tooltip.realFK': 'Real foreign key',
   'editTable.message.syncFKWarning': 'Missing required table information',
-  'editTable.message.syncFKSuccess': 'Synced: {0} added, {1} deleted, {2} unchanged',
+  'editTable.message.syncFKSuccess': 'Synced: {1} added, {2} deleted, {3} unchanged',
   'editTable.message.syncFKError': 'Failed to sync foreign keys',
   'editTable.option.cascade': 'CASCADE',
   'editTable.option.setNull': 'SET NULL',

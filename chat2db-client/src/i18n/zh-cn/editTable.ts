@@ -49,7 +49,7 @@ export default {
   'editTable.tooltip.virtualFK': '虚拟外键',
   'editTable.tooltip.realFK': '真实外键',
   'editTable.message.syncFKWarning': '缺少必要的表信息',
-  'editTable.message.syncFKSuccess': '同步完成：新增 {0} 个，删除 {1} 个，未变 {2} 个',
+  'editTable.message.syncFKSuccess': '同步完成：新增 {1} 个，删除 {2} 个，未变 {3} 个',
   'editTable.message.syncFKError': '同步外键失败',
   'editTable.option.cascade': '级联',
   'editTable.option.setNull': '置为NULL',

@@ -8,6 +8,7 @@ import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.web.api.controller.rdb.request.CreateVirtualFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKByNameRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeyListRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeySyncRequest;
@@ -111,5 +112,22 @@ public class ForeignKeyController {
             String ddl = result.getData();
             return DataResult.of(DeleteFKResult.builder().executedDDL(ddl).build());
         }
+    }
+
+    @PostMapping("/delete_by_name")
+    public ActionResult deleteByName(@Valid @RequestBody DeleteFKByNameRequest request) {
+        List<VirtualForeignKey> virtualFKs = foreignKeySyncService.queryVirtualForeignKeys(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName(),
+                request.getTableName()
+        );
+        for (VirtualForeignKey vk : virtualFKs) {
+            if (vk.getName() != null && vk.getName().equals(request.getKeyName())) {
+                foreignKeySyncService.deleteVirtualFK(vk.getId());
+                return ActionResult.isSuccess();
+            }
+        }
+        return ActionResult.fail("VIRTUAL_FK_NOT_FOUND", "虚拟外键不存在", "");
     }
 }
