@@ -110,4 +110,9 @@ public class ExecuteResult {
      * 虚拟外键建议列表（根据SQL解析自动生成）
      */
     private List<VirtualForeignKeySuggestion> vkSuggestions;
+
+    /**
+     * JSqlParser parsed AST statement (cached for reuse)
+     */
+    private transient net.sf.jsqlparser.statement.Statement jsqlStatement;
 }

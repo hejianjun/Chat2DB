@@ -55,6 +55,7 @@ import ai.chat2db.spi.util.ResultSetUtils;
 import ai.chat2db.spi.util.SqlUtils;
 import cn.hutool.core.date.TimeInterval;
 import lombok.extern.slf4j.Slf4j;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 
 /**
  * Dbhub 统一数据库连接管理
@@ -595,21 +596,32 @@ public class SQLExecutor implements CommandExecutor {
         Integer offset = null;
         Integer count = null;
         String sqlType = SqlTypeEnum.UNKNOWN.getCode();
-        // 解析sql
         String type = Chat2DBContext.getConnectInfo().getDbType();
         boolean supportDruid = !DataSourceTypeEnum.MONGODB.getCode().equals(type);
-        // 解析sql分页
-        SQLStatement sqlStatement = null;
+        boolean supportJsqlParser = supportDruid;
+
+        // Parse Druid AST once
+        SQLStatement druidSqlStatement = null;
         if (supportDruid) {
             try {
-                sqlStatement = SQLUtils.parseSingleStatement(originalSql, dbType);
+                druidSqlStatement = SQLUtils.parseSingleStatement(originalSql, dbType);
             } catch (ParserException e) {
-                log.warn("解析sql失败:{}", originalSql, e);
+                log.warn("Druid parse sql error:{}", originalSql, e);
             }
         }
 
-        // Mongodb is currently unable to recognize it, so every time a page is transmitted
-        if (!supportDruid || (sqlStatement instanceof SQLSelectStatement)) {
+        // Parse JSqlParser AST once
+        net.sf.jsqlparser.statement.Statement jsqlStatement = null;
+        if (supportJsqlParser) {
+            try {
+                jsqlStatement = CCJSqlParserUtil.parse(originalSql);
+            } catch (Exception e) {
+                log.warn("JSqlParser parse sql error:{}", originalSql, e);
+            }
+        }
+
+        // Determine SQL type using Druid AST
+        if (!supportDruid || (druidSqlStatement instanceof SQLSelectStatement)) {
             pageNo = Optional.ofNullable(param.getPageNo()).orElse(1);
             pageSize = Optional.ofNullable(param.getPageSize()).orElse(EasyToolsConstant.MAX_PAGE_SIZE);
             offset = (pageNo - 1) * pageSize;
@@ -617,8 +629,9 @@ public class SQLExecutor implements CommandExecutor {
             sqlType = SqlTypeEnum.SELECT.getCode();
         }
 
+        // Check pagination using JSqlParser AST
         ExecuteResult executeResult = null;
-        if (SqlTypeEnum.SELECT.getCode().equals(sqlType) && !SqlUtils.hasPageLimit(originalSql, dbType)) {
+        if (SqlTypeEnum.SELECT.getCode().equals(sqlType) && jsqlStatement != null && !SqlUtils.hasPageLimit(jsqlStatement, dbType)) {
             String pageLimit = Chat2DBContext.getSqlBuilder().pageLimit(originalSql, offset, pageNo, pageSize);
             if (StringUtils.isNotBlank(pageLimit)) {
                 executeResult = execute(pageLimit, 0, count);
@@ -631,10 +644,10 @@ public class SQLExecutor implements CommandExecutor {
         executeResult.setSqlType(sqlType);
         executeResult.setOriginalSql(originalSql);
 
-        boolean supportJsqlParser = !DataSourceTypeEnum.MONGODB.getCode().equals(type);
-        if (supportJsqlParser && SqlTypeEnum.SELECT.getCode().equals(sqlType)) {
+        // Build editable result using JSqlParser AST
+        if (supportJsqlParser && SqlTypeEnum.SELECT.getCode().equals(sqlType) && jsqlStatement != null) {
             try {
-                SqlUtils.buildCanEditResult(originalSql, dbType, executeResult);
+                SqlUtils.buildCanEditResultFromStatement(jsqlStatement, originalSql, dbType, executeResult);
             } catch (Exception e) {
                 log.warn("buildCanEditResult error", e);
             }
@@ -652,10 +665,6 @@ public class SQLExecutor implements CommandExecutor {
         }
 
         List<Header> headers = executeResult.getHeaderList();
-//        if (executeResult.getSuccess() && executeResult.isCanEdit() && CollectionUtils.isNotEmpty(headers)) {
-//            headers = setColumnInfo(headers, executeResult.getTableName(), param.getSchemaName(),
-//                    param.getDatabaseName());
-//        }
         Header rowNumberHeader = Header.builder()
                 .name(I18nUtils.getMessage("sqlResult.rowNumber"))
                 .dataType(DataTypeEnum.CHAT2DB_ROW_NUMBER
@@ -672,8 +681,8 @@ public class SQLExecutor implements CommandExecutor {
                 executeResult.getDataList().set(i, newRow);
             }
         }
-        //  Total number of fuzzy rows
         executeResult.setFuzzyTotal(calculateFuzzyTotal(pageNo, pageSize, executeResult));
+        executeResult.setJsqlStatement(jsqlStatement);
         return executeResult;
     }
 

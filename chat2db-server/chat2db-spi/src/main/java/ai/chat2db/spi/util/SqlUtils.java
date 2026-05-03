@@ -48,24 +48,30 @@ public class SqlUtils {
             } else {
                 statement = CCJSqlParserUtil.parse(sql);
             }
+            buildCanEditResultFromStatement(statement, sql, dbType, executeResult);
+        } catch (Exception e) {
+            log.error("buildCanEditResult error:", e);
+            executeResult.setCanEdit(false);
+        }
+    }
+
+    public static void buildCanEditResultFromStatement(Statement statement, String sql, DbType dbType, ExecuteResult executeResult) {
+        try {
             if (statement instanceof Select) {
                 Select select = (Select) statement;
-                PlainSelect plainSelect = (PlainSelect) select.getSelectBody();
-                if (plainSelect.getJoins() == null && plainSelect.getFromItem() != null) {
-                    for (SelectItem item : plainSelect.getSelectItems()) {
-                        if (item instanceof SelectExpressionItem) {
-                            SelectExpressionItem expressionItem = (SelectExpressionItem) item;
-                            if (expressionItem.getAlias() != null) {
-                                //canEdit = false; // 找到了一个别名
-                                executeResult.setCanEdit(false);
-                                return;
-                            }
+                SelectBody selectBody = select.getSelectBody();
+                if (selectBody instanceof PlainSelect plainSelect) {
+                    if (plainSelect.getJoins() == null && plainSelect.getFromItem() != null) {
+                        for (SelectItem item : plainSelect.getSelectItems()) {
                             if (item instanceof SelectExpressionItem) {
+                                SelectExpressionItem expressionItem = (SelectExpressionItem) item;
+                                if (expressionItem.getAlias() != null) {
+                                    executeResult.setCanEdit(false);
+                                    return;
+                                }
                                 SelectExpressionItem selectExpressionItem = (SelectExpressionItem) item;
-                                // 如果表达式是一个函数
                                 if (selectExpressionItem.getExpression() instanceof Function) {
                                     Function function = (Function) selectExpressionItem.getExpression();
-                                    // 检查函数是否为 "COUNT"
                                     if ("COUNT".equalsIgnoreCase(function.getName())) {
                                         executeResult.setCanEdit(false);
                                         return;
@@ -73,20 +79,20 @@ public class SqlUtils {
                                 }
                             }
                         }
+                        executeResult.setCanEdit(true);
+                        SQLStatement sqlStatement = SQLUtils.parseSingleStatement(sql, dbType);
+                        if ((sqlStatement instanceof SQLSelectStatement sqlSelectStatement)) {
+                            SQLExprTableSource sqlExprTableSource = (SQLExprTableSource) getSQLExprTableSource(
+                                    sqlSelectStatement.getSelect().getFirstQueryBlock().getFrom());
+                            executeResult.setTableName(getMetaDataTableName(sqlExprTableSource.getCatalog(), sqlExprTableSource.getSchema(), sqlExprTableSource.getTableName()));
+                        }
+                    } else {
+                        executeResult.setCanEdit(false);
                     }
-                    executeResult.setCanEdit(true);
-                    SQLStatement sqlStatement = SQLUtils.parseSingleStatement(sql, dbType);
-                    if ((sqlStatement instanceof SQLSelectStatement sqlSelectStatement)) {
-                        SQLExprTableSource sqlExprTableSource = (SQLExprTableSource) getSQLExprTableSource(
-                                sqlSelectStatement.getSelect().getFirstQueryBlock().getFrom());
-                        executeResult.setTableName(getMetaDataTableName(sqlExprTableSource.getCatalog(), sqlExprTableSource.getSchema(), sqlExprTableSource.getTableName()));
-                    }
-                } else {
-                    executeResult.setCanEdit(false);
                 }
             }
         } catch (Exception e) {
-            log.error("buildCanEditResult error:", e);
+            log.error("buildCanEditResultFromStatement error:", e);
             executeResult.setCanEdit(false);
         }
     }
@@ -137,13 +143,18 @@ public class SqlUtils {
         List<String> list = new ArrayList<>();
         try {
             Statements statements = CCJSqlParserUtil.parseStatements(sql);
-            // 遍历每个语句
-            for (Statement stmt : statements.getStatements()) {
-                list.add(stmt.toString());
-            }
+            return parseFromStatements(statements);
         } catch (Exception e) {
             log.error("parse error:", e);
             list = SQLParserUtils.splitAndRemoveComment(sql, dbType);
+        }
+        return list;
+    }
+
+    public static List<String> parseFromStatements(Statements statements) {
+        List<String> list = new ArrayList<>();
+        for (Statement stmt : statements.getStatements()) {
+            list.add(stmt.toString());
         }
         return list;
     }
@@ -164,22 +175,25 @@ public class SqlUtils {
     public static boolean hasPageLimit(String sql, DbType dbType) {
         try {
             Statement statement = CCJSqlParserUtil.parse(sql);
-            if (statement instanceof Select selectStatement) {
-                SelectBody selectBody = selectStatement.getSelectBody();
-                // 检查常见的分页方法
-                if (selectBody instanceof PlainSelect plainSelect) {
-                    // 检查 LIMIT
-                    if (plainSelect.getLimit() != null || plainSelect.getOffset() != null || plainSelect.getTop() != null || plainSelect.getFetch() != null) {
-                        return true;
-                    }
-                    if (DbType.oracle.equals(dbType)) {
-                        return sql.contains("ROWNUM") || sql.contains("rownum");
-                    }
-                }
-            }
+            return hasPageLimit(statement, dbType);
         } catch (Exception e) {
             log.error("hasPageLimit error:", e);
             return false;
+        }
+    }
+
+    public static boolean hasPageLimit(Statement statement, DbType dbType) {
+        if (statement instanceof Select selectStatement) {
+            SelectBody selectBody = selectStatement.getSelectBody();
+            if (selectBody instanceof PlainSelect plainSelect) {
+                if (plainSelect.getLimit() != null || plainSelect.getOffset() != null || plainSelect.getTop() != null || plainSelect.getFetch() != null) {
+                    return true;
+                }
+                if (DbType.oracle.equals(dbType)) {
+                    String sql = statement.toString();
+                    return sql.contains("ROWNUM") || sql.contains("rownum");
+                }
+            }
         }
         return false;
     }

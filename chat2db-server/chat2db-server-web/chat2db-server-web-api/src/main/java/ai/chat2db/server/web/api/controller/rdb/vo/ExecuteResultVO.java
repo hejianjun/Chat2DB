@@ -2,7 +2,6 @@ package ai.chat2db.server.web.api.controller.rdb.vo;
 
 import java.util.List;
 
-
 import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import lombok.Data;
@@ -104,4 +103,9 @@ public class ExecuteResultVO {
      * 虚拟外键建议列表
      */
     private List<VirtualForeignKeySuggestion> vkSuggestions;
+
+    /**
+     * JSqlParser parsed AST statement (cached for reuse)
+     */
+    private transient net.sf.jsqlparser.statement.Statement jsqlStatement;
 }

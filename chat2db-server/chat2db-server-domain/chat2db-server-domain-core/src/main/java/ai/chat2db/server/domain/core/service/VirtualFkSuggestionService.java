@@ -19,20 +19,23 @@ import java.util.*;
 public class VirtualFkSuggestionService {
 
     public List<VirtualForeignKeySuggestion> suggest(String sql) {
-        List<VirtualForeignKeySuggestion> suggestions = new ArrayList<>();
-        if (sql == null || sql.trim().isEmpty()) return suggestions;
-
+        if (sql == null || sql.trim().isEmpty()) return Collections.emptyList();
         try {
             Statement stmt = CCJSqlParserUtil.parse(sql);
-            if (stmt instanceof Select selectStmt) {
-                SelectBody body = selectStmt.getSelectBody();
-                if (body instanceof PlainSelect plainSelect) {
-                    Map<String, String> aliasMap = buildAliasMap(plainSelect);
-                    extractSuggestions(plainSelect, aliasMap, suggestions);
-                }
-            }
+            return suggest(stmt);
         } catch (JSQLParserException e) {
-            // Ignore parse errors
+            return Collections.emptyList();
+        }
+    }
+
+    public List<VirtualForeignKeySuggestion> suggest(Statement stmt) {
+        List<VirtualForeignKeySuggestion> suggestions = new ArrayList<>();
+        if (stmt instanceof Select selectStmt) {
+            SelectBody body = selectStmt.getSelectBody();
+            if (body instanceof PlainSelect plainSelect) {
+                Map<String, String> aliasMap = buildAliasMap(plainSelect);
+                extractSuggestions(plainSelect, aliasMap, suggestions);
+            }
         }
         return suggestions;
     }

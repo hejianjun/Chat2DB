@@ -75,16 +75,14 @@ public class RdbDmlController {
         ListResult<ExecuteResult> resultDTOListResult = dlTemplateService.execute(param);
         List<ExecuteResultVO> resultVOS = rdbWebConverter.dto2vo(resultDTOListResult.getData());
         
-        // Add Virtual FK suggestions for the first SELECT statement executed
-        // Or if there are multiple SQLs, we could try to parse each one, 
-        // but usually the user executes a query.
-        // Let's just parse the input SQL if it's a single one.
-        String sql = request.getSql();
-        if (sql != null) {
-            List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(sql);
-            if (!suggestions.isEmpty() && !resultVOS.isEmpty()) {
-                // Attach to the first result
-                resultVOS.get(0).setVkSuggestions(suggestions);
+        // Add Virtual FK suggestions using cached JSqlParser AST
+        if (!resultVOS.isEmpty()) {
+            ExecuteResultVO firstResult = resultVOS.get(0);
+            if (firstResult.getJsqlStatement() != null) {
+                List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(firstResult.getJsqlStatement());
+                if (!suggestions.isEmpty()) {
+                    firstResult.setVkSuggestions(suggestions);
+                }
             }
         }
         
