@@ -226,15 +226,11 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 selector
         ).getData();
 
-        Table targetTable = null;
-        if (CollectionUtils.isNotEmpty(tables)) {
-            for (Table t : tables) {
-                if (referencedTableName.equalsIgnoreCase(t.getName())) {
-                    targetTable = t;
-                    break;
-                }
-            }
-        }
+        // 排除自关联
+        Table targetTable = tables.stream()
+                .filter(t -> !referencedTableName.equalsIgnoreCase(t.getName()))
+                .findFirst()
+                .orElse(null);
 
         if (targetTable == null) {
             return null;
