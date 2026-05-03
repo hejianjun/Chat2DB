@@ -44,7 +44,6 @@ import ai.chat2db.server.web.api.controller.rdb.vo.IndexVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.MetaSchemaVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.SchemaVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
-import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.MetaSchema;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.Table;
@@ -157,12 +156,6 @@ public class RdbDdlController {
         List<TableColumn> tableColumns = tableService.queryColumns(queryParam);
         List<ColumnVO> tableVOS = rdbWebConverter.columnDto2vo(tableColumns);
         return ListResult.of(tableVOS);
-    }
-
-    @GetMapping("/foreign_key_list")
-    public ListResult<ForeignKey> foreignKeyList(@Valid TableDetailQueryRequest request) {
-        TableQueryParam queryParam = rdbWebConverter.tableRequest2param(request);
-        return ListResult.of(tableService.queryForeignKeys(queryParam));
     }
 
     /**

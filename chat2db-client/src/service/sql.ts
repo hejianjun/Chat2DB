@@ -226,7 +226,7 @@ const getIndexList = createRequest<ITableParams, IColumn[]>('/api/rdb/ddl/index_
   method: 'get',
   delayTime: 200,
 });
-const getKeyList = createRequest<ITableParams, IForeignKey[]>('/api/rdb/ddl/foreign_key_list', { method: 'get', delayTime: 200 });
+const getKeyList = createRequest<ITableParams, IForeignKey[]>('/api/rdb/fk/list', { method: 'get', delayTime: 200 });
 const getSchemaList = createRequest<ISchemaParams, ISchemaResponse[]>('/api/rdb/ddl/schema_list', {
   method: 'get',
   delayTime: 200,

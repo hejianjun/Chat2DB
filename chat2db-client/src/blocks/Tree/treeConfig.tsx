@@ -280,7 +280,6 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 extraParams: {
                   ..._extraParams,
                   tableName: t.name,
-                  virtualForeignKeyList: t.virtualForeignKeyList,
                 },
               };
             });
@@ -397,13 +396,6 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             key: `${preCode}-keys`,
             name: 'keys',
             treeNodeType: TreeNodeType.KEYS,
-            extraParams: params.extraParams,
-          },
-          {
-            uuid: uuid(),
-            key: `${preCode}-virtual-keys`,
-            name: 'virtual-keys',
-            treeNodeType: TreeNodeType.V_KEYS,
             extraParams: params.extraParams,
           },
           {
@@ -683,10 +675,11 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           .getKeyList(params)
           .then((res) => {
             const tableList: ITreeNode[] = res?.map((item) => {
+              const isVirtual = item.sourceType === 'VIRTUAL' || item.editable;
               return {
                 uuid: uuid(),
                 name: item.name,
-                treeNodeType: TreeNodeType.KEY,
+                treeNodeType: isVirtual ? TreeNodeType.V_KEY : TreeNodeType.KEY,
                 key: item.name,
                 isLeaf: true,
                 extraParams: _extraParams,
@@ -735,25 +728,6 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   },
   [TreeNodeType.INDEX]: {
     icon: '\ue65b',
-    operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
-  },
-  [TreeNodeType.V_KEYS]: {
-    icon: '\ueac5', // 使用与 KEYS 相同的图标，或者选择一个新的图标
-    getChildren: (params) => {
-      const { virtualForeignKeyList } = params.extraParams!;
-      console.log(params.extraParams)
-      return new Promise((r: (value: ITreeNode[]) => void) => {
-        const virtualForeignKeys: ITreeNode[] = virtualForeignKeyList?.map((item) => ({
-          uuid: uuid(),
-          name: item.name,
-          treeNodeType: TreeNodeType.V_KEY,
-          key: item.name,
-          isLeaf: true,
-          extraParams: params.extraParams,
-        })) || [];
-        r(virtualForeignKeys);
-      });
-    },
     operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
   },
   [TreeNodeType.V_KEY]: {
