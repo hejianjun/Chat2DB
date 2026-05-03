@@ -20,6 +20,7 @@ import ai.chat2db.server.domain.api.param.OrderByParam;
 import ai.chat2db.server.domain.api.param.UpdateSelectResultParam;
 import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
+import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.core.service.VirtualFkSuggestionService;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -37,6 +38,7 @@ import ai.chat2db.server.web.api.util.ApplicationContextUtil;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import ai.chat2db.spi.sql.Chat2DBContext;
 
@@ -59,6 +61,9 @@ public class RdbDmlController {
     private DlTemplateService dlTemplateService;
 
     @Autowired
+    private ForeignKeySyncService foreignKeySyncService;
+
+    @Autowired
     private VirtualFkSuggestionService virtualFkSuggestionService;
 
 
@@ -79,7 +84,17 @@ public class RdbDmlController {
         if (!resultVOS.isEmpty()) {
             ExecuteResultVO firstResult = resultVOS.get(0);
             if (firstResult.getJsqlStatement() != null) {
-                List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(firstResult.getJsqlStatement());
+                List<VirtualForeignKey> existingFKs = foreignKeySyncService.listAllForeignKeys(
+                        request.getDataSourceId(),
+                        request.getDatabaseName(),
+                        request.getSchemaName(),
+                        null
+                ).stream()
+                        .filter(fk -> fk instanceof VirtualForeignKey)
+                        .map(fk -> (VirtualForeignKey) fk)
+                        .toList();
+                
+                List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(firstResult.getJsqlStatement(), existingFKs);
                 if (!suggestions.isEmpty()) {
                     firstResult.setVkSuggestions(suggestions);
                 }

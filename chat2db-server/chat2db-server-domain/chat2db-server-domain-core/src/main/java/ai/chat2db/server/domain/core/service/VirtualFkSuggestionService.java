@@ -1,5 +1,6 @@
 package ai.chat2db.server.domain.core.service;
 
+import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -16,16 +17,30 @@ import java.util.*;
 @Service
 public class VirtualFkSuggestionService {
 
-    public List<VirtualForeignKeySuggestion> suggest(Statement stmt) {
+    public List<VirtualForeignKeySuggestion> suggest(Statement stmt, List<VirtualForeignKey> existingFKs) {
+        Set<String> existingFKKeys = buildExistingFKSet(existingFKs);
         List<VirtualForeignKeySuggestion> suggestions = new ArrayList<>();
         if (stmt instanceof Select selectStmt) {
             SelectBody body = selectStmt.getSelectBody();
             if (body instanceof PlainSelect plainSelect) {
                 Map<String, String> aliasMap = buildAliasMap(plainSelect);
-                extractSuggestions(plainSelect, aliasMap, suggestions);
+                extractSuggestions(plainSelect, aliasMap, suggestions, existingFKKeys);
             }
         }
         return suggestions;
+    }
+
+    private Set<String> buildExistingFKSet(List<VirtualForeignKey> existingFKs) {
+        Set<String> keys = new HashSet<>();
+        if (existingFKs == null) return keys;
+        for (VirtualForeignKey vk : existingFKs) {
+            keys.add(buildFKKey(vk.getTableName(), vk.getColumn(), vk.getReferencedTable(), vk.getReferencedColumn()));
+        }
+        return keys;
+    }
+
+    private String buildFKKey(String table, String column, String refTable, String refColumn) {
+        return table.toLowerCase() + "." + column.toLowerCase() + "->" + refTable.toLowerCase() + "." + refColumn.toLowerCase();
     }
 
     private Map<String, String> buildAliasMap(PlainSelect plainSelect) {
@@ -49,29 +64,29 @@ public class VirtualFkSuggestionService {
         }
     }
 
-    private void extractSuggestions(PlainSelect plainSelect, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions) {
+    private void extractSuggestions(PlainSelect plainSelect, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions, Set<String> existingFKKeys) {
         if (plainSelect.getJoins() != null) {
             for (Join join : plainSelect.getJoins()) {
                 if (join.getOnExpression() != null) {
-                    processExpression(join.getOnExpression(), aliasMap, suggestions);
+                    processExpression(join.getOnExpression(), aliasMap, suggestions, existingFKKeys);
                 }
             }
         }
     }
 
-    private void processExpression(Expression expr, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions) {
+    private void processExpression(Expression expr, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions, Set<String> existingFKKeys) {
         if (expr instanceof EqualsTo equalsTo) {
-            processEquality(equalsTo.getLeftExpression(), equalsTo.getRightExpression(), aliasMap, suggestions);
+            processEquality(equalsTo.getLeftExpression(), equalsTo.getRightExpression(), aliasMap, suggestions, existingFKKeys);
         } else if (expr instanceof AndExpression andExpr) {
-            processExpression(andExpr.getLeftExpression(), aliasMap, suggestions);
-            processExpression(andExpr.getRightExpression(), aliasMap, suggestions);
+            processExpression(andExpr.getLeftExpression(), aliasMap, suggestions, existingFKKeys);
+            processExpression(andExpr.getRightExpression(), aliasMap, suggestions, existingFKKeys);
         } else if (expr instanceof OrExpression orExpr) {
-            processExpression(orExpr.getLeftExpression(), aliasMap, suggestions);
-            processExpression(orExpr.getRightExpression(), aliasMap, suggestions);
+            processExpression(orExpr.getLeftExpression(), aliasMap, suggestions, existingFKKeys);
+            processExpression(orExpr.getRightExpression(), aliasMap, suggestions, existingFKKeys);
         }
     }
 
-    private void processEquality(Expression left, Expression right, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions) {
+    private void processEquality(Expression left, Expression right, Map<String, String> aliasMap, List<VirtualForeignKeySuggestion> suggestions, Set<String> existingFKKeys) {
         if (left instanceof Column cLeft && right instanceof Column cRight) {
             if (cLeft.getTable() == null || cRight.getTable() == null) return;
 
@@ -88,15 +103,19 @@ public class VirtualFkSuggestionService {
                 boolean rightIsFK = rCol.toLowerCase().endsWith("_id");
 
                 if (leftIsFK && !rightIsFK) {
-                    addSuggestion(lRealTable, lCol, rRealTable, rCol, suggestions);
+                    addSuggestion(lRealTable, lCol, rRealTable, rCol, suggestions, existingFKKeys);
                 } else if (!leftIsFK && rightIsFK) {
-                    addSuggestion(rRealTable, rCol, lRealTable, lCol, suggestions);
+                    addSuggestion(rRealTable, rCol, lRealTable, lCol, suggestions, existingFKKeys);
                 }
             }
         }
     }
 
-    private void addSuggestion(String srcTable, String srcCol, String tgtTable, String tgtCol, List<VirtualForeignKeySuggestion> suggestions) {
+    private void addSuggestion(String srcTable, String srcCol, String tgtTable, String tgtCol, List<VirtualForeignKeySuggestion> suggestions, Set<String> existingFKKeys) {
+        String fkKey = buildFKKey(srcTable, srcCol, tgtTable, tgtCol);
+        if (existingFKKeys.contains(fkKey)) {
+            return;
+        }
         for (VirtualForeignKeySuggestion s : suggestions) {
             if (s.getSourceTable().equalsIgnoreCase(srcTable) &&
                 s.getSourceColumn().equalsIgnoreCase(srcCol) &&
