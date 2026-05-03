@@ -903,7 +903,12 @@ const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void
     });
     
     message.success('删除虚拟外键成功');
-    loadData?.({ refresh: true });
+    
+    // 刷新父节点（KEYS节点）
+    loadData({
+      refresh: true,
+      treeNodeData: treeNode.parentNode,
+    });
   } catch (error) {
     message.error('删除虚拟外键失败');
     console.error('删除虚拟外键失败:', error);

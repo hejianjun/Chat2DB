@@ -237,7 +237,9 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         targetColumn: e.targetColumn,
       },
       markerEnd: { type: 'arrowclosed' as const },
-      style: e.virtual ? { stroke: '#faad14', strokeWidth: 1.5, strokeDasharray: '5 3' } : { stroke: '#8c8c8c', strokeWidth: 2 },
+      style: e.virtual
+        ? { stroke: '#faad14', strokeWidth: 1.5, strokeDasharray: '5 3' }
+        : { stroke: '#8c8c8c', strokeWidth: 2 },
     }));
 
     const laidOutNodes = applyLayout(rfNodes, rfEdges, layoutType);
@@ -320,14 +322,17 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     });
   }, [uniqueData.databaseName]);
 
-  const miniMapNodeColor = useCallback((node: Node) => {
-    if (selectedTableId) {
-      const data = node.data as any;
-      if (data?.isHighlighted) return '#1890ff';
-      if (data?.isDimmed) return '#f0f0f0';
-    }
-    return '#91caff';
-  }, [selectedTableId]);
+  const miniMapNodeColor = useCallback(
+    (node: Node) => {
+      if (selectedTableId) {
+        const data = node.data as any;
+        if (data?.isHighlighted) return '#1890ff';
+        if (data?.isDimmed) return '#f0f0f0';
+      }
+      return '#91caff';
+    },
+    [selectedTableId],
+  );
 
   return (
     <div className={styles.erDiagramContainer} ref={chartRef}>
