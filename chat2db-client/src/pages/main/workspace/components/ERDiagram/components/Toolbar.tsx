@@ -1,6 +1,6 @@
 /**
  * ER图工具栏组件
- * 提供刷新、布局切换、虚拟外键开关、缩放控制、导出等功能
+ * 提供刷新、布局切换、虚拟外键开关、推断虚拟外键、缩放控制、导出等功能
  */
 import React, { memo } from 'react';
 import { Button, Space, Switch, Select, Tooltip } from 'antd';
@@ -10,6 +10,7 @@ import {
   ApartmentOutlined,
   ExpandOutlined,
   CompressOutlined,
+  BranchesOutlined,
 } from '@ant-design/icons';
 import { useReactFlow } from '@xyflow/react';
 import i18n from '@/i18n';
@@ -29,6 +30,10 @@ interface IToolbarProps {
   onLayoutChange: (type: LayoutType) => void;
   /** 虚拟外键开关回调 */
   onIncludeVirtualFkChange: (value: boolean) => void;
+  /** 推断虚拟外键回调 */
+  onInferVirtualFk: () => void;
+  /** 推断虚拟外键加载状态 */
+  inferring: boolean;
   /** 导出回调 */
   onExport: () => void;
 }
@@ -41,6 +46,8 @@ const Toolbar = memo(
     onRefresh,
     onLayoutChange,
     onIncludeVirtualFkChange,
+    onInferVirtualFk,
+    inferring,
     onExport,
   }: IToolbarProps) => {
     const { fitView, zoomIn, zoomOut } = useReactFlow();
@@ -54,6 +61,16 @@ const Toolbar = memo(
               icon={<ReloadOutlined />}
               onClick={onRefresh}
               loading={loading}
+              size="small"
+            />
+          </Tooltip>
+
+          {/* 推断虚拟外键按钮 */}
+          <Tooltip title={i18n('workspace.erDiagram.inferVirtualFk')}>
+            <Button
+              icon={<BranchesOutlined />}
+              onClick={onInferVirtualFk}
+              loading={inferring}
               size="small"
             />
           </Tooltip>

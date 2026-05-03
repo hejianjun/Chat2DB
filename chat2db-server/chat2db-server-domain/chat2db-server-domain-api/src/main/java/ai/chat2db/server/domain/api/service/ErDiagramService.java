@@ -17,4 +17,13 @@ public interface ErDiagramService {
      * @return ER图数据，包含节点（表）和边（外键关系）
      */
     DataResult<ErDiagram> queryErDiagram(ErDiagramQueryParam param);
+
+    /**
+     * 推断并添加虚拟外键
+     * 根据命名规范（如 user_id -> users.id）自动推断可能的虚拟外键关系
+     *
+     * @param param 查询参数
+     * @return 推断出的虚拟外键数量
+     */
+    DataResult<Integer> inferVirtualForeignKeys(ErDiagramQueryParam param);
 }

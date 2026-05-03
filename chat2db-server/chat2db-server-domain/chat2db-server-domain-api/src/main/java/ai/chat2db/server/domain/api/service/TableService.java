@@ -157,12 +157,6 @@ public interface TableService {
      * @return
      */
     TableMeta queryTableMeta(TypeQueryParam param);
-    /**
-     * 查询外键
-     * @param param
-     * @return
-     */
-    List<ForeignKey> queryForeignKeys(TableQueryParam param);
 
 
     /**

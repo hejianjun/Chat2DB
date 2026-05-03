@@ -25,6 +25,10 @@ interface IErDiagramStore {
 
   /** 获取ER图数据 */
   fetchErDiagram: (params: IErParams) => Promise<void>;
+  /** 推断虚拟外键 */
+  inferVirtualForeignKeys: (params: IErParams) => Promise<number>;
+  /** 删除虚拟外键 */
+  deleteVirtualForeignKey: (edgeId: string, params: IErParams) => Promise<void>;
   /** 设置过滤文本 */
   setFilterText: (text: string) => void;
   /** 设置布局类型 */
@@ -35,7 +39,7 @@ interface IErDiagramStore {
   setIncludeVirtualFk: (value: boolean) => void;
 }
 
-const useErDiagramStore = create<IErDiagramStore>((set) => ({
+const useErDiagramStore = create<IErDiagramStore>((set, get) => ({
   erDiagramData: null,
   loading: false,
   filterText: '',
@@ -52,6 +56,43 @@ const useErDiagramStore = create<IErDiagramStore>((set) => ({
       console.error('Failed to fetch ER diagram data:', error);
     } finally {
       set({ loading: false });
+    }
+  },
+
+  inferVirtualForeignKeys: async (params: IErParams) => {
+    try {
+      const count = await sqlServer.inferVirtualForeignKeys(params);
+      // 推断完成后刷新ER图
+      await get().fetchErDiagram(params);
+      return count;
+    } catch (error) {
+      console.error('Failed to infer virtual foreign keys:', error);
+      throw error;
+    }
+  },
+
+  deleteVirtualForeignKey: async (edgeId: string, params: IErParams) => {
+    try {
+      // 从ER图数据中找到对应的虚拟外键
+      const currentData = get().erDiagramData;
+      if (currentData) {
+        const edge = currentData.edges.find(e => e.id === edgeId);
+        if (edge && edge.virtual) {
+          // 通过名称匹配删除
+          await sqlServer.deleteVirtualForeignKey({
+            dataSourceId: params.dataSourceId,
+            databaseName: params.databaseName,
+            schemaName: params.schemaName,
+            tableName: edge.source,
+            keyName: edge.id,
+          });
+          // 删除完成后刷新ER图
+          await get().fetchErDiagram(params);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete virtual foreign key:', error);
+      throw error;
     }
   },
 

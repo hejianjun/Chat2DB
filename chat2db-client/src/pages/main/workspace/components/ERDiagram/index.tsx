@@ -1,9 +1,10 @@
 /**
  * ER图主组件
  * 使用ReactFlow渲染数据库表之间的外键关系图
- * 支持表过滤、布局切换、虚拟外键显示、缩放控制、PNG导出等功能
+ * 支持表过滤、布局切换、虚拟外键显示/推断/删除、缩放控制、PNG导出等功能
  */
 import React, { useCallback, useEffect, useRef } from 'react';
+import { message } from 'antd';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -50,10 +51,6 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 
 /**
  * 使用dagre算法计算层级布局
- * @param nodes 节点列表
- * @param edges 边列表
- * @param direction 布局方向，默认从上到下
- * @returns 计算好位置的节点列表
  */
 const getDagreLayout = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'TB') => {
   dagreGraph.setGraph({ rankdir: direction, nodesep: 50, ranksep: 80 });
@@ -79,10 +76,6 @@ const getDagreLayout = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = '
 
 /**
  * 使用力导向算法计算布局
- * 节点之间相互排斥，有边连接的节点相互吸引
- * @param nodes 节点列表
- * @param edges 边列表
- * @returns 计算好位置的节点列表
  */
 const getForceLayout = (nodes: Node[], edges: Edge[]) => {
   const nodeMap = new Map<string, { x: number; y: number; vx: number; vy: number }>();
@@ -91,7 +84,6 @@ const getForceLayout = (nodes: Node[], edges: Edge[]) => {
   const attraction = 0.005;
   const damping = 0.9;
 
-  // 初始化节点位置，均匀分布在圆周上
   nodes.forEach((node, i) => {
     const angle = (2 * Math.PI * i) / nodes.length;
     nodeMap.set(node.id, {
@@ -102,9 +94,7 @@ const getForceLayout = (nodes: Node[], edges: Edge[]) => {
     });
   });
 
-  // 迭代计算力
   for (let iter = 0; iter < iterations; iter++) {
-    // 计算节点间的斥力
     nodes.forEach((n1) => {
       const p1 = nodeMap.get(n1.id)!;
       nodes.forEach((n2) => {
@@ -119,7 +109,6 @@ const getForceLayout = (nodes: Node[], edges: Edge[]) => {
       });
     });
 
-    // 计算边连接节点间的引力
     edges.forEach((edge) => {
       const p1 = nodeMap.get(edge.source);
       const p2 = nodeMap.get(edge.target);
@@ -132,7 +121,6 @@ const getForceLayout = (nodes: Node[], edges: Edge[]) => {
       p2.vy -= dy * attraction;
     });
 
-    // 应用阻尼并更新位置
     nodes.forEach((node) => {
       const p = nodeMap.get(node.id)!;
       p.vx *= damping;
@@ -163,7 +151,6 @@ const applyLayout = (nodes: Node[], edges: Edge[], layoutType: LayoutType): Node
 const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
-  // 从Store获取状态和方法
   const {
     erDiagramData,
     loading,
@@ -172,17 +159,18 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     includeVirtualFk,
     selectedTableId,
     fetchErDiagram,
+    inferVirtualForeignKeys,
+    deleteVirtualForeignKey,
     setFilterText,
     setLayoutType,
     setSelectedTableId,
     setIncludeVirtualFk,
   } = useErDiagramStore();
 
-  // ReactFlow节点和边状态
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [inferring, setInferring] = React.useState(false);
 
-  // 获取ER图数据
   const fetchData = useCallback(
     () => {
       fetchErDiagram({
@@ -196,16 +184,13 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     [uniqueData, filterText, includeVirtualFk, fetchErDiagram],
   );
 
-  // 数据源变化时重新获取数据
   useEffect(() => {
     fetchData();
   }, [uniqueData.dataSourceId, uniqueData.databaseName, uniqueData.schemaName]);
 
-  // 数据变化时更新节点和边
   useEffect(() => {
     if (!erDiagramData) return;
 
-    // 根据过滤文本筛选节点
     const filteredNodes = filterText
       ? erDiagramData.nodes.filter(
           (n) =>
@@ -214,13 +199,11 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         )
       : erDiagramData.nodes;
 
-    // 根据筛选的节点筛选边
     const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
     const filteredEdges = erDiagramData.edges.filter(
       (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target),
     );
 
-    // 计算选中表关联的表ID集合
     const selectedRelatedNodeIds = new Set<string>();
     if (selectedTableId) {
       selectedRelatedNodeIds.add(selectedTableId);
@@ -230,7 +213,6 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
       });
     }
 
-    // 构建ReactFlow节点
     const rfNodes: Node[] = filteredNodes.map((n) => ({
       id: n.id,
       type: 'tableNode',
@@ -242,7 +224,6 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
       },
     }));
 
-    // 构建ReactFlow边
     const rfEdges: Edge[] = filteredEdges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -258,13 +239,11 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
       style: e.virtual ? { stroke: '#faad14', strokeWidth: 1.5, strokeDasharray: '5 3' } : { stroke: '#8c8c8c', strokeWidth: 2 },
     }));
 
-    // 应用布局算法
     const laidOutNodes = applyLayout(rfNodes, rfEdges, layoutType);
     setNodes(laidOutNodes);
     setEdges(rfEdges);
   }, [erDiagramData, filterText, layoutType, selectedTableId, setNodes, setEdges]);
 
-  // 点击节点时切换选中状态
   const handleNodeClick: OnNodeClick = useCallback(
     (_event, node) => {
       setSelectedTableId(selectedTableId === node.id ? null : node.id);
@@ -272,17 +251,52 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     [selectedTableId, setSelectedTableId],
   );
 
-  // 点击画布时取消选中
   const handlePaneClick: OnPaneClick = useCallback(() => {
     setSelectedTableId(null);
   }, [setSelectedTableId]);
 
-  // 刷新数据
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault();
+      const edgeData = edge.data as any;
+      if (edgeData?.virtual) {
+        if (window.confirm(i18n('workspace.erDiagram.confirmDeleteVirtualFk', [edge.id]))) {
+          deleteVirtualForeignKey(edge.id, {
+            dataSourceId: uniqueData.dataSourceId,
+            databaseName: uniqueData.databaseName,
+            schemaName: uniqueData.schemaName,
+          });
+        }
+      }
+    },
+    [deleteVirtualForeignKey, uniqueData],
+  );
+
   const handleRefresh = useCallback(() => {
     fetchData();
   }, [fetchData]);
 
-  // 切换布局
+  const handleInferVirtualFk = useCallback(async () => {
+    setInferring(true);
+    try {
+      const count = await inferVirtualForeignKeys({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        schemaName: uniqueData.schemaName,
+        tableNameFilter: filterText || undefined,
+      });
+      if (count > 0) {
+        message.success(i18n('workspace.erDiagram.inferVirtualFkSuccess', [count]));
+      } else {
+        message.info(i18n('workspace.erDiagram.inferVirtualFkNoResult'));
+      }
+    } catch (error) {
+      message.error(i18n('workspace.erDiagram.inferVirtualFkError'));
+    } finally {
+      setInferring(false);
+    }
+  }, [inferVirtualForeignKeys, uniqueData, filterText]);
+
   const handleLayoutChange = useCallback(
     (type: LayoutType) => {
       setLayoutType(type);
@@ -290,7 +304,6 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     [setLayoutType],
   );
 
-  // 导出PNG
   const handleExport = useCallback(() => {
     if (!chartRef.current) return;
     toPng(chartRef.current.querySelector('.react-flow') as HTMLElement, {
@@ -304,7 +317,6 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     });
   }, [uniqueData.databaseName]);
 
-  // MiniMap节点颜色
   const miniMapNodeColor = useCallback((node: Node) => {
     if (selectedTableId) {
       const data = node.data as any;
@@ -316,9 +328,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
 
   return (
     <div className={styles.erDiagramContainer} ref={chartRef}>
-      {/* 表名过滤 */}
       <TableFilter value={filterText} onChange={setFilterText} />
-      {/* 工具栏 */}
       <Toolbar
         loading={loading}
         layoutType={layoutType}
@@ -326,11 +336,11 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         onRefresh={handleRefresh}
         onLayoutChange={handleLayoutChange}
         onIncludeVirtualFkChange={setIncludeVirtualFk}
+        onInferVirtualFk={handleInferVirtualFk}
+        inferring={inferring}
         onExport={handleExport}
       />
-      {/* 图例 */}
       <Legend />
-      {/* 加载状态 */}
       {loading && !erDiagramData ? (
         <div className={styles.loadingContainer}>
           <Spin size="large" tip={i18n('workspace.erDiagram.loading')} />
@@ -347,6 +357,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
           onPaneClick={handlePaneClick}
+          onEdgeContextMenu={handleEdgeContextMenu}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView

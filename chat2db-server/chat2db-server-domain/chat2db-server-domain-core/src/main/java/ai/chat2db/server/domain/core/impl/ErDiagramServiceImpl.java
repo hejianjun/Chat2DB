@@ -9,16 +9,22 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import ai.chat2db.server.domain.api.param.CreateVirtualFKParam;
 import ai.chat2db.server.domain.api.param.ErDiagramQueryParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
+import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.service.ErDiagramService;
+import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.spi.model.ErDiagram;
 import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.model.TableIndexColumn;
 import ai.chat2db.spi.model.VirtualForeignKey;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,6 +34,9 @@ public class ErDiagramServiceImpl implements ErDiagramService {
 
     @Autowired
     private TableService tableService;
+
+    @Autowired
+    private ForeignKeySyncService foreignKeySyncService;
 
     @Override
     public DataResult<ErDiagram> queryErDiagram(ErDiagramQueryParam param) {
@@ -96,6 +105,161 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 .targetColumn(fk.getReferencedColumn())
                 .label(fk.getColumn() + " -> " + fk.getReferencedColumn())
                 .virtual(virtual)
+                .build();
+    }
+
+    @Override
+    public DataResult<Integer> inferVirtualForeignKeys(ErDiagramQueryParam param) {
+        List<Table> tables = queryTables(param);
+        int totalInferred = 0;
+
+        for (Table table : tables) {
+            List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(table, param);
+            for (VirtualForeignKey vfk : inferredFKs) {
+                try {
+                    foreignKeySyncService.createVirtualFK(
+                            CreateVirtualFKParam.builder()
+                                    .dataSourceId(param.getDataSourceId())
+                                    .databaseName(param.getDatabaseName())
+                                    .schemaName(param.getSchemaName())
+                                    .tableName(table.getName())
+                                    .columnName(vfk.getColumn())
+                                    .referencedTable(vfk.getReferencedTable())
+                                    .referencedColumnName(vfk.getReferencedColumn())
+                                    .comment("Inferred from column naming convention")
+                                    .build()
+                    );
+                    totalInferred++;
+                } catch (Exception e) {
+                    log.warn("Failed to create inferred virtual FK for {}.{} -> {}.{}",
+                            table.getName(), vfk.getColumn(),
+                            vfk.getReferencedTable(), vfk.getReferencedColumn(), e);
+                }
+            }
+        }
+
+        return DataResult.of(totalInferred);
+    }
+
+    /**
+     * 发现可能的虚拟外键关系（根据命名规范推断）
+     * 参考 TableServiceImpl.findVirtualForeignKeys 实现
+     */
+    private List<VirtualForeignKey> findVirtualForeignKeys(Table table, ErDiagramQueryParam param) {
+        List<VirtualForeignKey> result = new ArrayList<>();
+
+        // 预加载已明确声明的外键列名（用于排除已存在的外键）
+        Set<String> explicitForeignKeys = table.getForeignKeyList().stream()
+                .map(ForeignKey::getColumn)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        // 排除唯一索引列
+        if (CollectionUtils.isNotEmpty(table.getIndexList())) {
+            table.getIndexList().stream()
+                    .filter(index -> Boolean.TRUE.equals(index.getUnique()))
+                    .map(TableIndex::getColumnList)
+                    .flatMap(List::stream)
+                    .map(TableIndexColumn::getColumnName)
+                    .forEach(explicitForeignKeys::add);
+        }
+
+        // 查询已存储的虚拟外键，避免重复推断
+        List<VirtualForeignKey> storedVirtualFKs = foreignKeySyncService.queryVirtualForeignKeys(
+                param.getDataSourceId(),
+                param.getDatabaseName(),
+                param.getSchemaName(),
+                table.getName()
+        );
+        Set<String> existingVirtualFKColumns = storedVirtualFKs.stream()
+                .map(VirtualForeignKey::getColumn)
+                .collect(Collectors.toSet());
+
+        // 筛选候选列
+        if (CollectionUtils.isNotEmpty(table.getColumnList())) {
+            for (TableColumn column : table.getColumnList()) {
+                if (isPotentialVirtualKeyCandidate(column)
+                        && !explicitForeignKeys.contains(column.getName())
+                        && !existingVirtualFKColumns.contains(column.getName())) {
+                    VirtualForeignKey vfk = analyzeColumnRelation(table, column, param);
+                    if (vfk != null) {
+                        result.add(vfk);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 判断列是否为虚拟外键候选列
+     */
+    private boolean isPotentialVirtualKeyCandidate(TableColumn column) {
+        return column.getName() != null
+                && column.getName().endsWith("_id")
+                && Boolean.FALSE.equals(column.getPrimaryKey())
+                && column.getName().length() > 3;
+    }
+
+    /**
+     * 分析列关联关系并构建虚拟外键
+     */
+    private VirtualForeignKey analyzeColumnRelation(Table currentTable, TableColumn currentColumn, ErDiagramQueryParam param) {
+        String columnName = currentColumn.getName();
+        String referencedTableName = columnName.substring(0, columnName.length() - 3);
+
+        // 排除自关联
+        if (referencedTableName.equalsIgnoreCase(currentTable.getName())) {
+            return null;
+        }
+
+        // 查找匹配的表
+        TableSelector selector = new TableSelector();
+        selector.setColumnList(true);
+        List<Table> tables = tableService.pageQuery(
+                TablePageQueryParam.builder()
+                        .dataSourceId(param.getDataSourceId())
+                        .databaseName(currentColumn.getDatabaseName())
+                        .schemaName(currentColumn.getSchemaName())
+                        .searchKey(referencedTableName)
+                        .build(),
+                selector
+        ).getData();
+
+        Table targetTable = null;
+        if (CollectionUtils.isNotEmpty(tables)) {
+            for (Table t : tables) {
+                if (referencedTableName.equalsIgnoreCase(t.getName())) {
+                    targetTable = t;
+                    break;
+                }
+            }
+        }
+
+        if (targetTable == null) {
+            return null;
+        }
+
+        // 查找目标表的关联列
+        String referencedColumnName = "id";
+        if (CollectionUtils.isNotEmpty(targetTable.getColumnList())) {
+            for (TableColumn tableColumn : targetTable.getColumnList()) {
+                if (columnName.equalsIgnoreCase(tableColumn.getName())) {
+                    referencedColumnName = tableColumn.getName();
+                    break;
+                } else if ("id".equals(referencedColumnName) && Boolean.TRUE.equals(tableColumn.getPrimaryKey())) {
+                    referencedColumnName = tableColumn.getName();
+                }
+            }
+        }
+
+        return VirtualForeignKey.builder()
+                .name(String.format("VFK_%s_%s", currentTable.getName(), columnName))
+                .tableName(currentTable.getName())
+                .column(columnName)
+                .referencedTable(targetTable.getName())
+                .referencedColumn(referencedColumnName)
+                .virtualProperty("Inferred from column naming convention")
                 .build();
     }
 }

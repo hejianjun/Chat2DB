@@ -519,11 +519,20 @@ export interface IDeleteFKResult {
   executedDDL: string | null;
 }
 
+/** 虚拟外键推断参数 */
+export interface IInferVirtualFKParams {
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  tableNameFilter?: string;
+}
+
 const syncForeignKeys = createRequest<IForeignKeySyncParams, ISyncResult>('/api/rdb/fk/sync', { method: 'post' });
 const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>('/api/rdb/fk/list', { method: 'get' });
 const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', { method: 'post' });
 const updateVirtualForeignKey = createRequest<IUpdateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/update', { method: 'post' });
 const deleteForeignKey = createRequest<IDeleteFKParams, IDeleteFKResult>('/api/rdb/fk/delete', { method: 'post' });
+const inferVirtualForeignKeys = createRequest<IInferVirtualFKParams, number>('/api/rdb/er/infer-virtual-fk', { method: 'post' });
 
 export default {
   searchTree,
@@ -573,9 +582,5 @@ export default {
   getAiGuess,
   deleteVirtualForeignKey,
   truncateTable,
-  syncForeignKeys,
-  getForeignKeyList,
-  createVirtualForeignKey,
-  updateVirtualForeignKey,
-  deleteForeignKey,
+  inferVirtualForeignKeys,
 };

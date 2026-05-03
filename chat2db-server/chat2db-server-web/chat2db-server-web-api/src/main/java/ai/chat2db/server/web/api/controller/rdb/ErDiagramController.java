@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +45,24 @@ public class ErDiagramController {
                 .includeVirtualFk(request.getIncludeVirtualFk())
                 .build();
         return erDiagramService.queryErDiagram(param);
+    }
+
+    /**
+     * 推断并添加虚拟外键
+     * 根据命名规范（如 user_id -> users.id）自动推断可能的虚拟外键关系
+     *
+     * @param request 查询请求
+     * @return 推断出的虚拟外键数量
+     */
+    @PostMapping("/infer-virtual-fk")
+    public DataResult<Integer> inferVirtualForeignKey(@Valid @RequestBody ErDiagramQueryRequest request) {
+        ErDiagramQueryParam param = ErDiagramQueryParam.builder()
+                .dataSourceId(request.getDataSourceId())
+                .databaseName(request.getDatabaseName())
+                .schemaName(request.getSchemaName())
+                .tableNameFilter(request.getTableNameFilter())
+                .includeVirtualFk(true)
+                .build();
+        return erDiagramService.inferVirtualForeignKeys(param);
     }
 }
