@@ -117,18 +117,19 @@ public class ErDiagramServiceImpl implements ErDiagramService {
             List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(table, param);
             for (VirtualForeignKey vfk : inferredFKs) {
                 try {
-                    foreignKeySyncService.createVirtualFK(
-                            CreateVirtualFKParam.builder()
-                                    .dataSourceId(param.getDataSourceId())
-                                    .databaseName(param.getDatabaseName())
-                                    .schemaName(param.getSchemaName())
-                                    .tableName(table.getName())
-                                    .columnName(vfk.getColumn())
-                                    .referencedTable(vfk.getReferencedTable())
-                                    .referencedColumnName(vfk.getReferencedColumn())
-                                    .comment("Inferred from column naming convention")
-                                    .build()
-                    );
+                foreignKeySyncService.createVirtualFK(
+                        CreateVirtualFKParam.builder()
+                                .dataSourceId(param.getDataSourceId())
+                                .databaseName(param.getDatabaseName())
+                                .schemaName(param.getSchemaName())
+                                .tableName(table.getName())
+                                .columnName(vfk.getColumn())
+                                .referencedTable(vfk.getReferencedTable())
+                                .referencedColumnName(vfk.getReferencedColumn())
+                                .comment("Inferred from column naming convention")
+                                .sourceType("INFERRED")
+                                .build()
+                );
                     totalInferred++;
                 } catch (Exception e) {
                     log.warn("Failed to create inferred virtual FK for {}.{} -> {}.{}",

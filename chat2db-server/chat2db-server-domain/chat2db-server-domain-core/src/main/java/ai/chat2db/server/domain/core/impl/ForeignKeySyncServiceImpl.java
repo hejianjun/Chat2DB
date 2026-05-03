@@ -170,7 +170,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         entity.setReferencedTable(param.getReferencedTable());
         entity.setReferencedColumnName(param.getReferencedColumnName());
         entity.setComment(param.getComment());
-        entity.setSourceType(SOURCE_TYPE_VIRTUAL_MANUAL);
+        entity.setSourceType(param.getSourceType());
         entity.setUserId(ContextUtils.getUserId());
 
         getVFKMapper().insert(entity);
@@ -459,7 +459,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .referencedTable(vk.getReferencedTable())
                 .referencedColumn(vk.getReferencedColumnName())
                 .comment(vk.getComment())
-                .virtualProperty("User-defined virtual foreign key")
+                .virtualProperty(vk.getSourceType() != null ? vk.getSourceType() : "User-defined virtual foreign key")
                 .build();
     }
 
