@@ -162,8 +162,12 @@ export default memo<IProps>(() => {
     }
   }, [pendingAiChat, boundInfo, sendAiChatInternal]);
 
-  const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL') => {
-    sendAiChatInternal(messageText, promptType, boundInfo);
+  const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', tableNames?: string[] | null) => {
+    const infoWithTables = {
+      ...boundInfo,
+      tableNames: tableNames !== undefined ? tableNames : boundInfo.tableNames,
+    };
+    sendAiChatInternal(messageText, promptType, infoWithTables);
   };
 
   const sendAiChatInternal = useCallback(
@@ -197,6 +201,7 @@ export default memo<IProps>(() => {
         dataSourceId: info.dataSourceId,
         databaseName: info.databaseName,
         schemaName: info.schemaName,
+        tableNames: info.tableNames,
       });
 
       resetCurrentContent(sessionId);
@@ -314,7 +319,7 @@ export default memo<IProps>(() => {
 
   const handleRetry = () => {
     if (lastRequest) {
-      sendAiChat(lastRequest.message, lastRequest.promptType);
+      sendAiChat(lastRequest.message, lastRequest.promptType, lastRequest.tableNames);
     }
   };
 

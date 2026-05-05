@@ -7,7 +7,10 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
+import com.google.common.collect.ImmutableMap;
 import lombok.Data;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
@@ -19,6 +22,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.concurrent.Immutable;
 import java.util.*;
 
 @Service
@@ -83,8 +87,10 @@ public class AiChatConfig {
         String apiHost = service.getApiHost();
         OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(apiHost).apiKey(service.getApiKey()).build();
         Map<String, Object> extraBody = new HashMap<>();
-        if (fastMode) {
-            extraBody.put("enable_thinking", "true");
+        if (StringUtils.contains(modelItem.getModel(), "qwen")) {
+            extraBody.put("enable_thinking", !fastMode);
+        } else if (StringUtils.contains(modelItem.getModel(), "hy")) {
+            extraBody.put("reasoning", ImmutableMap.of("enable", !fastMode));
         }
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelItem.getModel())

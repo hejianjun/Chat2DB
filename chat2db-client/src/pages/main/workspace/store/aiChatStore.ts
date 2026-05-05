@@ -32,7 +32,8 @@ interface ILastRequest {
   promptType: string;
   dataSourceId?: number;
   databaseName?: string;
-  schemaName?: string;
+  schemaName?: string | null;
+  tableNames?: string[] | null;
 }
 
 interface IAiChatStore {
