@@ -1,9 +1,12 @@
 package ai.chat2db.server.web.api.config;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.TypeReference;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.model.ApiKey;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -16,6 +19,11 @@ import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
+import lombok.Data;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * AI 聊天客户端配置类
@@ -23,6 +31,8 @@ import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
  */
 @Service
 public class AiChatConfig {
+    private static final String MODEL_SERVICE_CONFIG_CODE = "ai.model.services";
+    private static final String MODEL_DEFAULT_CONFIG_CODE = "ai.model.default";
 
     @Autowired
     private ConfigService configService;
@@ -51,14 +61,16 @@ public class AiChatConfig {
      * @return ChatClient 聊天客户端实例
      */
     public ChatClient createChatClient(PromptType promptType) {
-        // 判断是否为简单任务且配置了快速模型
-        boolean useFastModel = promptType != null && promptType.isSimpleTask() 
-                && isFastModelConfigured();
-        
-        if (useFastModel) {
-            return createFastChatClient();
+        ModelRuntimeConfig runtimeConfig = loadModelRuntimeConfig();
+        if (runtimeConfig != null && runtimeConfig.defaultModel != null && runtimeConfig.defaultService != null) {
+            boolean useFastModel = promptType != null && promptType.isSimpleTask()
+                    && runtimeConfig.fastModel != null && runtimeConfig.fastService != null;
+            if (useFastModel) {
+                return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true);
+            }
+            return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false);
         }
-        
+
         return createDefaultChatClient();
     }
     
@@ -78,6 +90,10 @@ public class AiChatConfig {
      * @return ChatClient 聊天客户端实例
      */
     public ChatClient createFastChatClient() {
+        ModelRuntimeConfig runtimeConfig = loadModelRuntimeConfig();
+        if (runtimeConfig != null && runtimeConfig.fastModel != null && runtimeConfig.fastService != null) {
+            return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true);
+        }
         // 获取快速模型的 AI 来源配置，默认为 OPENAI
         String aiSqlSource = getConfigValue("ai.fast.source", AiSqlSourceEnum.OPENAI.getCode());
         AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(aiSqlSource);
@@ -182,6 +198,10 @@ public class AiChatConfig {
      * @return ChatClient 聊天客户端实例
      */
     private ChatClient createDefaultChatClient() {
+        ModelRuntimeConfig runtimeConfig = loadModelRuntimeConfig();
+        if (runtimeConfig != null && runtimeConfig.defaultModel != null && runtimeConfig.defaultService != null) {
+            return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false);
+        }
         // 获取 AI 来源配置，默认为 OPENAI
         String aiSqlSource = getConfigValue("ai.sql.source", AiSqlSourceEnum.OPENAI.getCode());
         AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(aiSqlSource);
@@ -277,5 +297,142 @@ public class AiChatConfig {
 
         // 创建并返回聊天客户端
         return ChatClient.builder(chatModel).build();
+    }
+
+    private ChatClient createChatClientByModel(ModelServiceConfig service, ModelItem modelItem, boolean fastMode) {
+        AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(service.getProvider());
+        if (aiSqlSourceEnum == null) {
+            aiSqlSourceEnum = AiSqlSourceEnum.OPENAI;
+        }
+
+        if (aiSqlSourceEnum == AiSqlSourceEnum.ANTHROPIC) {
+            AnthropicApi anthropicApi = AnthropicApi.builder()
+                    .apiKey(service.getApiKey())
+                    .build();
+            AnthropicChatOptions options = AnthropicChatOptions.builder()
+                    .model(modelItem.getModel())
+                    .temperature(fastMode ? 0.5 : 0.7)
+                    .maxTokens(fastMode ? 1024 : 4096)
+                    .build();
+            AnthropicChatModel chatModel = AnthropicChatModel.builder()
+                    .anthropicApi(anthropicApi)
+                    .defaultOptions(options)
+                    .build();
+            return ChatClient.builder(chatModel).build();
+        }
+
+        String apiHost = service.getApiHost();
+        if (apiHost != null && !apiHost.endsWith("/")) {
+            apiHost = apiHost + "/";
+        }
+        OpenAiApi openAiApi = OpenAiApi.builder()
+                .baseUrl(apiHost)
+                .apiKey(service.getApiKey())
+                .build();
+        OpenAiChatOptions options = OpenAiChatOptions.builder()
+                .model(modelItem.getModel())
+                .temperature(fastMode ? 0.5 : 0.7)
+                .maxTokens(fastMode ? 1024 : 4096)
+                .build();
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(openAiApi)
+                .defaultOptions(options)
+                .build();
+        return ChatClient.builder(chatModel).build();
+    }
+
+    public ChatResponse testModelService(String provider, String apiHost, String apiKey, String model) {
+        ModelServiceConfig service = new ModelServiceConfig();
+        service.setProvider(provider);
+        service.setApiHost(apiHost);
+        service.setApiKey(apiKey);
+        ModelItem modelItem = new ModelItem();
+        modelItem.setModel(model);
+        return createChatClientByModel(service, modelItem, true)
+                .prompt("ping")
+                .call()
+                .chatResponse();
+    }
+
+    private ModelRuntimeConfig loadModelRuntimeConfig() {
+        String serviceJson = getConfigValue(MODEL_SERVICE_CONFIG_CODE, "");
+        String defaultJson = getConfigValue(MODEL_DEFAULT_CONFIG_CODE, "");
+        if (serviceJson.isEmpty() || defaultJson.isEmpty()) {
+            return null;
+        }
+        List<ModelServiceConfig> serviceList = JSON.parseObject(serviceJson, new TypeReference<List<ModelServiceConfig>>() {});
+        DefaultModelConfig defaultModelConfig = JSON.parseObject(defaultJson, DefaultModelConfig.class);
+        if (serviceList == null || serviceList.isEmpty() || defaultModelConfig == null || defaultModelConfig.getDefaultModelId() == null) {
+            return null;
+        }
+
+        ModelLocateResult defaultResult = locateModel(serviceList, defaultModelConfig.getDefaultModelId());
+        ModelLocateResult fastResult = null;
+        if (defaultModelConfig.getFastModelId() != null && !defaultModelConfig.getFastModelId().isEmpty()) {
+            fastResult = locateModel(serviceList, defaultModelConfig.getFastModelId());
+        }
+        if (defaultResult == null) {
+            return null;
+        }
+        ModelRuntimeConfig runtimeConfig = new ModelRuntimeConfig();
+        runtimeConfig.defaultService = defaultResult.service;
+        runtimeConfig.defaultModel = defaultResult.model;
+        if (fastResult != null) {
+            runtimeConfig.fastService = fastResult.service;
+            runtimeConfig.fastModel = fastResult.model;
+        }
+        return runtimeConfig;
+    }
+
+    private ModelLocateResult locateModel(List<ModelServiceConfig> serviceList, String modelId) {
+        for (ModelServiceConfig service : serviceList) {
+            if (service.getModelList() == null) {
+                continue;
+            }
+            for (ModelItem model : service.getModelList()) {
+                if (Objects.equals(model.getId(), modelId)) {
+                    ModelLocateResult result = new ModelLocateResult();
+                    result.service = service;
+                    result.model = model;
+                    return result;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Data
+    private static class DefaultModelConfig {
+        private String defaultModelId;
+        private String fastModelId;
+    }
+
+    @Data
+    private static class ModelItem {
+        private String id;
+        private String name;
+        private String model;
+    }
+
+    @Data
+    private static class ModelServiceConfig {
+        private String id;
+        private String name;
+        private String provider;
+        private String apiKey;
+        private String apiHost;
+        private List<ModelItem> modelList = new ArrayList<>();
+    }
+
+    private static class ModelLocateResult {
+        private ModelServiceConfig service;
+        private ModelItem model;
+    }
+
+    private static class ModelRuntimeConfig {
+        private ModelServiceConfig defaultService;
+        private ModelItem defaultModel;
+        private ModelServiceConfig fastService;
+        private ModelItem fastModel;
     }
 }

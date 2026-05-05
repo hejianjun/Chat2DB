@@ -2,11 +2,7 @@ package ai.chat2db.server.web.api.controller.rdb;
 
 import java.sql.Connection;
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,18 +10,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.param.DlExecuteParam;
 import ai.chat2db.server.domain.api.param.OrderByParam;
 import ai.chat2db.server.domain.api.param.UpdateSelectResultParam;
-import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.core.service.VirtualFkSuggestionService;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
-import ai.chat2db.server.tools.common.util.ConfigUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.DdlCountRequest;
@@ -34,7 +27,6 @@ import ai.chat2db.server.web.api.controller.rdb.request.DmlTableRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.OrderByRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.SelectResultUpdateRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.ExecuteResultVO;
-import ai.chat2db.server.web.api.util.ApplicationContextUtil;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Table;

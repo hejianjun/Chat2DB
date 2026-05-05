@@ -77,6 +77,11 @@ const deleteModelService = createRequest<{ id: string }, void>('/api/config/mode
   errorLevel: 'toast',
 });
 
+const testModelService = createRequest<IModelServiceConfig, void>('/api/config/model_service/test', {
+  method: 'post',
+  errorLevel: false,
+});
+
 const getDefaultModelConfig = createRequest<void, IDefaultModelConfig>('/api/config/model/default', {
   method: 'get',
 });
@@ -120,6 +125,7 @@ export default {
   getModelServiceList,
   upsertModelService,
   deleteModelService,
+  testModelService,
   getDefaultModelConfig,
   setDefaultModelConfig,
   getAiWhiteAccess,

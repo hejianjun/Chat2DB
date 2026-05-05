@@ -17,12 +17,14 @@ import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.domain.core.util.PermissionUtils;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import ai.chat2db.server.web.api.config.AiChatConfig;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.config.request.AIConfigCreateRequest;
 import ai.chat2db.server.web.api.controller.config.request.DefaultModelConfigRequest;
 import ai.chat2db.server.web.api.controller.config.request.ModelItemRequest;
 import ai.chat2db.server.web.api.controller.config.request.ModelServiceDeleteRequest;
 import ai.chat2db.server.web.api.controller.config.request.ModelServiceUpsertRequest;
+import ai.chat2db.server.web.api.controller.config.request.ModelServiceTestRequest;
 import ai.chat2db.server.web.api.controller.config.request.SystemConfigRequest;
 import ai.chat2db.server.web.api.controller.config.response.DefaultModelConfigResponse;
 import ai.chat2db.server.web.api.controller.config.response.ModelServiceResponse;
@@ -44,6 +46,8 @@ public class ConfigController {
 
     @Autowired
     private ConfigService configService;
+    @Autowired
+    private AiChatConfig aiChatConfig;
 
     @PostMapping("/system_config")
     public ActionResult systemConfig(@RequestBody SystemConfigRequest request) {
@@ -267,6 +271,28 @@ public class ConfigController {
         services.removeIf(service -> StringUtils.equals(service.getId(), request.getId()));
         saveSystemConfig(MODEL_SERVICE_CONFIG_CODE, JSON.toJSONString(services));
         return ActionResult.isSuccess();
+    }
+
+    @PostMapping("/model_service/test")
+    public ActionResult testModelService(@RequestBody ModelServiceTestRequest request) {
+        PermissionUtils.checkDeskTopOrAdmin();
+        if (StringUtils.isBlank(request.getProvider()) || StringUtils.isBlank(request.getApiHost())
+                || StringUtils.isBlank(request.getApiKey())) {
+            return ActionResult.fail("INVALID_PARAM", "provider/apiHost/apiKey is required",
+                    "provider/apiHost/apiKey is required");
+        }
+        if (request.getModelList() == null || request.getModelList().isEmpty()
+                || StringUtils.isBlank(request.getModelList().get(0).getModel())) {
+            return ActionResult.fail("INVALID_PARAM", "at least one model is required", "at least one model is required");
+        }
+        String provider = request.getProvider().toUpperCase();
+        String model = request.getModelList().get(0).getModel();
+        try {
+            aiChatConfig.testModelService(provider, request.getApiHost(), request.getApiKey(), model);
+            return ActionResult.isSuccess();
+        } catch (Exception e) {
+            return ActionResult.fail("MODEL_SERVICE_TEST_FAILED", e.getMessage(), e.getMessage());
+        }
     }
 
     @GetMapping("/model/default")

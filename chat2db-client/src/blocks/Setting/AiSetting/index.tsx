@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Form, Input, Modal, Select, Space, Table } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Space, Table, message } from 'antd';
 import configService from '@/service/config';
 import { AIType } from '@/typings/ai';
 import { IDefaultModelConfig, IModelItem, IModelServiceConfig } from '@/typings/setting';
@@ -22,6 +22,7 @@ export default function SettingAI(props: IProps) {
   const [defaultModelConfig, setDefaultModelConfig] = useState<IDefaultModelConfig>({ defaultModelId: '', fastModelId: '' });
   const [editingService, setEditingService] = useState<IModelServiceConfig | null>(null);
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [serviceForm] = Form.useForm<IModelServiceConfig>();
   const { userInfo } = useUserStore((state) => ({ userInfo: state.curUser }));
 
@@ -86,6 +87,23 @@ export default function SettingAI(props: IProps) {
     });
     setServiceModalOpen(false);
     await loadData();
+  };
+
+  const handleTestService = async () => {
+    const values = await serviceForm.validateFields();
+    setTesting(true);
+    try {
+      await configService.testModelService({
+        ...values,
+        id: editingService?.id,
+        modelList: (values.modelList || []).filter((model) => model?.name && model?.model),
+      });
+      message.success('模型服务连接测试成功');
+    } catch (e: any) {
+      message.error(e?.message || '模型服务连接测试失败');
+    } finally {
+      setTesting(false);
+    }
   };
 
   const handleSaveDefaultModel = async () => {
@@ -169,6 +187,15 @@ export default function SettingAI(props: IProps) {
         open={serviceModalOpen}
         onCancel={() => setServiceModalOpen(false)}
         onOk={handleSaveService}
+        okText="保存"
+        cancelText="取消"
+        footer={(
+          <Space>
+            <Button onClick={() => setServiceModalOpen(false)}>取消</Button>
+            <Button onClick={handleTestService} loading={testing}>测试连接</Button>
+            <Button type="primary" onClick={handleSaveService}>保存</Button>
+          </Space>
+        )}
         destroyOnClose
       >
         <Form form={serviceForm} layout="vertical">
