@@ -12,7 +12,6 @@ import { ILatestVersion } from '@/service/config';
 import UpdateDetection, { IUpdateDetectionRef, UpdatedStatusEnum } from '@/blocks/Setting/UpdateDetection';
 
 // ---- store -----
-import { getAiSystemConfig } from '@/store/setting';
 
 interface IProps {
   className?: string;
@@ -39,17 +38,6 @@ function Setting(props: IProps) {
     }
   }, []);
 
-  useEffect(() => {
-    if (isModalVisible && !noLogin) {
-      getAiSystemConfig();
-    }
-  }, [isModalVisible]);
-
-  useEffect(() => {
-    if (!noLogin) {
-      getAiSystemConfig();
-    }
-  }, []);
 
   const showModal = (_currentMenu: number = 0) => {
     setCurrentMenu(_currentMenu);

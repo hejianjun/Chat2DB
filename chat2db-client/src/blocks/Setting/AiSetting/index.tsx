@@ -138,7 +138,7 @@ export default function SettingAI(props: IProps) {
           </Form.Item>
         </Form>
         <div className={styles.bottomButton}>
-          <Button type="primary" onClick={handleSaveDefaultModel} disabled={!defaultModelConfig.defaultModelId}>
+          <Button type="primary" onClick={handleSaveDefaultModel}>
             保存默认模型
           </Button>
         </div>
@@ -242,3 +242,4 @@ export default function SettingAI(props: IProps) {
     </>
   );
 }
+

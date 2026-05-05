@@ -1,4 +1,4 @@
-import { IAiConfig, IDefaultModelConfig, IModelServiceConfig } from '@/typings/setting';
+import { IDefaultModelConfig, IModelServiceConfig } from '@/typings/setting';
 import createRequest from './base';
 
 export interface ILatestVersion {
@@ -41,24 +41,6 @@ const getSystemConfig = createRequest<{ code: string }, { code: string; content:
   { errorLevel: false },
 );
 const setSystemConfig = createRequest<{ code: string; content: string }, void>('/api/config/system_config', {
-  errorLevel: 'toast',
-  method: 'post',
-});
-
-const getAiSystemConfig = createRequest<{ aiSqlSource?: string }, IAiConfig>('/api/config/system_config/ai', {
-  errorLevel: false,
-});
-
-const setAiSystemConfig = createRequest<IAiConfig, void>('/api/config/system_config/ai', {
-  errorLevel: 'toast',
-  method: 'post',
-});
-
-const getFastAiSystemConfig = createRequest<{ aiSqlSource?: string }, IAiConfig>('/api/config/system_config/ai/fast', {
-  errorLevel: false,
-});
-
-const setFastAiSystemConfig = createRequest<IAiConfig, void>('/api/config/system_config/ai/fast', {
   errorLevel: 'toast',
   method: 'post',
 });
@@ -118,10 +100,6 @@ const setAppUpdateType = createRequest<ILatestVersion['type'], boolean>('/api/sy
 export default {
   getSystemConfig,
   setSystemConfig,
-  getAiSystemConfig,
-  setAiSystemConfig,
-  getFastAiSystemConfig,
-  setFastAiSystemConfig,
   getModelServiceList,
   upsertModelService,
   deleteModelService,
@@ -132,5 +110,5 @@ export default {
   getLatestVersion,
   isUpdateSuccess,
   updateDesktopVersion,
-  setAppUpdateType
+  setAppUpdateType,
 };
