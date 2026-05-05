@@ -19,9 +19,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @Service
 public class AiChatConfig {
@@ -84,10 +82,15 @@ public class AiChatConfig {
 
         String apiHost = service.getApiHost();
         OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(apiHost).apiKey(service.getApiKey()).build();
+        Map<String, Object> extraBody = new HashMap<>();
+        if (fastMode) {
+            extraBody.put("enable_thinking", "true");
+        }
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelItem.getModel())
                 .temperature(fastMode ? 0.5 : 0.7)
                 .maxTokens(fastMode ? 1024 : 4096)
+                .extraBody(extraBody)
                 .build();
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
@@ -103,7 +106,8 @@ public class AiChatConfig {
             throw new IllegalStateException("Model service or default model config is empty.");
         }
 
-        List<ModelServiceConfig> serviceList = JSON.parseObject(serviceJson, new TypeReference<>() {});
+        List<ModelServiceConfig> serviceList = JSON.parseObject(serviceJson, new TypeReference<>() {
+        });
         DefaultModelConfig defaultModelConfig = JSON.parseObject(defaultJson, DefaultModelConfig.class);
         if (serviceList == null || serviceList.isEmpty() || defaultModelConfig == null
                 || defaultModelConfig.getDefaultModelId() == null || defaultModelConfig.getDefaultModelId().isEmpty()) {
