@@ -20,6 +20,7 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.config.request.AIConfigCreateRequest;
 import ai.chat2db.server.web.api.controller.config.request.DefaultModelConfigRequest;
+import ai.chat2db.server.web.api.controller.config.request.ModelItemRequest;
 import ai.chat2db.server.web.api.controller.config.request.ModelServiceDeleteRequest;
 import ai.chat2db.server.web.api.controller.config.request.ModelServiceUpsertRequest;
 import ai.chat2db.server.web.api.controller.config.request.SystemConfigRequest;
@@ -244,7 +245,13 @@ public class ConfigController {
         target.setHttpProxyPort(StringUtils.defaultString(request.getHttpProxyPort()));
         target.setOrganizationId(StringUtils.defaultString(request.getOrganizationId()));
         target.setProjectId(StringUtils.defaultString(request.getProjectId()));
-        target.setModelList(request.getModelList() == null ? new ArrayList<>() : request.getModelList());
+        List<ModelItemRequest> modelList = request.getModelList() == null ? new ArrayList<>() : request.getModelList();
+        for (ModelItemRequest modelItem : modelList) {
+            if (StringUtils.isBlank(modelItem.getId())) {
+                modelItem.setId(UUID.randomUUID().toString());
+            }
+        }
+        target.setModelList(modelList);
 
         saveSystemConfig(MODEL_SERVICE_CONFIG_CODE, JSON.toJSONString(services));
         return ActionResult.isSuccess();

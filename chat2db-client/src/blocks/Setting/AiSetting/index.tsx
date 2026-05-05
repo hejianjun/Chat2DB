@@ -33,7 +33,7 @@ export default function SettingAI(props: IProps) {
     return modelServices.flatMap((service) =>
       (service.modelList || []).map((model) => ({
         label: `${model.name} (${service.name})`,
-        value: model.id || '',
+        value: model.id || `${service.id || service.name}:${model.model}`,
       })),
     );
   }, [modelServices]);
