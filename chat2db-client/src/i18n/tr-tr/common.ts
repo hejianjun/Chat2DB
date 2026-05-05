@@ -120,4 +120,10 @@ export default {
   'common.label.LocalFile': 'Yerel Dosya',
   'common.text.rename': 'Yeniden Adlandır',
   'common.title.info': 'Bilgi',
+  'common.viewAllTable.batchDeprecated': 'Tabloları Toplu Kullanımdan Kaldır',
+  'common.viewAllTable.noSelectedTables': 'Lütfen kullanımdan kaldırmak için tabloları seçin',
+  'common.viewAllTable.batchDeprecatedConfirmTitle': 'Tabloları Toplu Kullanımdan Kaldırmayı Onayla',
+  'common.viewAllTable.batchDeprecatedConfirmContent': 'Seçili {1} tabloyu kullanımdan kaldırmak istediğinizden emin misiniz?',
+  'common.viewAllTable.batchDeprecatedSuccess': '{1} tablo başarıyla kullanımdan kaldırıldı',
+  'common.viewAllTable.batchDeprecatedPartialSuccess': '{1} tablo başarıyla kullanımdan kaldırıldı, {2} başarısız oldu',
 };

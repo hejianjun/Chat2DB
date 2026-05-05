@@ -265,11 +265,6 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         }
 
         SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
-        Table table = Table.builder()
-                .databaseName(existing.getDatabaseName())
-                .schemaName(existing.getSchemaName())
-                .name(existing.getTableName())
-                .build();
         ForeignKey fk = ForeignKey.builder()
                 .name(existing.getFkName())
                 .tableName(existing.getTableName())
@@ -280,7 +275,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .deleteRule(existing.getDeleteRule() != null ? existing.getDeleteRule() : 0)
                 .build();
 
-        String dropFKSql = sqlBuilder.buildDropForeignKeySql(table, fk);
+        String dropFKSql = sqlBuilder.buildDropForeignKeySql(fk);
 
         getFKMapper().deleteById(id);
 
@@ -313,7 +308,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
         for (ForeignKey newFK : newFKs) {
             if (!oldFKMap.containsKey(buildUniqueKey(newFK))) {
-                String ddl = sqlBuilder.buildAddForeignKeySql(newTable, newFK);
+                String ddl = sqlBuilder.buildAddForeignKeySql(newFK);
                 if (StringUtils.isNotBlank(ddl)) {
                     ddlList.add(ddl);
                 }
@@ -322,7 +317,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
         for (ForeignKey oldFK : oldFKs) {
             if (!newFKMap.containsKey(buildUniqueKey(oldFK))) {
-                String ddl = sqlBuilder.buildDropForeignKeySql(oldTable, oldFK);
+                String ddl = sqlBuilder.buildDropForeignKeySql(oldFK);
                 if (StringUtils.isNotBlank(ddl)) {
                     ddlList.add(ddl);
                 }

@@ -2,7 +2,12 @@
 package ai.chat2db.server.web.api.controller.config;
 
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.TypeReference;
 import ai.chat2db.server.domain.api.constant.AiConfigKeys;
 import ai.chat2db.server.domain.api.enums.AiSqlSourceEnum;
 import ai.chat2db.server.domain.api.model.AIConfig;
@@ -14,7 +19,12 @@ import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.config.request.AIConfigCreateRequest;
+import ai.chat2db.server.web.api.controller.config.request.DefaultModelConfigRequest;
+import ai.chat2db.server.web.api.controller.config.request.ModelServiceDeleteRequest;
+import ai.chat2db.server.web.api.controller.config.request.ModelServiceUpsertRequest;
 import ai.chat2db.server.web.api.controller.config.request.SystemConfigRequest;
+import ai.chat2db.server.web.api.controller.config.response.DefaultModelConfigResponse;
+import ai.chat2db.server.web.api.controller.config.response.ModelServiceResponse;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/config")
 @RestController
 public class ConfigController {
+    private static final String MODEL_SERVICE_CONFIG_CODE = "ai.model.services";
+    private static final String MODEL_DEFAULT_CONFIG_CODE = "ai.model.default";
 
     @Autowired
     private ConfigService configService;
@@ -193,6 +205,98 @@ public class ConfigController {
             return result.getData().getContent();
         }
         return "";
+    }
+
+    @GetMapping("/model_service/list")
+    public DataResult<List<ModelServiceResponse>> getModelServiceList() {
+        return DataResult.of(readModelServices());
+    }
+
+    @PostMapping("/model_service/upsert")
+    public ActionResult upsertModelService(@RequestBody ModelServiceUpsertRequest request) {
+        PermissionUtils.checkDeskTopOrAdmin();
+        if (StringUtils.isBlank(request.getProvider())) {
+            return ActionResult.fail("INVALID_PARAM", "provider is required", "provider is required");
+        }
+
+        List<ModelServiceResponse> services = readModelServices();
+        ModelServiceResponse target = null;
+        if (StringUtils.isNotBlank(request.getId())) {
+            for (ModelServiceResponse service : services) {
+                if (StringUtils.equals(service.getId(), request.getId())) {
+                    target = service;
+                    break;
+                }
+            }
+        }
+
+        if (target == null) {
+            target = new ModelServiceResponse();
+            target.setId(UUID.randomUUID().toString());
+            services.add(target);
+        }
+
+        target.setName(StringUtils.defaultIfBlank(request.getName(), request.getProvider() + " Service"));
+        target.setProvider(request.getProvider());
+        target.setApiKey(StringUtils.defaultString(request.getApiKey()));
+        target.setApiHost(StringUtils.defaultString(request.getApiHost()));
+        target.setHttpProxyHost(StringUtils.defaultString(request.getHttpProxyHost()));
+        target.setHttpProxyPort(StringUtils.defaultString(request.getHttpProxyPort()));
+        target.setOrganizationId(StringUtils.defaultString(request.getOrganizationId()));
+        target.setProjectId(StringUtils.defaultString(request.getProjectId()));
+        target.setModelList(request.getModelList() == null ? new ArrayList<>() : request.getModelList());
+
+        saveSystemConfig(MODEL_SERVICE_CONFIG_CODE, JSON.toJSONString(services));
+        return ActionResult.isSuccess();
+    }
+
+    @PostMapping("/model_service/delete")
+    public ActionResult deleteModelService(@RequestBody ModelServiceDeleteRequest request) {
+        PermissionUtils.checkDeskTopOrAdmin();
+        if (StringUtils.isBlank(request.getId())) {
+            return ActionResult.fail("INVALID_PARAM", "id is required", "id is required");
+        }
+        List<ModelServiceResponse> services = readModelServices();
+        services.removeIf(service -> StringUtils.equals(service.getId(), request.getId()));
+        saveSystemConfig(MODEL_SERVICE_CONFIG_CODE, JSON.toJSONString(services));
+        return ActionResult.isSuccess();
+    }
+
+    @GetMapping("/model/default")
+    public DataResult<DefaultModelConfigResponse> getDefaultModelConfig() {
+        String content = getConfigValue(MODEL_DEFAULT_CONFIG_CODE);
+        if (StringUtils.isBlank(content)) {
+            return DataResult.of(new DefaultModelConfigResponse());
+        }
+        return DataResult.of(JSON.parseObject(content, DefaultModelConfigResponse.class));
+    }
+
+    @PostMapping("/model/default")
+    public ActionResult setDefaultModelConfig(@RequestBody DefaultModelConfigRequest request) {
+        PermissionUtils.checkDeskTopOrAdmin();
+        if (StringUtils.isBlank(request.getDefaultModelId())) {
+            return ActionResult.fail("INVALID_PARAM", "defaultModelId is required", "defaultModelId is required");
+        }
+        DefaultModelConfigResponse response = new DefaultModelConfigResponse();
+        response.setDefaultModelId(request.getDefaultModelId());
+        response.setFastModelId(StringUtils.defaultString(request.getFastModelId()));
+        saveSystemConfig(MODEL_DEFAULT_CONFIG_CODE, JSON.toJSONString(response));
+        return ActionResult.isSuccess();
+    }
+
+    private List<ModelServiceResponse> readModelServices() {
+        String content = getConfigValue(MODEL_SERVICE_CONFIG_CODE);
+        if (StringUtils.isBlank(content)) {
+            return new ArrayList<>();
+        }
+        List<ModelServiceResponse> services = JSON.parseObject(content, new TypeReference<List<ModelServiceResponse>>() {
+        });
+        return services == null ? new ArrayList<>() : services;
+    }
+
+    private void saveSystemConfig(String code, String content) {
+        SystemConfigParam param = SystemConfigParam.builder().code(code).content(content).build();
+        configService.createOrUpdate(param);
     }
 
 }

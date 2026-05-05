@@ -1,244 +1,217 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Button, Form, Input, Modal, Select, Space, Table } from 'antd';
 import configService from '@/service/config';
 import { AIType } from '@/typings/ai';
-import { Alert, Button, Form, Input, Radio, RadioChangeEvent, InputNumber, Divider, Typography } from 'antd';
+import { IDefaultModelConfig, IModelItem, IModelServiceConfig } from '@/typings/setting';
 import i18n from '@/i18n';
-import { IAiConfig, IFastAIConfig } from '@/typings/setting';
-import { IRole } from '@/typings/user'
-import { AIFormConfig, AITypeName, FastAIFormConfig } from './aiTypeConfig';
+import { IRole } from '@/typings/user';
+import { useUserStore } from '@/store/user';
 import styles from './index.less';
-import { useUserStore } from '@/store/user'
 
 interface IProps {
-  handleApplyAiConfig: (aiConfig: IAiConfig) => void;
-  aiConfig: IAiConfig;
+  mode: 'service' | 'default';
 }
 
-function capitalizeFirstLetter(string) {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-}
+const providerOptions = [
+  { label: 'OpenAI', value: AIType.OPENAI },
+  { label: 'Anthropic', value: AIType.ANTHROPIC },
+];
 
-// 转换参数名以更好地显示
-function formatParamName(param: string): string {
-  // 特殊参数名映射
-  const nameMap: Record<string, string> = {
-    'apiHost': 'API Host',
-    'httpProxyHost': 'HTTP Proxy Host',
-    'httpProxyPort': 'HTTP Proxy Port',
-    'maxTokens': 'Max Tokens',
-    'topP': 'Top P',
-    'topK': 'Top K',
-    'stopSequences': 'Stop Sequences',
-    'betaVersion': 'Beta Version',
-    'presencePenalty': 'Presence Penalty',
-    'frequencyPenalty': 'Frequency Penalty',
-    'logitBias': 'Logit Bias',
-    'organizationId': 'Organization ID',
-    'projectId': 'Project ID',
-  };
-  
-  if (nameMap[param]) {
-    return nameMap[param];
-  }
-  
-  // 将驼峰命名转换为带空格的格式
-  return param.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-}
-
-// 确定输入类型
-function getFieldType(key: string): 'input' | 'number' {
-  const numberFields = [
-    'temperature', 'maxTokens', 'topP', 'topK', 'n', 
-    'presencePenalty', 'frequencyPenalty', 'httpProxyPort'
-  ];
-  return numberFields.includes(key) ? 'number' : 'input';
-}
-
-// openAI 的设置项
 export default function SettingAI(props: IProps) {
-  const [aiConfig, setAiConfig] = useState<IAiConfig>();
-  const [fastAiConfig, setFastAiConfig] = useState<IFastAIConfig>();
-  const { userInfo } = useUserStore(state => {
-    return {
-      userInfo: state.curUser
-    }
-  })
+  const [modelServices, setModelServices] = useState<IModelServiceConfig[]>([]);
+  const [defaultModelConfig, setDefaultModelConfig] = useState<IDefaultModelConfig>({ defaultModelId: '', fastModelId: '' });
+  const [editingService, setEditingService] = useState<IModelServiceConfig | null>(null);
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [serviceForm] = Form.useForm<IModelServiceConfig>();
+  const { userInfo } = useUserStore((state) => ({ userInfo: state.curUser }));
 
   useEffect(() => {
-    setAiConfig(props.aiConfig);
-    loadFastAiConfig();
-  }, [props.aiConfig]);
+    loadData();
+  }, []);
 
-  const loadFastAiConfig = async () => {
-    const res = await configService.getFastAiSystemConfig({
-      aiSqlSource: aiConfig?.aiSqlSource,
-    });
-    setFastAiConfig(res);
+  const modelOptions = useMemo(() => {
+    return modelServices.flatMap((service) =>
+      (service.modelList || []).map((model) => ({
+        label: `${model.name} (${service.name})`,
+        value: model.id || '',
+      })),
+    );
+  }, [modelServices]);
+
+  const loadData = async () => {
+    const [serviceList, modelConfig] = await Promise.all([
+      configService.getModelServiceList(),
+      configService.getDefaultModelConfig(),
+    ]);
+    setModelServices(serviceList || []);
+    setDefaultModelConfig(modelConfig || { defaultModelId: '', fastModelId: '' });
   };
 
-  if (!aiConfig) {
-    return <Alert description={i18n('setting.ai.tips')} type="warning" showIcon />;
-  }
-
   if (userInfo?.roleCode && userInfo?.roleCode === IRole.USER) {
-    // 如果是用户，不能配置ai
     return <Alert description={i18n('setting.ai.user.hidden')} type="warning" showIcon />;
   }
 
-  const handleAiTypeChange = async (e: RadioChangeEvent) => {
-    const aiSqlSource = e.target.value;
+  const openCreate = () => {
+    setEditingService(null);
+    serviceForm.setFieldsValue({
+      provider: AIType.OPENAI,
+      modelList: [{ name: '', model: '' }],
+    } as IModelServiceConfig);
+    setServiceModalOpen(true);
+  };
 
-    // 查询对应 ai 类型的配置
-    const res = await configService.getAiSystemConfig({
-      aiSqlSource,
+  const openEdit = (record: IModelServiceConfig) => {
+    setEditingService(record);
+    serviceForm.setFieldsValue({
+      ...record,
+      modelList: record.modelList?.length ? record.modelList : [{ name: '', model: '' }],
     });
-    setAiConfig(res);
-    
-    // 同时加载快速模型配置
-    const fastRes = await configService.getFastAiSystemConfig({
-      aiSqlSource,
+    setServiceModalOpen(true);
+  };
+
+  const handleDelete = async (id?: string) => {
+    if (!id) {
+      return;
+    }
+    await configService.deleteModelService({ id });
+    await loadData();
+  };
+
+  const handleSaveService = async () => {
+    const values = await serviceForm.validateFields();
+    await configService.upsertModelService({
+      ...values,
+      id: editingService?.id,
+      modelList: (values.modelList || []).filter((model) => model?.name && model?.model),
     });
-    setFastAiConfig(fastRes);
+    setServiceModalOpen(false);
+    await loadData();
   };
 
-  /** 应用快速 Ai 配置 */
-  const handleApplyFastAiConfig = async () => {
-    const newFastAiConfig = { ...fastAiConfig };
-    if (newFastAiConfig.apiHost && !newFastAiConfig.apiHost?.endsWith('/')) {
-      newFastAiConfig.apiHost = newFastAiConfig.apiHost + '/';
-    }
-    
-    await configService.setFastAiSystemConfig(newFastAiConfig as any);
-    
-    // 刷新配置
-    await loadFastAiConfig();
+  const handleSaveDefaultModel = async () => {
+    await configService.setDefaultModelConfig(defaultModelConfig);
+    await loadData();
   };
 
-  /** 应用 Ai 配置 */
-  const handleApplyAiConfig = () => {
-    const newAiConfig = { ...aiConfig };
-    if (newAiConfig.apiHost && !newAiConfig.apiHost?.endsWith('/')) {
-      newAiConfig.apiHost = newAiConfig.apiHost + '/';
-    }
-    
-    if (props.handleApplyAiConfig) {
-      props.handleApplyAiConfig(newAiConfig);
-    }
-  };
+  if (props.mode === 'default') {
+    return (
+      <>
+        <Form layout="vertical">
+          <Form.Item required label="默认模型" className={styles.title}>
+            <Select
+              placeholder="请选择默认模型"
+              value={defaultModelConfig.defaultModelId || undefined}
+              options={modelOptions}
+              onChange={(value) => {
+                setDefaultModelConfig({ ...defaultModelConfig, defaultModelId: value });
+              }}
+            />
+          </Form.Item>
+          <Form.Item label="快速模型" className={styles.title}>
+            <Select
+              allowClear
+              placeholder="请选择快速模型"
+              value={defaultModelConfig.fastModelId || undefined}
+              options={modelOptions}
+              onChange={(value) => {
+                setDefaultModelConfig({ ...defaultModelConfig, fastModelId: value || '' });
+              }}
+            />
+          </Form.Item>
+        </Form>
+        <div className={styles.bottomButton}>
+          <Button type="primary" onClick={handleSaveDefaultModel} disabled={!defaultModelConfig.defaultModelId}>
+            保存默认模型
+          </Button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <div className={styles.aiSqlSource}>
-        <div className={styles.aiSqlSourceTitle}>{i18n('setting.title.aiSource')}:</div>
-        <Radio.Group onChange={handleAiTypeChange} value={aiConfig?.aiSqlSource}>
-          {Object.keys(AIType).map((key) => (
-            <Radio key={key} value={AIType[key]} style={{ marginBottom: '8px' }}>
-              {AITypeName[AIType[key]]}
-            </Radio>
-          ))}
-        </Radio.Group>
-      </div>
-
-      <Divider orientation="left">主模型配置</Divider>
-
-      <Form layout="vertical">
-        {Object.keys(AIFormConfig[aiConfig?.aiSqlSource]).map((key: string) => {
-          const fieldType = getFieldType(key);
-          const isRequired = key === 'apiKey';
-          
-          return (
-            <Form.Item
-              key={key}
-              required={isRequired}
-              label={formatParamName(key)}
-              className={styles.title}
-            >
-              {fieldType === 'number' ? (
-                <InputNumber
-                  style={{ width: '100%' }}
-                  value={aiConfig[key as keyof IAiConfig] as number}
-                  placeholder={AIFormConfig[aiConfig?.aiSqlSource]?.[key] as string}
-                  onChange={(value) => {
-                    setAiConfig({ ...aiConfig, [key]: value });
-                  }}
-                  min={key === 'temperature' || key === 'topP' ? 0 : undefined}
-                  max={key === 'temperature' || key === 'topP' ? 1 : undefined}
-                  step={key === 'temperature' || key === 'topP' ? 0.1 : 1}
-                />
-              ) : (
-                <Input
-                  autoComplete="off"
-                  value={aiConfig[key as keyof IAiConfig] as string}
-                  placeholder={AIFormConfig[aiConfig?.aiSqlSource]?.[key] as string}
-                  onChange={(e) => {
-                    setAiConfig({ ...aiConfig, [key]: e.target.value });
-                  }}
-                />
-              )}
-            </Form.Item>
-          );
-        })}
-      </Form>
-
-      <div className={styles.bottomButton}>
-        <Button type="primary" onClick={handleApplyAiConfig}>
-          {i18n('setting.button.apply')}
+      <div className={styles.bottomButton} style={{ justifyContent: 'flex-start', marginTop: 0, marginBottom: 12 }}>
+        <Button type="primary" onClick={openCreate}>
+          新增模型服务
         </Button>
       </div>
 
-      <Divider orientation="left">快速模型配置（用于选表等简单任务）</Divider>
+      <Table
+        rowKey={(record) => record.id || record.name}
+        dataSource={modelServices}
+        pagination={false}
+        columns={[
+          { title: '服务名称', dataIndex: 'name' },
+          { title: '厂商', dataIndex: 'provider' },
+          {
+            title: '模型',
+            dataIndex: 'modelList',
+            render: (models: IModelItem[]) => (models || []).map((item) => item.name).join(', '),
+          },
+          {
+            title: '操作',
+            render: (_, record: IModelServiceConfig) => (
+              <Space>
+                <Button type="link" onClick={() => openEdit(record)}>
+                  编辑
+                </Button>
+                <Button type="link" danger onClick={() => handleDelete(record.id)}>
+                  删除
+                </Button>
+              </Space>
+            ),
+          },
+        ]}
+      />
 
-      <Typography.Paragraph style={{ fontSize: '12px', color: '#666', marginBottom: '16px' }}>
-        快速模型用于选表、生成标题等简单任务，可以降低成本并提高响应速度。
-        如果未配置，将使用主模型进行所有操作。
-      </Typography.Paragraph>
-
-      <Form layout="vertical">
-        {Object.keys(FastAIFormConfig[aiConfig?.aiSqlSource || AIType.OPENAI]).map((key: string) => {
-          const fieldType = getFieldType(key);
-          const isRequired = key === 'apiKey' && fastAiConfig?.apiKey;
-          const placeholder = FastAIFormConfig[aiConfig?.aiSqlSource || AIType.OPENAI]?.[key] as string;
-          const hasPlaceholder = placeholder && placeholder !== 'true';
-          
-          return (
-            <Form.Item
-              key={key}
-              required={isRequired}
-              label={formatParamName(key)}
-              className={styles.title}
-            >
-              {fieldType === 'number' ? (
-                <InputNumber
-                  style={{ width: '100%' }}
-                  value={fastAiConfig?.[key as keyof IFastAIConfig] as number}
-                  placeholder={hasPlaceholder ? placeholder : undefined}
-                  onChange={(value) => {
-                    setFastAiConfig({ ...fastAiConfig, [key]: value });
-                  }}
-                  min={key === 'temperature' || key === 'topP' ? 0 : undefined}
-                  max={key === 'temperature' || key === 'topP' ? 1 : undefined}
-                  step={key === 'temperature' || key === 'topP' ? 0.1 : 1}
-                />
-              ) : (
-                <Input
-                  autoComplete="off"
-                  value={fastAiConfig?.[key as keyof IFastAIConfig] as string}
-                  placeholder={hasPlaceholder ? placeholder : undefined}
-                  onChange={(e) => {
-                    setFastAiConfig({ ...fastAiConfig, [key]: e.target.value });
-                  }}
-                />
-              )}
-            </Form.Item>
-          );
-        })}
-      </Form>
-
-      <div className={styles.bottomButton}>
-        <Button type="primary" onClick={handleApplyFastAiConfig}>
-          {i18n('setting.button.apply')} - 快速模型
-        </Button>
-      </div>
+      <Modal
+        title={editingService ? '编辑模型服务' : '新增模型服务'}
+        open={serviceModalOpen}
+        onCancel={() => setServiceModalOpen(false)}
+        onOk={handleSaveService}
+        destroyOnClose
+      >
+        <Form form={serviceForm} layout="vertical">
+          <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+            <Input placeholder="例如 OpenAI-Prod" />
+          </Form.Item>
+          <Form.Item name="provider" label="厂商" rules={[{ required: true, message: '请选择厂商' }]}>
+            <Select options={providerOptions} />
+          </Form.Item>
+          <Form.Item name="apiHost" label="API Host">
+            <Input />
+          </Form.Item>
+          <Form.Item name="apiKey" label="API Key">
+            <Input.Password />
+          </Form.Item>
+          <Form.List name="modelList">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map((field) => (
+                  <Space key={field.key} align="baseline" style={{ display: 'flex', marginBottom: 8 }}>
+                    <Form.Item
+                      name={[field.name, 'name']}
+                      rules={[{ required: true, message: '模型名称必填' }]}
+                    >
+                      <Input placeholder="展示名" />
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, 'model']}
+                      rules={[{ required: true, message: '模型ID必填' }]}
+                    >
+                      <Input placeholder="模型ID，如 gpt-4o-mini" />
+                    </Form.Item>
+                    <Button danger onClick={() => remove(field.name)}>
+                      删除
+                    </Button>
+                  </Space>
+                ))}
+                <Button onClick={() => add({ name: '', model: '' })}>新增模型</Button>
+              </>
+            )}
+          </Form.List>
+        </Form>
+      </Modal>
     </>
   );
 }

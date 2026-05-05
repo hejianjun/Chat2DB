@@ -134,4 +134,10 @@ export default {
   'common.button.editAll': 'Edit All',
   'common.text.generateTitle': 'AI Generate Title',
   'common.text.generatingTitle': 'Generating Title...',
+  'common.viewAllTable.batchDeprecated': 'Batch Deprecate Tables',
+  'common.viewAllTable.noSelectedTables': 'Please select tables to deprecate first',
+  'common.viewAllTable.batchDeprecatedConfirmTitle': 'Confirm Batch Deprecate Tables',
+  'common.viewAllTable.batchDeprecatedConfirmContent': 'Are you sure to deprecate the selected {1} table(s)?',
+  'common.viewAllTable.batchDeprecatedSuccess': 'Successfully deprecated {1} table(s)',
+  'common.viewAllTable.batchDeprecatedPartialSuccess': 'Deprecated {1} table(s) successfully, {2} failed',
 };

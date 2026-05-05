@@ -1,4 +1,4 @@
-import { IAiConfig } from '@/typings';
+import { IAiConfig, IDefaultModelConfig, IModelServiceConfig } from '@/typings/setting';
 import createRequest from './base';
 
 export interface ILatestVersion {
@@ -63,6 +63,29 @@ const setFastAiSystemConfig = createRequest<IAiConfig, void>('/api/config/system
   method: 'post',
 });
 
+const getModelServiceList = createRequest<void, IModelServiceConfig[]>('/api/config/model_service/list', {
+  method: 'get',
+});
+
+const upsertModelService = createRequest<IModelServiceConfig, void>('/api/config/model_service/upsert', {
+  method: 'post',
+  errorLevel: 'toast',
+});
+
+const deleteModelService = createRequest<{ id: string }, void>('/api/config/model_service/delete', {
+  method: 'post',
+  errorLevel: 'toast',
+});
+
+const getDefaultModelConfig = createRequest<void, IDefaultModelConfig>('/api/config/model/default', {
+  method: 'get',
+});
+
+const setDefaultModelConfig = createRequest<IDefaultModelConfig, void>('/api/config/model/default', {
+  method: 'post',
+  errorLevel: 'toast',
+});
+
 const getAiWhiteAccess = createRequest<{ apiKey: string }, boolean>('/api/ai/embedding/white/check', {
   method: 'get',
 });
@@ -94,6 +117,11 @@ export default {
   setAiSystemConfig,
   getFastAiSystemConfig,
   setFastAiSystemConfig,
+  getModelServiceList,
+  upsertModelService,
+  deleteModelService,
+  getDefaultModelConfig,
+  setDefaultModelConfig,
   getAiWhiteAccess,
   getLatestVersion,
   isUpdateSuccess,

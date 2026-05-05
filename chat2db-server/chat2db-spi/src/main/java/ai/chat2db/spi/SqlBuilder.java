@@ -84,14 +84,14 @@ public interface SqlBuilder {
     /**
      * Generate add foreign key sql
      */
-    default String buildAddForeignKeySql(Table table, ForeignKey fk) {
+    default String buildAddForeignKeySql(ForeignKey fk) {
         return null;
     }
 
     /**
      * Generate drop foreign key sql
      */
-    default String buildDropForeignKeySql(Table table, ForeignKey fk) {
+    default String buildDropForeignKeySql(ForeignKey fk) {
         return null;
     }
 

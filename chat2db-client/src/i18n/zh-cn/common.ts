@@ -133,4 +133,10 @@ export default {
   'common.button.editAll': '编辑全部',
   'common.text.generateTitle': 'AI 生成标题',
   'common.text.generatingTitle': '正在生成标题...',
+  'common.viewAllTable.batchDeprecated': '批量废弃表',
+  'common.viewAllTable.noSelectedTables': '请先选择要废弃的表',
+  'common.viewAllTable.batchDeprecatedConfirmTitle': '确认批量废弃表',
+  'common.viewAllTable.batchDeprecatedConfirmContent': '确定要废弃选中的 {1} 张表吗？',
+  'common.viewAllTable.batchDeprecatedSuccess': '成功废弃 {1} 张表',
+  'common.viewAllTable.batchDeprecatedPartialSuccess': '成功废弃 {1} 张表，失败 {2} 张表',
 };

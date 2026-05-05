@@ -279,14 +279,14 @@ public class DefaultSqlBuilder implements SqlBuilder {
                 + StringUtils.defaultString(fk.getReferencedColumn());
     }
 
-    public String buildAddForeignKeySql(Table table, ForeignKey fk) {
+    public String buildAddForeignKeySql(ForeignKey fk) {
         StringBuilder script = new StringBuilder();
         script.append("ALTER TABLE ");
-        if (StringUtils.isNotBlank(table.getDatabaseName())) {
-            script.append("`").append(table.getDatabaseName()).append("`.`");
+        if (StringUtils.isNotBlank(fk.getDatabaseName())) {
+            script.append("`").append(fk.getDatabaseName()).append("`.`");
         }
-        script.append("`").append(table.getName()).append("` ADD CONSTRAINT `")
-                .append(fk.getName() != null ? fk.getName() : "FK_" + table.getName() + "_" + fk.getColumn())
+        script.append("`").append(fk.getTableName()).append("` ADD CONSTRAINT `")
+                .append(fk.getName() != null ? fk.getName() : "FK_" + fk.getName() + "_" + fk.getColumn())
                 .append("` FOREIGN KEY (`").append(fk.getColumn())
                 .append("`) REFERENCES `").append(fk.getReferencedTable())
                 .append("` (`").append(fk.getReferencedColumn()).append("`)");
@@ -304,13 +304,13 @@ public class DefaultSqlBuilder implements SqlBuilder {
         return script.toString();
     }
 
-    public String buildDropForeignKeySql(Table table, ForeignKey fk) {
+    public String buildDropForeignKeySql(ForeignKey fk) {
         StringBuilder script = new StringBuilder();
         script.append("ALTER TABLE ");
-        if (StringUtils.isNotBlank(table.getDatabaseName())) {
-            script.append("`").append(table.getDatabaseName()).append("`.`");
+        if (StringUtils.isNotBlank(fk.getDatabaseName())) {
+            script.append("`").append(fk.getDatabaseName()).append("`.`");
         }
-        script.append("`").append(table.getName()).append("` DROP FOREIGN KEY `")
+        script.append("`").append(fk.getTableName()).append("` DROP FOREIGN KEY `")
                 .append(fk.getName()).append("`;");
         return script.toString();
     }

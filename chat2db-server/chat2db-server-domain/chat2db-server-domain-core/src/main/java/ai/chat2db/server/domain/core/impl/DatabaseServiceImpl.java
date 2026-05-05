@@ -25,12 +25,7 @@ import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
-import ai.chat2db.spi.model.Database;
-import ai.chat2db.spi.model.ForeignKey;
-import ai.chat2db.spi.model.MetaSchema;
-import ai.chat2db.spi.model.Schema;
-import ai.chat2db.spi.model.Sql;
-import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.model.*;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import cn.hutool.core.thread.ThreadUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -255,7 +250,8 @@ public class DatabaseServiceImpl implements DatabaseService {
                 String comment = StringUtils.defaultString(table.getComment(), table.getAiComment());
                 List<ForeignKey> foreignKeys = table.getForeignKeyList();
 
-                if (StringUtils.isNotEmpty(comment) || !foreignKeys.isEmpty()) {
+                List<VirtualForeignKey> virtualForeignKeys = table.getVirtualForeignKeyList();
+                if (StringUtils.isNotEmpty(comment) || !foreignKeys.isEmpty() || !virtualForeignKeys.isEmpty()) {
                     sb.append("(").append(comment);
 
                     if (!foreignKeys.isEmpty()) {
@@ -267,7 +263,19 @@ public class DatabaseServiceImpl implements DatabaseService {
                                         foreignKey.getReferencedTable() + ":" +
                                         foreignKey.getReferencedColumn())
                                 .collect(Collectors.joining(","));
+
                         sb.append("foreignKeys:").append(foreignKeysString);
+                    }
+                    if (!virtualForeignKeys.isEmpty()) {
+                        if (StringUtils.isNotEmpty(comment) || !foreignKeys.isEmpty()) {
+                            sb.append(";");
+                        }
+                        String virtualForeignKeysString = virtualForeignKeys.stream()
+                                .map(virtualForeignKey -> virtualForeignKey.getColumn() + "->" +
+                                        virtualForeignKey.getReferencedTable() + ":" +
+                                        virtualForeignKey.getReferencedColumn())
+                                .collect(Collectors.joining(","));
+                        sb.append("virtualForeignKeys:").append(virtualForeignKeysString);
                     }
                     sb.append(")");
                 }

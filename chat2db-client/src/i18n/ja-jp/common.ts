@@ -119,4 +119,10 @@ export default {
   'common.label.LocalFile': 'ローカルファイル',
   'common.text.rename': '名前を変更',
   'common.title.info': '情報',
+  'common.viewAllTable.batchDeprecated': 'テーブルの一括非推奨化',
+  'common.viewAllTable.noSelectedTables': '非推奨化するテーブルを選択してください',
+  'common.viewAllTable.batchDeprecatedConfirmTitle': 'テーブルの一括非推奨化を確認',
+  'common.viewAllTable.batchDeprecatedConfirmContent': '選択した {1} 個のテーブルを非推奨にしてもよろしいですか？',
+  'common.viewAllTable.batchDeprecatedSuccess': '{1} 個のテーブルを非推奨化しました',
+  'common.viewAllTable.batchDeprecatedPartialSuccess': '{1} 個のテーブルを非推奨化しました。{2} 個が失敗しました',
 };

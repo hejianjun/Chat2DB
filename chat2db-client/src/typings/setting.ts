@@ -43,3 +43,27 @@ export interface IFastAIConfig {
 }
 
 export type IAiConfig = IAnthropicConfig | IOpenAIConfig;
+
+export interface IModelItem {
+  id?: string;
+  name: string;
+  model: string;
+}
+
+export interface IModelServiceConfig {
+  id?: string;
+  name: string;
+  provider: AIType;
+  apiKey?: string;
+  apiHost?: string;
+  httpProxyHost?: string;
+  httpProxyPort?: string;
+  organizationId?: string;
+  projectId?: string;
+  modelList: IModelItem[];
+}
+
+export interface IDefaultModelConfig {
+  defaultModelId: string;
+  fastModelId?: string;
+}

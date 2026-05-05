@@ -49,6 +49,7 @@ export default memo<IProps>((props) => {
   const [viewSqlModal, setViewSqlModal] = useState<boolean>(false);
   const [appendValue, setAppendValue] = useState<string>('');
   const [form] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     getTable({
@@ -260,6 +261,64 @@ export default memo<IProps>((props) => {
     });
   };
 
+  const batchDeprecatedTable = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning(i18n('common.viewAllTable.noSelectedTables'));
+      return;
+    }
+
+    Modal.confirm({
+      title: i18n('common.viewAllTable.batchDeprecatedConfirmTitle'),
+      content: i18n('common.viewAllTable.batchDeprecatedConfirmContent', selectedRowKeys.length),
+      okText: i18n('common.button.confirm'),
+      cancelText: i18n('common.button.cancel'),
+      onOk: async () => {
+        const selectedTables = tableData?.filter((item) => selectedRowKeys.includes(item.key)) || [];
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const table of selectedTables) {
+          try {
+            await sqlServer.deprecatedTable({
+              dataSourceId: uniqueData.dataSourceId,
+              databaseName: uniqueData.databaseName,
+              schemaName: uniqueData.schemaName,
+              tableName: table.name,
+            });
+            successCount++;
+          } catch (error) {
+            failCount++;
+            console.error(`Failed to deprecate table ${table.name}:`, error);
+          }
+        }
+
+        setSelectedRowKeys([]);
+        
+        if (failCount === 0) {
+          message.success(i18n('common.viewAllTable.batchDeprecatedSuccess', successCount));
+        } else {
+          message.warning(i18n('common.viewAllTable.batchDeprecatedPartialSuccess', successCount, failCount));
+        }
+
+        getTable({
+          pageNo: currentPageNo,
+          pageSize: 1000,
+        });
+      },
+    });
+  };
+
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (newSelectedRowKeys: React.Key[]) => {
+      setSelectedRowKeys(newSelectedRowKeys);
+    },
+    columnWidth: 32,
+    getCheckboxProps: (record: any) => ({
+      disabled: false,
+    }),
+  };
+
   const pendingBatchesRef = React.useRef<string[][]>([]);
 
   const handleBatchCommentGenerated = useCallback((result: IBatchTableCommentResult) => {
@@ -373,9 +432,18 @@ export default memo<IProps>((props) => {
               </Button>
             </>
           ) : (
-            <Button onClick={startEditing} style={{ marginLeft: 8 }}>
-              {i18n('common.button.editAll')}
-            </Button>
+            <>
+              <Button
+                onClick={batchDeprecatedTable}
+                disabled={selectedRowKeys.length === 0}
+                style={{ marginLeft: 8 }}
+              >
+                {i18n('common.viewAllTable.batchDeprecated')}
+              </Button>
+              <Button onClick={startEditing} style={{ marginLeft: 8 }}>
+                {i18n('common.button.editAll')}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -394,6 +462,7 @@ export default memo<IProps>((props) => {
             <Form form={form} component={false}>
               <Table
                 loading={tableLoading}
+                rowSelection={rowSelection}
                 onRow={(row) => {
                   return {
                     onClick: () => {

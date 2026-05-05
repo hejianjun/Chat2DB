@@ -12,7 +12,7 @@ import { ILatestVersion } from '@/service/config';
 import UpdateDetection, { IUpdateDetectionRef, UpdatedStatusEnum } from '@/blocks/Setting/UpdateDetection';
 
 // ---- store -----
-import { useSettingStore, getAiSystemConfig, setAiSystemConfig } from '@/store/setting';
+import { getAiSystemConfig } from '@/store/setting';
 
 interface IProps {
   className?: string;
@@ -32,7 +32,6 @@ function Setting(props: IProps) {
   const [currentMenu, setCurrentMenu] = useState<number>(defaultMenu);
   const [updateDetectionData, setUpdateDetectionData] = useState<IUpdateDetectionData | null>(null);
   const updateDetectionRef = React.useRef<IUpdateDetectionRef>(null);
-  const aiConfig = useSettingStore((state) => state.aiConfig);
 
   useEffect(() => {
     if (defaultArouse) {
@@ -77,10 +76,16 @@ function Setting(props: IProps) {
       code: 'basic',
     },
     {
-      label: i18n('setting.nav.customAi'),
+      label: '模型服务',
       icon: '\ue646',
-      body: <AISetting aiConfig={aiConfig} handleApplyAiConfig={setAiSystemConfig} />,
-      code: 'ai',
+      body: <AISetting mode="service" />,
+      code: 'model-service',
+    },
+    {
+      label: '默认模型',
+      icon: '\ue63d',
+      body: <AISetting mode="default" />,
+      code: 'default-model',
     },
     {
       label: i18n('setting.nav.proxy'),
