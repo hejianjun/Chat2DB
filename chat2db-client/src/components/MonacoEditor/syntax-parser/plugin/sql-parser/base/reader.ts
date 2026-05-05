@@ -5,10 +5,12 @@ import {
   ICompletionItem,
   ICursorInfo,
   IGetFieldsByTableName,
+  IJoinTableInfo,
   ISelectStatement,
   ISource,
   IStatement,
   IStatements,
+  ITableInfo,
 } from './define';
 
 export async function getCursorInfo(rootStatement: IStatements, keyPath: string[]) {
@@ -38,6 +40,17 @@ export async function getCursorInfo(rootStatement: IStatements, keyPath: string[
     switch (typePlusVariant) {
       case 'identifier.tableName':
         // console.log('[Reader] getCursorInfo - 识别为表名');
+        // 检查是否在 JOIN 后面
+        const joinContext = findJoinContext(rootStatement, keyPath);
+        if (joinContext) {
+          // console.log('[Reader] getCursorInfo - 识别为 JOIN 后的表名');
+          return {
+            type: 'joinTable',
+            variant: cursorKey,
+            token: cursorValue,
+            joinTableInfo: joinContext,
+          };
+        }
         return {
           type: 'tableName',
           variant: cursorKey,
@@ -109,6 +122,69 @@ export function findNearestStatement(
     return findNearestStatement(rootStatement, keyPath.slice(0, keyPath.length - 1), callback);
   }
   return null;
+}
+
+export function findJoinContext(
+  rootStatement: IStatements,
+  keyPath: string[],
+): IJoinTableInfo | null {
+  if (!rootStatement || keyPath.length < 2) {
+    return null;
+  }
+
+  // 查找当前的 tableSource 语句
+  const currentStatement = _.get(rootStatement, keyPath.slice(0, keyPath.length - 1));
+  
+  // 检查父级是否为 join 语句
+  const parentJoin = findNearestStatement(rootStatement, keyPath, stmt => {
+    return stmt?.variant === 'join';
+  });
+
+  if (!parentJoin || parentJoin.variant !== 'join') {
+    return null;
+  }
+
+  // 获取最近的 SELECT 语句
+  const selectStatement = findNearestStatement(rootStatement, keyPath, stmt => {
+    return stmt?.variant === 'select';
+  });
+
+  if (!selectStatement) {
+    return null;
+  }
+
+  // 获取当前 FROM 子句中所有的表
+  const sources = _.get(selectStatement, 'from.sources', []);
+  const joinedTables: ITableInfo[] = [];
+
+  // 收集所有已加入的表
+  for (const source of sources) {
+    const mainTable = _.get(source, 'source.name') as ITableInfo | undefined;
+    if (mainTable) {
+      joinedTables.push(mainTable);
+    }
+    
+    // 收集 joins 中的表
+    const joins = _.get(source, 'joins', []) || [];
+    for (const join of joins) {
+      const joinTable = _.get(join, 'join.name') as ITableInfo | undefined;
+      if (joinTable) {
+        joinedTables.push(joinTable);
+      }
+    }
+  }
+
+  // 获取主表（FROM 后的第一个表）
+  const currentTable = _.get(sources, '[0].source.name') as ITableInfo | undefined;
+
+  if (!currentTable) {
+    return null;
+  }
+
+  return {
+    currentTable,
+    joinedTables,
+  };
 }
 
 export async function getFieldsFromStatement(

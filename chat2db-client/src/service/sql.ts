@@ -570,6 +570,7 @@ export default {
   getColumnList,
   getIndexList,
   getKeyList,
+  getForeignKeyList,
   getSchemaList,
   getDatabaseSchemaList,
   addTablePin,
@@ -586,4 +587,5 @@ export default {
   truncateTable,
   inferVirtualForeignKeys,
   createVirtualForeignKey,
+  syncForeignKeys,
 };

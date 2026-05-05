@@ -34,6 +34,12 @@ export interface ITableInfo {
   namespace: IToken;
 }
 
+export interface IJoinTableInfo {
+  currentTable: ITableInfo & { tableName: { value: string } };
+  currentTableAlias?: string;
+  joinedTables: (ITableInfo & { tableName: { value: string } })[];
+}
+
 export interface ICompletionItem {
   label: string;
   kind?: string;
@@ -51,7 +57,8 @@ export type CursorType =
   | 'namespace'
   | 'namespaceOne'
   | 'functionName'
-  | 'tableFieldAfterGroup';
+  | 'tableFieldAfterGroup'
+  | 'joinTable';
 
 export type ICursorInfo<T = {}> = {
   token: IToken;

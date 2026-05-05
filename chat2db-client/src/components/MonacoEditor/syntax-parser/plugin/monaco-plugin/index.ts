@@ -11,6 +11,7 @@ import { mysqlParser } from '../sql-parser';
 import {
   ICompletionItem,
   ITableInfo,
+  IJoinTableInfo,
   reader,
   ICursorInfo,
 } from '../sql-parser';
@@ -246,6 +247,19 @@ export function monacoSqlAutocomplete(
             opts.monacoEditorVersion,
           );
           
+        case 'joinTable':
+          console.log('🔗 JOIN 表名补全模式');
+          const joinTableNames = await opts.onSuggestJoinTables(
+            cursorInfo as ICursorInfo<IJoinTableInfo>,
+          );
+
+          console.log('JOIN 表名数量:', joinTableNames.length);
+          console.groupEnd();
+          return returnCompletionItemsByVersion(
+            joinTableNames.concat(parserSuggestion),
+            opts.monacoEditorVersion,
+          );
+
         case 'tableName':
           console.log('📚 表名补全模式');
           const tableNames = await opts.onSuggestTableNames(

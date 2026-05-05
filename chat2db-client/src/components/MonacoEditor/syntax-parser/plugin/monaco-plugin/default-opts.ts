@@ -2,7 +2,7 @@
 /* eslint-disable no-useless-constructor */
 import * as _ from 'lodash';
 import { IMatching, IParseResult } from '../..';
-import { ITableInfo, ICompletionItem, IStatement, ICursorInfo } from '../sql-parser';
+import { ITableInfo, IJoinTableInfo, ICompletionItem, IStatement, ICursorInfo } from '../sql-parser';
 
 export type IMonacoVersion = '0.13.2' | '0.15.6';
 
@@ -24,6 +24,20 @@ export class DefaultOpts {
   };
 
   public onSuggestTableNames?: (cursorInfo?: ICursorInfo<ITableInfo>) => Promise<ICompletionItem[]> = cursorInfo => {
+    return Promise.resolve(
+      ['dt', 'b2b', 'tmall'].map(name => {
+        return {
+          label: name,
+          insertText: name,
+          sortText: `Z${name}`,  // 表名排在最后（Z 开头）
+          kind: this.monaco.languages.CompletionItemKind.Folder,
+        };
+      }),
+    );
+  };
+
+  public onSuggestJoinTables?: (joinInfo?: ICursorInfo<IJoinTableInfo>) => Promise<ICompletionItem[]> = joinInfo => {
+    // 默认实现：返回所有表（子类可以覆盖）
     return Promise.resolve(
       ['dt', 'b2b', 'tmall'].map(name => {
         return {

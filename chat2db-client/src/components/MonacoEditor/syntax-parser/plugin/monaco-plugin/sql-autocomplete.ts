@@ -1,8 +1,8 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { monacoSqlAutocomplete } from './index';
-import sqlService from '@/service/sql';
+import sqlService, { IForeignKeyVO } from '@/service/sql';
 import { IBoundInfo } from '@/typings/workspace';
-import { ICompletionItem, ITableInfo, ICursorInfo } from '../sql-parser/base/define';
+import { ICompletionItem, ITableInfo, IJoinTableInfo, ICursorInfo } from '../sql-parser/base/define';
 
 export interface ISqlAutocompleteOptions {
   monaco: typeof monaco;
@@ -96,6 +96,160 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         });
       } catch (error) {
         console.error('[SQL 补全 - API] 获取表名失败:', error);
+        return [];
+      }
+    },
+
+    onSuggestJoinTables: async (cursorInfo?: ICursorInfo<IJoinTableInfo>) => {
+      try {
+        const joinInfo = cursorInfo?.joinTableInfo;
+        if (!joinInfo || !joinInfo.currentTable) {
+          console.warn('[SQL 补全 - JOIN] 无当前表信息，返回所有表');
+          return await sqlService.getAllTableList({
+            dataSourceId: boundInfo.dataSourceId,
+            databaseName: boundInfo.databaseName,
+            schemaName: boundInfo.schemaName,
+          }).then((data) => {
+            const parentName = boundInfo.schemaName || boundInfo.databaseName || '';
+            return data.map((table) => {
+              const name = table.name;
+              const alias = name.charAt(0).toLowerCase();
+              const label = parentName ? `${name} (${parentName})` : name;
+              return {
+                label,
+                insertText: `${name} ${alias}`,
+                sortText: `Z${name}`,
+                kind: monaco.languages.CompletionItemKind.Struct as any,
+                detail: `(表) ${table.comment || ''}`,
+                documentation: table.comment || `表: ${name}`,
+              };
+            });
+          });
+        }
+
+        const currentTableName = joinInfo.currentTable.tableName?.value;
+        const currentTableAlias = currentTableName.charAt(0).toLowerCase();
+        if (!currentTableName) {
+          console.warn('[SQL 补全 - JOIN] 当前表名为空，返回所有表');
+          return [];
+        }
+
+        console.log('[SQL 补全 - JOIN] 当前表:', currentTableName);
+        console.log('[SQL 补全 - JOIN] 已关联表数量:', joinInfo.joinedTables?.length || 0);
+
+        // 获取当前表的外键关系
+        const foreignKeys = await sqlService.getForeignKeyList({
+          dataSourceId: boundInfo.dataSourceId,
+          databaseName: boundInfo.databaseName || '',
+          schemaName: boundInfo.schemaName,
+          tableName: currentTableName,
+        });
+
+        console.log('[SQL 补全 - JOIN] 外键数量:', foreignKeys.length);
+
+        // 过滤掉已经在 JOIN 中使用的表
+        const joinedTableNames = new Set(
+          (joinInfo.joinedTables || []).map(t => t.tableName?.value).filter(Boolean)
+        );
+
+        // 获取所有表用于填充未找到外键时的默认列表
+        const allTables = await sqlService.getAllTableList({
+          dataSourceId: boundInfo.dataSourceId,
+          databaseName: boundInfo.databaseName,
+          schemaName: boundInfo.schemaName,
+        });
+
+        const parentName = boundInfo.schemaName || boundInfo.databaseName || '';
+
+        // 生成表别名：取首字母，如果冲突则加数字
+        const generateAlias = (tableName: string, usedAliases: Set<string>): string => {
+          let alias = tableName.charAt(0).toLowerCase();
+          if (usedAliases.has(alias)) {
+            let i = 1;
+            while (usedAliases.has(`${alias}${i}`)) {
+              i++;
+            }
+            alias = `${alias}${i}`;
+          }
+          usedAliases.add(alias);
+          return alias;
+        };
+
+        // 收集已使用的别名
+        const usedAliases = new Set<string>();
+        usedAliases.add(currentTableAlias);
+
+        // 如果有外键，优先返回通过外键关联的表（带完整 ON 条件）
+        if (foreignKeys.length > 0) {
+          const relatedTableItems: any[] = [];
+          const processedTables = new Set<string>();
+
+          // 收集所有关联的表（通过外键引用的表）
+          for (const fk of foreignKeys as IForeignKeyVO[]) {
+            const refTable = fk.referencedTable;
+            if (!refTable || joinedTableNames.has(refTable) || processedTables.has(refTable)) {
+              continue;
+            }
+
+            processedTables.add(refTable);
+            const alias = generateAlias(refTable, usedAliases);
+
+            // 使用 snippet 格式：表名 别名 ON 当前表.外键列 = 关联表.主键列
+            const snippetText = `${refTable} ${alias} ON ${currentTableAlias}.${fk.columnName} = ${alias}.${fk.referencedColumnName}`;
+
+            const label = parentName ? `${refTable} (${parentName})` : refTable;
+            relatedTableItems.push({
+              label,
+              insertText: snippetText,
+              insertTextRules: 4, // Monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+              sortText: `A${refTable}`, // A 开头优先显示
+              kind: monaco.languages.CompletionItemKind.Struct as any,
+              detail: `(关联) ${fk.columnName} → ${fk.referencedColumnName}`,
+              documentation: fk.comment || `通过 ${fk.columnName} 关联到 ${refTable}.${fk.referencedColumnName}`,
+            });
+          }
+
+          console.log('[SQL 补全 - JOIN] 关联表数量:', relatedTableItems.length);
+
+          // 然后返回其他未关联的表（Z 开头，排在后面）
+          const unrelatedTableItems = allTables
+            .filter(t => !processedTables.has(t.name) && !joinedTableNames.has(t.name))
+            .map((table) => {
+              const name = table.name;
+              const alias = generateAlias(name, usedAliases);
+              const label = parentName ? `${name} (${parentName})` : name;
+              return {
+                label,
+                insertText: `${name} ${alias}`,
+                sortText: `Z${name}`,
+                kind: monaco.languages.CompletionItemKind.Struct as any,
+                detail: `(表) ${table.comment || ''}`,
+                documentation: table.comment || `表: ${name}`,
+              };
+            });
+
+          return [...relatedTableItems, ...unrelatedTableItems];
+        }
+
+        // 如果没有外键，返回所有表（排除已 JOIN 的）
+        console.log('[SQL 补全 - JOIN] 无外键，返回所有表');
+        return allTables
+          .filter(t => !joinedTableNames.has(t.name))
+          .map((table) => {
+            const name = table.name;
+            const alias = generateAlias(name, usedAliases);
+            const label = parentName ? `${name} (${parentName})` : name;
+            return {
+              label,
+              insertText: `${name} ${alias}`,
+              sortText: `Z${name}`,
+              kind: monaco.languages.CompletionItemKind.Struct as any,
+              detail: `(表) ${table.comment || ''}`,
+              documentation: table.comment || `表: ${name}`,
+            };
+          });
+      } catch (error) {
+        console.error('[SQL 补全 - JOIN] 获取 JOIN 表失败:', error);
         return [];
       }
     },
