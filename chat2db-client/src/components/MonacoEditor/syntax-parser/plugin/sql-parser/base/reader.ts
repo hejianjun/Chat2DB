@@ -174,8 +174,10 @@ export function findJoinContext(
     }
   }
 
-  // 获取主表（FROM 后的第一个表）
-  const currentTable = _.get(sources, '[0].source.name') as ITableInfo | undefined;
+  // 获取主表（FROM 后的第一个表）及其别名
+  const mainSource = _.get(sources, '[0]');
+  const currentTable = _.get(mainSource, 'source.name') as ITableInfo | undefined;
+  const currentTableAlias = _.get(mainSource, 'source.alias.value') as string | undefined;
 
   if (!currentTable) {
     return null;
@@ -183,6 +185,7 @@ export function findJoinContext(
 
   return {
     currentTable,
+    currentTableAlias,
     joinedTables,
   };
 }

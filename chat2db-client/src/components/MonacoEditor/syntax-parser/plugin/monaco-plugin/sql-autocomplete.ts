@@ -128,7 +128,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         }
 
         const currentTableName = joinInfo.currentTable.tableName?.value;
-        const currentTableAlias = currentTableName.charAt(0).toLowerCase();
+        const currentTableAlias = joinInfo.currentTableAlias || currentTableName?.charAt(0).toLowerCase();
         if (!currentTableName) {
           console.warn('[SQL 补全 - JOIN] 当前表名为空，返回所有表');
           return [];
