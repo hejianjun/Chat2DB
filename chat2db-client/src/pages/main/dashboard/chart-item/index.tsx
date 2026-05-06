@@ -175,9 +175,7 @@ function ChartItem(props: IChartItemProps) {
     // 设置Chart参数，eg ChartType、xAxis、yAxis
     const formValue = JSON.parse(res.schema || '{}');
     setPendingFormValues(formValue);
-    if (isEditing) {
-      form.setFieldsValue(formValue);
-    }
+    form.setFieldsValue(formValue);
 
     if (res.ddl && res.connectable) {
       setInitDDL(res.ddl);
