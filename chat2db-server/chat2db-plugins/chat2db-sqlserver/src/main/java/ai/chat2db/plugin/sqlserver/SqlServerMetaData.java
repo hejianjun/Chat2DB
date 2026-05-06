@@ -391,7 +391,7 @@ public class SqlServerMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public String getMetaDataName(String... names) {
-        return Arrays.stream(names).filter(name -> StringUtils.isNotBlank(name)).map(name -> "[" + name + "]").collect(Collectors.joining("."));
+        return Arrays.stream(names).filter(StringUtils::isNotBlank).map(name -> "[" + name + "]").collect(Collectors.joining("."));
     }
 
     @Override

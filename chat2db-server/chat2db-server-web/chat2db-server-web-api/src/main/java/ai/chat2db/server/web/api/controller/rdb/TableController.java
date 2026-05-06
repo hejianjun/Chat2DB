@@ -66,15 +66,7 @@ public class TableController {
     private TableService tableService;
 
     @Autowired
-    private DlTemplateService dlTemplateService;
-
-    @Autowired
     private RdbWebConverter rdbWebConverter;
-
-    @Autowired
-    private DatabaseService databaseService;
-
-    public static ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
 
     /**
      * 查询当前DB下的表列表
