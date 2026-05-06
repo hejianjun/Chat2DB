@@ -97,10 +97,6 @@ public class TableServiceImpl implements TableService {
     private ForeignKeySyncService foreignKeySyncService;
 
     @Autowired
-    @Qualifier("indexUpdateExecutor")
-    private ExecutorService executor;
-
-    @Autowired
     private LuceneIndexManagerFactory managerFactory;
 
     @Override
@@ -411,20 +407,6 @@ public class TableServiceImpl implements TableService {
         return PageResult.of(tables, total, param);
     }
 
-    @PreDestroy
-    public void shutdownExecutor() {
-        if (executor != null) {
-            executor.shutdown();
-            try {
-                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
 
     @Override
     public ListResult<SimpleTable> queryTables(TablePageQueryParam param) {
