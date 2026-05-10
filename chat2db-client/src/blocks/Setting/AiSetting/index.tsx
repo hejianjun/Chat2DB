@@ -85,6 +85,7 @@ export default function SettingAI(props: IProps) {
       id: editingService?.id,
       modelList: (values.modelList || []).filter((model) => model?.name && model?.model),
     });
+    message.success('模型服务保存成功');
     setServiceModalOpen(false);
     await loadData();
   };
@@ -100,7 +101,7 @@ export default function SettingAI(props: IProps) {
       });
       message.success('模型服务连接测试成功');
     } catch (e: any) {
-      message.error(e?.message || '模型服务连接测试失败');
+      message.error(typeof e === 'string' ? e : e?.message || '模型服务连接测试失败');
     } finally {
       setTesting(false);
     }
@@ -108,6 +109,7 @@ export default function SettingAI(props: IProps) {
 
   const handleSaveDefaultModel = async () => {
     await configService.setDefaultModelConfig(defaultModelConfig);
+    message.success('默认模型配置保存成功');
     await loadData();
   };
 
