@@ -44,4 +44,14 @@ public class TableBriefQueryRequest extends PageQueryRequest implements DataSour
      */
     private boolean refresh;
 
+    /**
+     * 排序字段: name, rowCount
+     */
+    private String sortField;
+
+    /**
+     * 排序方向: ascend, descend
+     */
+    private String sortOrder;
+
 }

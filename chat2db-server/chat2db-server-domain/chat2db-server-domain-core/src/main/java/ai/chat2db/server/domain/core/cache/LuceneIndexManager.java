@@ -19,6 +19,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
+import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
@@ -341,8 +342,18 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         addStringField(doc, "schemaName", source.getSchemaName());
         addStringField(doc, "tableName", source.getTableName());
         addTextField(doc, "name", source.getName());
+        // 为 name 字段添加 SortedDocValuesField 支持排序
+        addStringFieldForSort(doc, "name_sort", source.getName());
         addTextField(doc, "comment", source.getComment());
         addTextField(doc, "aiComment", source.getAiComment());
+
+        // 为 Table 类型添加 rowCount 排序字段
+        if (source instanceof Table) {
+            Table table = (Table) source;
+            if (table.getRowCount() != null) {
+                doc.add(new NumericDocValuesField("rowCount_sort", table.getRowCount()));
+            }
+        }
 
         // 5. 添加名称字段别名（typeName + "Name"）
         Optional.ofNullable(source.getName())
@@ -409,6 +420,20 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     }
 
     /**
+     * 向文档中添加用于排序的字符串字段（带 DocValues）
+     *
+     * @param doc       文档对象
+     * @param fieldName 字段名
+     * @param value     字段值
+     */
+    private void addStringFieldForSort(Document doc, String fieldName, String value) {
+        if (value != null) {
+            doc.add(new StringField(fieldName, value, Field.Store.NO));
+            doc.add(new SortedDocValuesField(fieldName, new org.apache.lucene.util.BytesRef(value)));
+        }
+    }
+
+    /**
      * 搜索文档
      *
      * @param lastDocId 上一次搜索结果中的最后一个文档ID，用于分页搜索
@@ -417,6 +442,21 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      */
     @SneakyThrows
     public <E extends BaseModel> List<T> search(E queryModel, Integer lastDocId, String queryStr) {
+        return search(queryModel, lastDocId, queryStr, null, false);
+    }
+
+    /**
+     * 搜索文档（支持排序）
+     *
+     * @param queryModel 查询模型
+     * @param lastDocId 上一次搜索结果中的最后一个文档ID，用于分页搜索
+     * @param queryStr  搜索查询字符串
+     * @param sortField 排序字段名（如 "name_sort", "rowCount_sort"）
+     * @param reverse   是否降序
+     * @return 搜索结果的TopDocs对象
+     */
+    @SneakyThrows
+    public <E extends BaseModel> List<T> search(E queryModel, Integer lastDocId, String queryStr, String sortField, boolean reverse) {
         lock.readLock().lock();
         try {
             BooleanQuery booleanQuery = buildSearchQuery(queryModel, queryStr);
@@ -424,7 +464,29 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             if (lastDocId != null) {
                 lastScoreDoc = new ScoreDoc(lastDocId, 1);
             }
-            TopDocs topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
+            
+            TopDocs topDocs;
+            if (StringUtils.isNotBlank(sortField)) {
+                // 使用排序搜索
+                Sort sort;
+                if ("name_sort".equals(sortField)) {
+                    sort = new Sort(new SortField("name_sort", SortField.Type.STRING, reverse));
+                } else if ("rowCount_sort".equals(sortField)) {
+                    sort = new Sort(new SortField("rowCount_sort", SortField.Type.LONG, reverse));
+                } else {
+                    sort = null;
+                }
+                
+                if (sort != null) {
+                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000, sort);
+                } else {
+                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
+                }
+            } else {
+                // 不使用排序
+                topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
+            }
+            
             return Arrays.stream(topDocs.scoreDocs)
                     .map(scoreDoc -> {
                         T doc = (T) getDocument(queryModel.getClassType(), scoreDoc.doc);

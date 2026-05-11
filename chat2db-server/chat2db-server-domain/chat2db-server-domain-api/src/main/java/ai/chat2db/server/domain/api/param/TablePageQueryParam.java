@@ -53,6 +53,15 @@ public class TablePageQueryParam extends PageQueryParam implements BaseModel<Tab
 
     private String searchKey;
 
+    /**
+     * 排序字段: name, rowCount
+     */
+    private String sortField;
+
+    /**
+     * 排序方向: ascend, descend
+     */
+    private String sortOrder;
 
     @Override
     public Class<Table> getClassType() {

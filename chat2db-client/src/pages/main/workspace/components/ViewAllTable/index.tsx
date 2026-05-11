@@ -193,6 +193,7 @@ export default memo<IProps>((props) => {
       title: 'Table name',
       dataIndex: 'name',
       key: 'name',
+      sorter: true,
       render: (text, record) => renderCell(text, record, 'name'),
     },
     {
@@ -200,6 +201,7 @@ export default memo<IProps>((props) => {
       dataIndex: 'rowCount',
       key: 'rowCount',
       width: 120,
+      sorter: true,
       render: (text, record) => renderCell(text, record, 'rowCount'),
     },
     {
@@ -282,6 +284,20 @@ export default memo<IProps>((props) => {
       pageSize: 1000,
       searchKey: value,
     });
+  };
+
+  const handleTableChange = (pagination: any, filters: any, sorter: any) => {
+    const params: any = {
+      pageNo: 1,
+      pageSize: 1000,
+    };
+    
+    if (sorter.field) {
+      params.sortField = sorter.field;
+      params.sortOrder = sorter.order === 'ascend' ? 'ascend' : 'descend';
+    }
+    
+    getTable(params);
   };
 
   const batchDeprecatedTable = async () => {
@@ -486,6 +502,7 @@ export default memo<IProps>((props) => {
               <Table
                 loading={tableLoading}
                 rowSelection={rowSelection}
+                onChange={handleTableChange}
                 onRow={(row) => {
                   return {
                     onClick: () => {

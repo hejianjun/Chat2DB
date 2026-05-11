@@ -365,7 +365,26 @@ public class TableServiceImpl implements TableService {
         if (needRefreshCache(param, version)) {
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
-        List<Table> tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
+        List<Table> tables;
+        // 处理排序参数
+        if (StringUtils.isNotBlank(param.getSortField())) {
+            String sortField = null;
+            boolean reverse = false;
+            if ("name".equals(param.getSortField())) {
+                sortField = "name_sort";
+                reverse = "descend".equals(param.getSortOrder());
+            } else if ("rowCount".equals(param.getSortField())) {
+                sortField = "rowCount_sort";
+                reverse = "descend".equals(param.getSortOrder());
+            }
+            if (sortField != null) {
+                tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey(), sortField, reverse);
+            } else {
+                tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
+            }
+        } else {
+            tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
+        }
         long total = luceneMgr.getTotal();
         log.info("total:{}", total);
         for (Table table : tables) {
