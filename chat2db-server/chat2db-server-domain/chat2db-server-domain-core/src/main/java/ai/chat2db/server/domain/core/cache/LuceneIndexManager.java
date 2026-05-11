@@ -417,7 +417,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * @param queryModel 查询模型
      * @param lastDocId 上一次搜索结果中的最后一个文档ID，用于分页搜索
      * @param queryStr  搜索查询字符串
-     * @param sortField 排序字段名（如 "name_sort", "rowCount_sort"）
+     * @param sortField 排序字段名（如 "name", "rowCount"，对应 @LuceneField 注解的 name 属性）
      * @param reverse   是否降序
      * @return 搜索结果的TopDocs对象
      */
@@ -433,16 +433,8 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             
             TopDocs topDocs;
             if (StringUtils.isNotBlank(sortField)) {
-                // 使用排序搜索
-                Sort sort;
-                if ("name_sort".equals(sortField)) {
-                    sort = new Sort(new SortField("name_sort", SortField.Type.STRING, reverse));
-                } else if ("rowCount_sort".equals(sortField)) {
-                    sort = new Sort(new SortField("rowCount_sort", SortField.Type.LONG, reverse));
-                } else {
-                    sort = null;
-                }
-                
+                // 使用排序搜索（字段名直接对应 @LuceneField 注解的 name 属性）
+                Sort sort = createSort(sortField, reverse);
                 if (sort != null) {
                     topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000, sort);
                 } else {
@@ -463,6 +455,23 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    /**
+     * 创建排序对象
+     *
+     * @param sortField 排序字段名（对应 @LuceneField 注解的 name 属性）
+     * @param reverse   是否降序
+     * @return 排序对象，如果字段不支持排序则返回 null
+     */
+    private Sort createSort(String sortField, boolean reverse) {
+        // 根据字段名确定排序类型（与 @LuceneField 注解定义保持一致）
+        if ("name".equals(sortField)) {
+            return new Sort(new SortField("name", SortField.Type.STRING, reverse));
+        } else if ("rowCount".equals(sortField)) {
+            return new Sort(new SortField("rowCount", SortField.Type.LONG, reverse));
+        }
+        return null;
     }
 
     /**
