@@ -137,8 +137,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             case "test":
                 return basePath + id + "_test";
             case "dev":
-            default:
                 return basePath + id + "_dev";
+            default:
+                return basePath + id;
         }
     }
 
