@@ -19,21 +19,25 @@ public class ForeignKey implements IndexModel {
 
     // 外键名称
     @JsonAlias({"FK_NAME"})
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
     private String name;
     // 当前表
     @JsonAlias({"FKTABLE_NAME"})
+    @LuceneField(name = "tableName", type = LuceneFieldType.STRING)
     private String tableName;
 
     /**
      * 索引所属schema
      */
     @JsonAlias({"PKTABLE_SCHEM"})
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     /**
      * 数据库名
      */
     @JsonAlias({"PKTABLE_CAT"})
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
     // 当前表的列
     @JsonAlias({"FKCOLUMN_NAME"})
@@ -66,6 +70,7 @@ public class ForeignKey implements IndexModel {
 
     // 备注（可选）
     @JsonAlias({"COMMENT"})
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
 
 
@@ -74,6 +79,7 @@ public class ForeignKey implements IndexModel {
     /**
      * AI生成的注释
      */
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
 
     /**

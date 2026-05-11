@@ -28,17 +28,22 @@ public class Procedure implements IndexModel {
     //
 
     @JsonAlias({"PROCEDURE_CAT"})
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
     @JsonAlias({"PROCEDURE_SCHEM"})
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     @JsonAlias({"PROCEDURE_NAME"})
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
     private String name;
 
     @JsonAlias({"REMARKS"})
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
 
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
 
     private Long version;

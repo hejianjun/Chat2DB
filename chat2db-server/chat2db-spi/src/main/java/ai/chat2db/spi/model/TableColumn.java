@@ -32,12 +32,14 @@ public class TableColumn implements IndexModel {
      * 列名
      */
     @JsonAlias({"COLUMN_NAME","column_name"})
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
     private String name;
 
     /**
      * 表名
      */
     @JsonAlias({"TABLE_NAME","table_name"})
+    @LuceneField(name = "tableName", type = LuceneFieldType.STRING)
     private String tableName;
 
     /**
@@ -46,6 +48,7 @@ public class TableColumn implements IndexModel {
      */
 
     @JsonAlias({"TYPE_NAME","type_name"})
+    @LuceneField(name = "columnType", type = LuceneFieldType.TEXT)
     private String columnType;
 
     /**
@@ -77,6 +80,7 @@ public class TableColumn implements IndexModel {
      * 注释
      */
     @JsonAlias({"REMARKS","remarks"})
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
 
     /**
@@ -101,12 +105,14 @@ public class TableColumn implements IndexModel {
      * 空间名
      */
     @JsonAlias({"TABLE_SCHEM","table_schem"})
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     /**
      * 数据库名
      */
     @JsonAlias({"TABLE_CAT","table_cat"})
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
 //    /**
@@ -203,6 +209,7 @@ public class TableColumn implements IndexModel {
     /**
      * AI生成的注释
      */
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
 
     /**

@@ -16,14 +16,19 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 public class Trigger implements IndexModel {
 
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
     private String name;
 
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
 
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
 
     private Long version;

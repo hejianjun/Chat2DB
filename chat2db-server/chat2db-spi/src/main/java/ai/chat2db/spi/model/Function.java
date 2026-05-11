@@ -28,17 +28,22 @@ public class Function implements IndexModel {
     //
 
     @JsonAlias({"FUNCTION_CAT"})
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
     @JsonAlias({"FUNCTION_SCHEM"})
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     @JsonAlias({"FUNCTION_NAME"})
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
     private String name;
 
     @JsonAlias({"REMARKS"})
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
 
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
 
     private Long version;
