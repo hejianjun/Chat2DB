@@ -363,6 +363,46 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public int cleanInvalidVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName, List<String> existingTableNames) {
+        if (CollectionUtils.isEmpty(existingTableNames)) {
+            return 0;
+        }
+
+        Set<String> existingTableSet = existingTableNames.stream()
+                .filter(StringUtils::isNotBlank)
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+
+        LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(VirtualForeignKeyDO::getDataSourceId, dataSourceId)
+                .eq(StringUtils.isNotBlank(databaseName), VirtualForeignKeyDO::getDatabaseName, databaseName)
+                .eq(StringUtils.isNotBlank(schemaName), VirtualForeignKeyDO::getSchemaName, schemaName);
+
+        List<VirtualForeignKeyDO> allVirtualFKs = getVFKMapper().selectList(wrapper);
+        if (CollectionUtils.isEmpty(allVirtualFKs)) {
+            return 0;
+        }
+
+        List<Long> idsToDelete = new ArrayList<>();
+        for (VirtualForeignKeyDO vfk : allVirtualFKs) {
+            boolean tableExists = existingTableSet.contains(vfk.getTableName().toLowerCase());
+            boolean referencedTableExists = existingTableSet.contains(vfk.getReferencedTable().toLowerCase());
+
+            if (!tableExists || !referencedTableExists) {
+                idsToDelete.add(vfk.getId());
+            }
+        }
+
+        if (!idsToDelete.isEmpty()) {
+            getVFKMapper().deleteBatchIds(idsToDelete);
+            log.info("Cleaned {} invalid virtual foreign keys for dataSourceId={}, databaseName={}, schemaName={}",
+                    idsToDelete.size(), dataSourceId, databaseName, schemaName);
+        }
+
+        return idsToDelete.size();
+    }
+
     /**
      * 从H2数据库查询真实外键记录
      * 根据数据源ID和表信息查询本地存储的真实外键

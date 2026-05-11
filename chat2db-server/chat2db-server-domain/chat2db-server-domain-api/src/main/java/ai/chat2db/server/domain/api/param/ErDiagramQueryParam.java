@@ -53,4 +53,9 @@ public class ErDiagramQueryParam extends QueryParam {
      * 是否同步数据库真实外键到本地，默认为false
      */
     private Boolean syncForeignKeys;
+
+    /**
+     * 是否只返回有外键关系的表，默认为false
+     */
+    private Boolean onlyRelatedTables;
 }

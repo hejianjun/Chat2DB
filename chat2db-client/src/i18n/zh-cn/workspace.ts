@@ -30,6 +30,7 @@ export default {
   'workspace.erDiagram.fitView': '适应画布',
   'workspace.erDiagram.export': '导出 PNG',
   'workspace.erDiagram.filterPlaceholder': '过滤表名...',
+  'workspace.erDiagram.showOnlyRelatedTables': '只显示关联表',
   'workspace.erDiagram.legend': '图例',
   'workspace.erDiagram.realFk': '外键',
   'workspace.erDiagram.loading': '正在加载 ER 图...',

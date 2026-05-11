@@ -10,33 +10,22 @@ export type LayoutType = 'force' | 'dagre';
 
 /** ER图Store接口定义 */
 interface IErDiagramStore {
-  /** ER图数据，包含节点和边 */
   erDiagramData: IErDiagram | null;
-  /** 数据加载状态 */
   loading: boolean;
-  /** 表名过滤文本 */
   filterText: string;
-  /** 当前布局类型 */
   layoutType: LayoutType;
-  /** 是否包含虚拟外键 */
   includeVirtualFk: boolean;
-  /** 当前选中的表ID */
+  showOnlyRelatedTables: boolean;
   selectedTableId: string | null;
 
-  /** 获取ER图数据 */
   fetchErDiagram: (params: IErParams) => Promise<void>;
-  /** 推断虚拟外键 */
   inferVirtualForeignKeys: (params: IErParams) => Promise<number>;
-  /** 删除虚拟外键 */
   deleteVirtualForeignKey: (edgeId: string, params: IErParams) => Promise<void>;
-  /** 设置过滤文本 */
   setFilterText: (text: string) => void;
-  /** 设置布局类型 */
   setLayoutType: (type: LayoutType) => void;
-  /** 设置选中的表ID */
   setSelectedTableId: (id: string | null) => void;
-  /** 设置是否包含虚拟外键 */
   setIncludeVirtualFk: (value: boolean) => void;
+  setShowOnlyRelatedTables: (value: boolean) => void;
 }
 
 const useErDiagramStore = create<IErDiagramStore>((set, get) => ({
@@ -45,6 +34,7 @@ const useErDiagramStore = create<IErDiagramStore>((set, get) => ({
   filterText: '',
   layoutType: 'dagre',
   includeVirtualFk: true,
+  showOnlyRelatedTables: false,
   selectedTableId: null,
 
   fetchErDiagram: async (params: IErParams) => {
@@ -100,6 +90,7 @@ const useErDiagramStore = create<IErDiagramStore>((set, get) => ({
   setLayoutType: (type: LayoutType) => set({ layoutType: type }),
   setSelectedTableId: (id: string | null) => set({ selectedTableId: id }),
   setIncludeVirtualFk: (value: boolean) => set({ includeVirtualFk: value }),
+  setShowOnlyRelatedTables: (value: boolean) => set({ showOnlyRelatedTables: value }),
 }));
 
 export default useErDiagramStore;

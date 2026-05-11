@@ -29,6 +29,7 @@ export default {
   'workspace.erDiagram.fitView': 'Fit View',
   'workspace.erDiagram.export': 'Export PNG',
   'workspace.erDiagram.filterPlaceholder': 'Filter tables...',
+  'workspace.erDiagram.showOnlyRelatedTables': 'Show only related tables',
   'workspace.erDiagram.legend': 'Legend',
   'workspace.erDiagram.realFk': 'Foreign Key',
   'workspace.erDiagram.virtualFk': 'Virtual Foreign Key',

@@ -118,6 +118,8 @@ export interface IErParams {
   includeVirtualFk?: boolean;
   /** 是否同步数据库真实外键到本地 */
   syncForeignKeys?: boolean;
+  /** 是否只显示关联表 */
+  onlyRelatedTables?: boolean;
 }
 
 /** 获取ER图数据接口 */

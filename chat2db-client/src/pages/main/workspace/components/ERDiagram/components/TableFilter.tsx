@@ -9,13 +9,12 @@ import i18n from '@/i18n';
 import styles from './TableFilter.less';
 
 interface ITableFilterProps {
-  /** 当前过滤文本 */
   value: string;
-  /** 过滤文本变更回调 */
   onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
-const TableFilter = memo(({ value, onChange }: ITableFilterProps) => {
+const TableFilter = memo(({ value, onChange, disabled }: ITableFilterProps) => {
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onChange(e.target.value);
@@ -31,6 +30,7 @@ const TableFilter = memo(({ value, onChange }: ITableFilterProps) => {
         value={value}
         onChange={handleChange}
         allowClear
+        disabled={disabled}
         size="small"
         className={styles.filterInput}
       />

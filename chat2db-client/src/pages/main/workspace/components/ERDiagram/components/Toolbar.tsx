@@ -18,23 +18,16 @@ import { LayoutType } from '../store';
 import styles from './Toolbar.less';
 
 interface IToolbarProps {
-  /** 数据加载状态 */
   loading: boolean;
-  /** 当前布局类型 */
   layoutType: LayoutType;
-  /** 是否包含虚拟外键 */
   includeVirtualFk: boolean;
-  /** 刷新回调 */
+  showOnlyRelatedTables: boolean;
   onRefresh: () => void;
-  /** 布局切换回调 */
   onLayoutChange: (type: LayoutType) => void;
-  /** 虚拟外键开关回调 */
   onIncludeVirtualFkChange: (value: boolean) => void;
-  /** 推断虚拟外键回调 */
+  onShowOnlyRelatedTablesChange: (value: boolean) => void;
   onInferVirtualFk: () => void;
-  /** 推断虚拟外键加载状态 */
   inferring: boolean;
-  /** 导出回调 */
   onExport: () => void;
 }
 
@@ -43,9 +36,11 @@ const Toolbar = memo(
     loading,
     layoutType,
     includeVirtualFk,
+    showOnlyRelatedTables,
     onRefresh,
     onLayoutChange,
     onIncludeVirtualFkChange,
+    onShowOnlyRelatedTablesChange,
     onInferVirtualFk,
     inferring,
     onExport,
@@ -107,6 +102,15 @@ const Toolbar = memo(
               size="small"
               checked={includeVirtualFk}
               onChange={onIncludeVirtualFkChange}
+            />
+          </Tooltip>
+
+          {/* 只显示关联表开关 */}
+          <Tooltip title={i18n('workspace.erDiagram.showOnlyRelatedTables')}>
+            <Switch
+              size="small"
+              checked={showOnlyRelatedTables}
+              onChange={onShowOnlyRelatedTablesChange}
             />
           </Tooltip>
 

@@ -157,6 +157,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     filterText,
     layoutType,
     includeVirtualFk,
+    showOnlyRelatedTables,
     selectedTableId,
     fetchErDiagram,
     inferVirtualForeignKeys,
@@ -165,6 +166,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     setLayoutType,
     setSelectedTableId,
     setIncludeVirtualFk,
+    setShowOnlyRelatedTables,
   } = useErDiagramStore();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -180,9 +182,10 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         tableNameFilter: filterText || undefined,
         includeVirtualFk,
         syncForeignKeys,
+        onlyRelatedTables: showOnlyRelatedTables,
       });
     },
-    [uniqueData, filterText, includeVirtualFk, fetchErDiagram],
+    [uniqueData, filterText, includeVirtualFk, showOnlyRelatedTables, fetchErDiagram],
   );
 
   useEffect(() => {
@@ -192,7 +195,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
   useEffect(() => {
     if (!erDiagramData) return;
 
-    const filteredNodes = filterText
+    let filteredNodes = filterText
       ? erDiagramData.nodes.filter(
           (n) =>
             n.name.toLowerCase().includes(filterText.toLowerCase()) ||
@@ -200,8 +203,23 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         )
       : erDiagramData.nodes;
 
+    let filteredEdges = erDiagramData.edges.filter(
+      (e) =>
+        filteredNodes.some((n) => n.id === e.source) &&
+        filteredNodes.some((n) => n.id === e.target),
+    );
+
+    if (showOnlyRelatedTables) {
+      const relatedTableIds = new Set<string>();
+      filteredEdges.forEach((e) => {
+        relatedTableIds.add(e.source);
+        relatedTableIds.add(e.target);
+      });
+      filteredNodes = filteredNodes.filter((n) => relatedTableIds.has(n.id));
+    }
+
     const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges = erDiagramData.edges.filter(
+    filteredEdges = filteredEdges.filter(
       (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target),
     );
 
@@ -245,7 +263,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
     const laidOutNodes = applyLayout(rfNodes, rfEdges, layoutType);
     setNodes(laidOutNodes);
     setEdges(rfEdges);
-  }, [erDiagramData, filterText, layoutType, selectedTableId, setNodes, setEdges]);
+  }, [erDiagramData, filterText, layoutType, selectedTableId, showOnlyRelatedTables, setNodes, setEdges]);
 
   const handleNodeClick: OnNodeClick = useCallback(
     (_event, node) => {
@@ -336,14 +354,16 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
 
   return (
     <div className={styles.erDiagramContainer} ref={chartRef}>
-      <TableFilter value={filterText} onChange={setFilterText} />
+      <TableFilter value={filterText} onChange={setFilterText} disabled={showOnlyRelatedTables} />
       <Toolbar
         loading={loading}
         layoutType={layoutType}
         includeVirtualFk={includeVirtualFk}
+        showOnlyRelatedTables={showOnlyRelatedTables}
         onRefresh={handleRefresh}
         onLayoutChange={handleLayoutChange}
         onIncludeVirtualFkChange={setIncludeVirtualFk}
+        onShowOnlyRelatedTablesChange={setShowOnlyRelatedTables}
         onInferVirtualFk={handleInferVirtualFk}
         inferring={inferring}
         onExport={handleExport}

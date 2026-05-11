@@ -26,6 +26,7 @@ import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableIndexColumn;
 import ai.chat2db.spi.model.VirtualForeignKey;
+import ai.chat2db.spi.model.SimpleTable;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -40,7 +41,6 @@ public class ErDiagramServiceImpl implements ErDiagramService {
 
     @Override
     public DataResult<ErDiagram> queryErDiagram(ErDiagramQueryParam param) {
-        // 根据参数决定是否同步数据库真实外键到本地H2
         if (Boolean.TRUE.equals(param.getSyncForeignKeys())) {
             foreignKeySyncService.syncForeignKeys(
                     param.getDataSourceId(),
@@ -55,6 +55,19 @@ public class ErDiagramServiceImpl implements ErDiagramService {
         Set<String> tableNameSet = tables.stream().map(Table::getName).collect(Collectors.toSet());
         boolean includeVirtual = param.getIncludeVirtualFk() == null || param.getIncludeVirtualFk();
         List<ErDiagram.Edge> edges = buildEdges(tables, tableNameSet, includeVirtual);
+        
+        if (Boolean.TRUE.equals(param.getOnlyRelatedTables())) {
+            Set<String> relatedTableIds = edges.stream()
+                    .flatMap(e -> java.util.stream.Stream.of(e.getSource(), e.getTarget()))
+                    .collect(Collectors.toSet());
+            nodes = nodes.stream()
+                    .filter(n -> relatedTableIds.contains(n.getId()))
+                    .collect(Collectors.toList());
+            edges = edges.stream()
+                    .filter(e -> relatedTableIds.contains(e.getSource()) && relatedTableIds.contains(e.getTarget()))
+                    .collect(Collectors.toList());
+        }
+        
         return DataResult.of(ErDiagram.builder().nodes(nodes).edges(edges).build());
     }
 
@@ -121,6 +134,19 @@ public class ErDiagramServiceImpl implements ErDiagramService {
     @Override
     public DataResult<Integer> inferVirtualForeignKeys(ErDiagramQueryParam param) {
         List<Table> tables = queryTables(param);
+        
+        List<String> existingTableNames = tables.stream()
+                .map(Table::getName)
+                .collect(Collectors.toList());
+        
+        int cleanedCount = foreignKeySyncService.cleanInvalidVirtualForeignKeys(
+                param.getDataSourceId(),
+                param.getDatabaseName(),
+                param.getSchemaName(),
+                existingTableNames
+        );
+        log.info("Cleaned {} invalid virtual foreign keys before inference", cleanedCount);
+
         int totalInferred = 0;
 
         for (Table table : tables) {
