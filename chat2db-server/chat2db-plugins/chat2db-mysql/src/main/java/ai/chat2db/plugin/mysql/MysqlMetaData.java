@@ -22,6 +22,51 @@ import static ai.chat2db.spi.util.SortUtils.sortDatabase;
 public class MysqlMetaData extends DefaultMetaService implements MetaData {
 
     private List<String> systemDatabases = Arrays.asList("information_schema", "performance_schema", "mysql", "sys");
+    
+    private static final String SELECT_TABLES_SQL = "SELECT TABLE_NAME, TABLE_COMMENT, TABLE_ROWS, ENGINE, CREATE_TIME, UPDATE_TIME " +
+            "FROM information_schema.tables WHERE TABLE_SCHEMA = '%s' AND TABLE_TYPE IN ('BASE TABLE', 'SYSTEM TABLE')";
+    
+    @Override
+    public List<Table> tables(Connection connection, @NotEmpty String databaseName, String schemaName, String tableName) {
+        List<Table> tables = new ArrayList<>();
+        
+        String sql = String.format(SELECT_TABLES_SQL, databaseName);
+        if (StringUtils.isNotBlank(tableName)) {
+            sql += String.format(" AND TABLE_NAME = '%s'", tableName);
+        }
+        sql += " ORDER BY TABLE_NAME";
+        
+        try {
+            SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+                while (resultSet.next()) {
+                    Table table = Table.builder()
+                            .name(resultSet.getString("TABLE_NAME"))
+                            .comment(resultSet.getString("TABLE_COMMENT"))
+                            .databaseName(databaseName)
+                            .schemaName(schemaName)
+                            .type("BASE TABLE")
+                            .engine(resultSet.getString("ENGINE"))
+                            .build();
+                    
+                    // 设置预估行数（InnoDB 等引擎可能返回 NULL）
+                    long rowCount = resultSet.getLong("TABLE_ROWS");
+                    if (!resultSet.wasNull()) {
+                        table.setRowCount(rowCount);
+                    }
+                    
+                    tables.add(table);
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            // 如果查询失败，回退到 JDBC 元数据方式
+            return SQLExecutor.getInstance().tables(connection, databaseName, schemaName, tableName, 
+                    new String[]{"TABLE", "SYSTEM TABLE"});
+        }
+        
+        return tables;
+    }
+    
     @Override
     public List<Database> databases(Connection connection) {
         List<Database> databases = SQLExecutor.getInstance().databases(connection);

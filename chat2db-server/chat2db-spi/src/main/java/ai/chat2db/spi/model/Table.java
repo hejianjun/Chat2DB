@@ -122,6 +122,11 @@ public class Table implements IndexModel {
      */
     private Long version;
 
+    /**
+     * 预估行数
+     */
+    private Long rowCount;
+
     @Override
     public String getTableName() {
         return this.name;

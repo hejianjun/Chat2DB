@@ -55,4 +55,9 @@ public class TableVO {
      * ddl
      */
     private String ddl;
+
+    /**
+     * 预估行数
+     */
+    private Long rowCount;
 }

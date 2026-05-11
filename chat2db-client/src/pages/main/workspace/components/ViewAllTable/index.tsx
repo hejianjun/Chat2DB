@@ -83,6 +83,7 @@ export default memo<IProps>((props) => {
             key: t.name,
             pinned: t.pinned,
             comment: t.comment,
+            rowCount: t.rowCount,
             extraParams: {
               ...uniqueData,
               tableName: t.name,
@@ -159,11 +160,19 @@ export default memo<IProps>((props) => {
       );
     }
 
+    if (dataIndex === 'rowCount') {
+      return (
+        <div className={classnames(styles.tableCell, { [styles.activeTableCell]: activeId === record.key })}>
+          {formatRowCount(text)}
+        </div>
+      );
+    }
+
     return isEditing ? (
       <Form.Item
         name={[record.key, dataIndex]}
         style={{ margin: 0 }}
-        rules={dataIndex === 'comment' ? [] : [{ required: true, message: `${dataIndex} is required.` }]} // 去掉 Comment 的必填规则
+        rules={dataIndex === 'comment' ? [] : [{ required: true, message: `${dataIndex} is required.` }]}
       >
         <Input />
       </Form.Item>
@@ -172,12 +181,26 @@ export default memo<IProps>((props) => {
     );
   };
 
+  const formatRowCount = (count?: number) => {
+    if (count == null || count < 0) return '-';
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
+
   const columns: ColumnsType<any> = [
     {
       title: 'Table name',
       dataIndex: 'name',
       key: 'name',
       render: (text, record) => renderCell(text, record, 'name'),
+    },
+    {
+      title: 'Row Count',
+      dataIndex: 'rowCount',
+      key: 'rowCount',
+      width: 120,
+      render: (text, record) => renderCell(text, record, 'rowCount'),
     },
     {
       title: 'Comment',

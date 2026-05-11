@@ -59,5 +59,9 @@ export interface ITable {
     * 是否已经被固定
     */
    pinned?: boolean;
+   /**
+    * 预估行数
+    */
+   rowCount?: number;
 
 }
