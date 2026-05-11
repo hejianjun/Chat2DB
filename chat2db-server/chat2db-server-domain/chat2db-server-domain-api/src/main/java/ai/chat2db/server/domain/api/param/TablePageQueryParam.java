@@ -2,6 +2,8 @@ package ai.chat2db.server.domain.api.param;
 
 import ai.chat2db.server.tools.base.wrapper.param.PageQueryParam;
 import ai.chat2db.spi.model.BaseModel;
+import ai.chat2db.spi.model.LuceneField;
+import ai.chat2db.spi.model.LuceneFieldType;
 import ai.chat2db.spi.model.Table;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -24,23 +26,27 @@ public class TablePageQueryParam extends PageQueryParam implements BaseModel<Tab
      * 对应数据库存储的来源id
      */
     @NotNull
+    @LuceneField(name = "dataSourceId", type = LuceneFieldType.STRING)
     private Long dataSourceId;
 
     /**
      * 对应的连接数据库名称
      */
     @NotNull
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
     /**
      * 表名
      */
+    @LuceneField(name = "tableName", type = LuceneFieldType.STRING)
     private String tableName;
 
 
     /**
-     *
+     * 模式名
      */
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
 

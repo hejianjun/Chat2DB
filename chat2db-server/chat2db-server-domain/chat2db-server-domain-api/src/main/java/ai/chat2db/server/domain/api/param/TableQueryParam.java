@@ -2,14 +2,12 @@ package ai.chat2db.server.domain.api.param;
 
 import java.io.Serial;
 
+import ai.chat2db.spi.model.*;
 import com.jayway.jsonpath.internal.function.sequence.Index;
 
 import jakarta.validation.constraints.NotNull;
 
 import ai.chat2db.server.tools.base.wrapper.param.QueryParam;
-import ai.chat2db.spi.model.BaseModel;
-import ai.chat2db.spi.model.IndexModel;
-import ai.chat2db.spi.model.TableColumn;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -31,22 +29,26 @@ public class TableQueryParam extends QueryParam implements BaseModel<IndexModel>
      * 对应数据库存储的来源id
      */
     @NotNull
+    @LuceneField(name = "dataSourceId", type = LuceneFieldType.STRING)
     private Long dataSourceId;
 
     /**
      * 对应的连接数据库名称
      */
     @NotNull
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
     private String databaseName;
 
     /**
      * 表名
      */
+    @LuceneField(name = "tableName", type = LuceneFieldType.STRING)
     private String tableName;
 
     /**
-     * 空间名
+     * 模式名
      */
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     private boolean refresh;

@@ -205,13 +205,6 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             return;
         }
         T model = sources.get(0);
-        // 兼容Table类型
-        if (model instanceof Table) {
-            Table table = new Table();
-            table.setDatabaseName(model.getDatabaseName());
-            table.setSchemaName(model.getSchemaName());
-            model = (T) table;
-        }
         lock.writeLock().lock();
         try {
             // 获取全部相关旧数据
@@ -263,15 +256,21 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     private <E extends BaseModel<?>> BooleanQuery.Builder buildBooleanQuery(E model) {
         BooleanQuery.Builder booleanQuery = new BooleanQuery.Builder();
 
+        // 添加类型标识条件
         addTermQuery(booleanQuery, "type", model.getClassType().getSimpleName(), BooleanClause.Occur.FILTER);
-        // 添加数据库名称条件
-        addTermQuery(booleanQuery, "databaseName", model.getDatabaseName(), BooleanClause.Occur.FILTER);
 
-        // 添加架构名称条件
-        addTermQuery(booleanQuery, "schemaName", model.getSchemaName(), BooleanClause.Occur.FILTER);
-
-        // 添加表名称条件
-        addTermQuery(booleanQuery, "tableName", model.getTableName(), BooleanClause.Occur.FILTER);
+        // 使用 STRING 类型的字段自动构建过滤条件
+        List<AnnotationBasedDocumentBuilder.AnnotatedFieldInfo> stringFields = documentBuilder.getStringFields(model.getClass());
+        for (AnnotationBasedDocumentBuilder.AnnotatedFieldInfo info : stringFields) {
+            try {
+                Object value = info.field.get(model);
+                if (value instanceof String) {
+                    addTermQuery(booleanQuery, info.annotation.name(), (String) value, BooleanClause.Occur.FILTER);
+                }
+            } catch (IllegalAccessException e) {
+                // 忽略无法访问的字段
+            }
+        }
 
         return booleanQuery;
     }

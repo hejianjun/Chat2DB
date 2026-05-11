@@ -27,20 +27,61 @@ import lombok.SneakyThrows;
 public class AnnotationBasedDocumentBuilder {
 
     /**
-     * 缓存类的字段信息，key 为类名，value 为带注解的字段列表
-     */
-    private final Map<String, List<AnnotatedFieldInfo>> fieldCache = new ConcurrentHashMap<>();
-
-    /**
      * 带注解的字段信息
      */
-    private static class AnnotatedFieldInfo {
+    static class AnnotatedFieldInfo {
         final Field field;
         final LuceneField annotation;
 
         AnnotatedFieldInfo(Field field, LuceneField annotation) {
             this.field = field;
             this.annotation = annotation;
+        }
+    }
+
+    /**
+     * 缓存类的字段信息，key 为类名，value 为带注解的字段列表
+     */
+    private final Map<String, List<AnnotatedFieldInfo>> fieldCache = new ConcurrentHashMap<>();
+
+    /**
+     * 缓存类的 STRING 类型字段（用于过滤），key 为类名，value 为 STRING 类型字段列表
+     */
+    private final Map<String, List<AnnotatedFieldInfo>> stringFieldCache = new ConcurrentHashMap<>();
+
+    /**
+     * 获取 STRING 类型的字段列表（用于构建查询过滤）
+     * STRING 类型字段自动用于精确匹配过滤
+     */
+    public List<AnnotatedFieldInfo> getStringFields(Class<?> clazz) {
+        return stringFieldCache.computeIfAbsent(clazz.getName(), k -> collectStringFields(clazz));
+    }
+
+    /**
+     * 收集 STRING 类型的字段
+     */
+    private List<AnnotatedFieldInfo> collectStringFields(Class<?> clazz) {
+        List<AnnotatedFieldInfo> stringFields = new ArrayList<>();
+        collectStringFieldsRecursive(clazz, stringFields);
+        return stringFields;
+    }
+
+    /**
+     * 递归收集 STRING 类型的字段
+     */
+    private void collectStringFieldsRecursive(Class<?> clazz, List<AnnotatedFieldInfo> stringFields) {
+        if (clazz == null || clazz == Object.class) {
+            return;
+        }
+
+        collectStringFieldsRecursive(clazz.getSuperclass(), stringFields);
+
+        for (Field field : clazz.getDeclaredFields()) {
+            LuceneField annotation = field.getAnnotation(LuceneField.class);
+            if (annotation != null && annotation.type() == LuceneFieldType.STRING) {
+                field.setAccessible(true);
+                stringFields.add(new AnnotatedFieldInfo(field, annotation));
+            }
         }
     }
 
