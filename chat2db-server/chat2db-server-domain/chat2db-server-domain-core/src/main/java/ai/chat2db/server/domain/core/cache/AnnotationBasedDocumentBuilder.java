@@ -1,6 +1,10 @@
 package ai.chat2db.server.domain.core.cache;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.LongPoint;
@@ -18,8 +22,27 @@ import lombok.SneakyThrows;
 /**
  * 基于注解的 Lucene 文档构建器
  * 通过读取字段上的 @LuceneField 注解自动构建 Lucene Document
+ * 使用缓存避免重复反射，提升性能
  */
 public class AnnotationBasedDocumentBuilder {
+
+    /**
+     * 缓存类的字段信息，key 为类名，value 为带注解的字段列表
+     */
+    private final Map<String, List<AnnotatedFieldInfo>> fieldCache = new ConcurrentHashMap<>();
+
+    /**
+     * 带注解的字段信息
+     */
+    private static class AnnotatedFieldInfo {
+        final Field field;
+        final LuceneField annotation;
+
+        AnnotatedFieldInfo(Field field, LuceneField annotation) {
+            this.field = field;
+            this.annotation = annotation;
+        }
+    }
 
     /**
      * 基于注解构建 Lucene 文档
@@ -36,31 +59,44 @@ public class AnnotationBasedDocumentBuilder {
         org.apache.lucene.document.Document doc = new org.apache.lucene.document.Document();
         Class<?> clazz = source.getClass();
 
-        // 递归处理父类字段（从子类到父类）
-        buildClassFields(doc, clazz, source);
+        // 从缓存获取或解析字段信息
+        List<AnnotatedFieldInfo> annotatedFields = fieldCache.computeIfAbsent(clazz.getName(), k -> collectAnnotatedFields(clazz));
+
+        // 直接使用缓存的字段信息构建文档
+        for (AnnotatedFieldInfo info : annotatedFields) {
+            Object value = info.field.get(source);
+            addFieldToDocument(doc, info.annotation, value);
+        }
 
         return doc;
     }
 
     /**
-     * 递归处理类及其父类的字段
+     * 收集类及其父类中所有带 @LuceneField 注解的字段
      */
-    @SneakyThrows
-    private void buildClassFields(org.apache.lucene.document.Document doc, Class<?> clazz, Object source) {
+    private List<AnnotatedFieldInfo> collectAnnotatedFields(Class<?> clazz) {
+        List<AnnotatedFieldInfo> fields = new ArrayList<>();
+        collectAnnotatedFieldsRecursive(clazz, fields);
+        return fields;
+    }
+
+    /**
+     * 递归收集字段（从父类到子类）
+     */
+    private void collectAnnotatedFieldsRecursive(Class<?> clazz, List<AnnotatedFieldInfo> fields) {
         if (clazz == null || clazz == Object.class) {
             return;
         }
 
-        // 先处理父类字段
-        buildClassFields(doc, clazz.getSuperclass(), source);
+        // 先处理父类
+        collectAnnotatedFieldsRecursive(clazz.getSuperclass(), fields);
 
-        // 处理当前类字段
+        // 再处理当前类
         for (Field field : clazz.getDeclaredFields()) {
             LuceneField annotation = field.getAnnotation(LuceneField.class);
             if (annotation != null) {
                 field.setAccessible(true);
-                Object value = field.get(source);
-                addFieldToDocument(doc, annotation, value);
+                fields.add(new AnnotatedFieldInfo(field, annotation));
             }
         }
     }
