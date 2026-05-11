@@ -351,7 +351,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
 
         // 5. 添加名称字段别名（typeName + "Name"）
         Optional.ofNullable(source.getName())
-                .ifPresent(name -> addStringField(doc, typeName + "Name", name));
+                .ifPresent(name -> addStringField(doc, StringUtils.uncapitalize(typeName + "Name"), name));
 
         // 6. 存储原始数据快照
         doc.add(new StoredField("source", JSONObject.toJSONString(source)));
