@@ -8,7 +8,6 @@ import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
@@ -17,23 +16,16 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
-import org.apache.lucene.document.SortedDocValuesField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.IndexableField;
-import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.StoredFields;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.function.FunctionValues;
-import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.queries.function.valuesource.LongFieldSource;
 import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.*;
@@ -49,7 +41,6 @@ import ai.chat2db.spi.model.IndexModel;
 import ai.chat2db.spi.model.Table;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.SneakyThrows;
 
 /**
@@ -78,7 +69,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     @Getter
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
-    private static final String[] TEXT_FIELDS = { "name", "comment", "aiComment" };
+    private static final String[] TEXT_FIELDS = {"name", "comment", "aiComment"};
 
     /**
      * 基于注解的文档构建器
@@ -177,22 +168,22 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     /**
      * 构建旧数据映射表
      *
-     * @param model     实体类型（用于构建查询条件）
+     * @param query   查询条件
      * @param maxHits 最大命中数
      * @return 以"name"为Key的旧数据映射表
      */
     @SneakyThrows
-    private <E extends IndexModel> Map<String, E> buildSourceMap(E model, int maxHits) {
-        BooleanQuery query = buildBooleanQuery(model).build();
+    private Map<String, JSONObject> buildSourceMap(BooleanQuery query, int maxHits) {
         TopDocs topDocs = searcher.search(query, maxHits);
         total = topDocs.totalHits.value;
         if (total == 0) {
             return Collections.emptyMap();
         }
         return Arrays.stream(topDocs.scoreDocs)
-                .map(scoreDoc -> (E) getDocument(model.getClassType(), scoreDoc.doc))
+                .map(scoreDoc -> getSource(scoreDoc.doc))
+                .map(JSONObject::parseObject)
                 .collect(Collectors.toMap(
-                        IndexModel::getName,
+                        obj -> obj.getString("name"),
                         obj -> obj,
                         // 重复时保留最新值
                         (oldVal, newVal) -> newVal
@@ -224,8 +215,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         lock.writeLock().lock();
         try {
             // 获取全部相关旧数据
-            Map<String, T> sourceMap = buildSourceMap(model, 1000);
-            BooleanQuery query = buildBooleanQuery(model).build();
+            BooleanQuery query = buildBooleanQuery(model)
+                    .build();
+            Map<String, JSONObject> sourceMap = buildSourceMap(query, 1000);
             List<Document> docs = sources.stream()
                     .peek(source -> source.setVersion(version))
                     .map(source -> createDocument(source, sourceMap))
@@ -253,9 +245,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         }
         lock.writeLock().lock();
         try {
-            Map<String, T> sourceMap = buildSourceMap(source, 1);
-            Document document = createDocument(source, sourceMap);
             BooleanQuery query = buildBooleanQuery(source).build();
+            Map<String, JSONObject> sourceMap = buildSourceMap(query, 1);
+            Document document = createDocument(source, sourceMap);
             writer.updateDocuments(query, Collections.singletonList(document));
             reload();
         } finally {
@@ -293,7 +285,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * @param occur        查询条款的发生关系
      */
     private void addTermQuery(BooleanQuery.Builder booleanQuery, String field, String value,
-            BooleanClause.Occur occur) {
+                              BooleanClause.Occur occur) {
         if (StringUtils.isNotBlank(value)) {
             Query query = new TermQuery(new Term(field, value));
             booleanQuery.add(query, occur);
@@ -313,7 +305,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * @param sourceMap 旧数据映射表（用于字段继承）
      * @return 构建完成的Lucene文档
      */
-    private Document createDocument(T source, Map<String, T> sourceMap) {
+    private Document createDocument(T source, Map<String, JSONObject> sourceMap) {
         Document doc = new Document();
 
         // 1. 添加类型标识字段
@@ -323,7 +315,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         // 2. 处理版本冲突检测和版本号设置
         Long incomingVersion = source.getVersion();
         Long storedVersion = getStoredVersion(source, sourceMap);
-        
+
         if (storedVersion != null) {
             if (incomingVersion != null && incomingVersion < storedVersion) {
                 throw new ConcurrentModificationException(
@@ -361,18 +353,18 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     /**
      * 新增版本获取方法
      */
-    private Long getStoredVersion(T source, Map<String, T> sourceMap) {
+    private Long getStoredVersion(T source, Map<String, JSONObject> sourceMap) {
         String nameValue = source.getName();
         if (nameValue == null || sourceMap == null) {
             return null;
         }
 
-        T oldData = sourceMap.get(nameValue);
-        return oldData != null ? oldData.getVersion() : null;
+        JSONObject oldData = sourceMap.get(nameValue);
+        return oldData != null ? oldData.getLong("version") : null;
     }
 
     // 辅助方法：处理AI注释继承
-    private void handleAiCommentInheritance(T source, Map<String, T> sourceMap) {
+    private void handleAiCommentInheritance(T source, Map<String, JSONObject> sourceMap) {
         String nameValue = source.getName();
         if (nameValue == null) {
             return;
@@ -380,9 +372,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
 
         String aiComment = source.getAiComment();
         if (aiComment == null && sourceMap != null) {
-            T oldData = sourceMap.get(nameValue);
+            JSONObject oldData = sourceMap.get(nameValue);
             if (oldData != null) {
-                source.setAiComment(oldData.getAiComment());
+                source.setAiComment(oldData.getString("aiComment"));
             }
         }
     }
@@ -416,10 +408,10 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * 搜索文档（支持排序）
      *
      * @param queryModel 查询模型
-     * @param lastDocId 上一次搜索结果中的最后一个文档ID，用于分页搜索
-     * @param queryStr  搜索查询字符串
-     * @param sortField 排序字段名（如 "name", "rowCount"，对应 @LuceneField 注解的 name 属性）
-     * @param reverse   是否降序
+     * @param lastDocId  上一次搜索结果中的最后一个文档ID，用于分页搜索
+     * @param queryStr   搜索查询字符串
+     * @param sortField  排序字段名（如 "name", "rowCount"，对应 @LuceneField 注解的 name 属性）
+     * @param reverse    是否降序
      * @return 搜索结果的TopDocs对象
      */
     @SneakyThrows
@@ -431,7 +423,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             if (lastDocId != null) {
                 lastScoreDoc = new ScoreDoc(lastDocId, 1);
             }
-            
+
             TopDocs topDocs;
             if (StringUtils.isNotBlank(sortField)) {
                 // 使用排序搜索（字段名直接对应 @LuceneField 注解的 name 属性）
@@ -445,7 +437,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 // 不使用排序
                 topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
             }
-            
+
             return Arrays.stream(topDocs.scoreDocs)
                     .map(scoreDoc -> {
                         T doc = (T) getDocument(queryModel.getClassType(), scoreDoc.doc);
@@ -495,18 +487,22 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         return booleanQuery.build();
     }
 
+    @SneakyThrows
+    private String getSource(int docId) {
+        StoredFields storedFields = searcher.storedFields();
+        Document document = storedFields.document(docId, Sets.newHashSet("source"));
+        return document.get("source");
+    }
+
     /**
      * 获取指定ID的文档，可指定需要加载的字段
      *
      * @param docId 文档ID
      * @return 加载的文档对象
      */
-    @SneakyThrows
+
     private <E extends IndexModel> E getDocument(Class<E> clz, int docId) {
-        StoredFields storedFields = searcher.storedFields();
-        Document document = storedFields.document(docId, Sets.newHashSet("source"));
-        String source = document.get("source");
-        return JSONObject.parseObject(source, clz);
+        return JSONObject.parseObject(getSource(docId), clz);
     }
 
 }
