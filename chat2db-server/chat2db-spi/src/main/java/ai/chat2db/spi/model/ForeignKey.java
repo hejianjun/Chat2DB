@@ -19,7 +19,7 @@ public class ForeignKey implements IndexModel {
 
     // 外键名称
     @JsonAlias({"FK_NAME"})
-    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
     // 当前表
     @JsonAlias({"FKTABLE_NAME"})

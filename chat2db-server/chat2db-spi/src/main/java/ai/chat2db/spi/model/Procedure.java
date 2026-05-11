@@ -36,7 +36,7 @@ public class Procedure implements IndexModel {
     private String schemaName;
 
     @JsonAlias({"PROCEDURE_NAME"})
-    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
 
     @JsonAlias({"REMARKS"})

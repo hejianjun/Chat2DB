@@ -22,7 +22,7 @@ public class Trigger implements IndexModel {
     @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
-    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
 
     @LuceneField(name = "comment", type = LuceneFieldType.TEXT)

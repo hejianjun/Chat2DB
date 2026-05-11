@@ -32,7 +32,7 @@ public class TableColumn implements IndexModel {
      * 列名
      */
     @JsonAlias({"COLUMN_NAME","column_name"})
-    @LuceneField(name = "name", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
 
     /**
