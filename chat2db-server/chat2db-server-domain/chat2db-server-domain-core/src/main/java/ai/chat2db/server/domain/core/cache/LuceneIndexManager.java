@@ -81,6 +81,11 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     private static final String[] TEXT_FIELDS = { "name", "comment", "aiComment" };
 
     /**
+     * 基于注解的文档构建器
+     */
+    private final AnnotationBasedDocumentBuilder documentBuilder = new AnnotationBasedDocumentBuilder();
+
+    /**
      * 构造函数，根据给定的ID初始化Lucene索引管理器
      *
      * @param id 用于确定索引文件路径的ID
@@ -298,9 +303,10 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * 根据实体对象创建Lucene文档
      * 逻辑说明：
      * 1. 添加类型标识字段
-     * 2. 处理AI注释字段继承逻辑
-     * 3. 动态添加预定义字段
-     * 4. 保留原始数据快照
+     * 2. 处理版本号
+     * 3. AI注释继承逻辑
+     * 4. 使用注解自动构建字段
+     * 5. 存储原始数据快照
      *
      * @param source    源实体对象
      * @param sourceMap 旧数据映射表（用于字段继承）
@@ -313,11 +319,10 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         String typeName = source.getClassType().getSimpleName();
         addStringField(doc, "type", typeName);
 
-        // 新增版本冲突检测逻辑
+        // 2. 处理版本冲突检测和版本号设置
         Long incomingVersion = source.getVersion();
-
-        // 继承旧版本号或初始化
         Long storedVersion = getStoredVersion(source, sourceMap);
+        
         if (storedVersion != null) {
             if (incomingVersion != null && incomingVersion < storedVersion) {
                 throw new ConcurrentModificationException(
@@ -337,22 +342,10 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         // 3. AI注释继承逻辑（新数据为空时从旧数据获取）
         handleAiCommentInheritance(source, sourceMap);
 
-        // 4. 添加预定义字段（文本型+字符串型）
-        addStringField(doc, "databaseName", source.getDatabaseName());
-        addStringField(doc, "schemaName", source.getSchemaName());
-        addStringField(doc, "tableName", source.getTableName());
-        addTextField(doc, "name", source.getName());
-        // 为 name 字段添加 SortedDocValuesField 支持排序
-        addStringFieldForSort(doc, "name_sort", source.getName());
-        addTextField(doc, "comment", source.getComment());
-        addTextField(doc, "aiComment", source.getAiComment());
-
-        // 为 Table 类型添加 rowCount 排序字段
-        if (source instanceof Table) {
-            Table table = (Table) source;
-            if (table.getRowCount() != null) {
-                doc.add(new NumericDocValuesField("rowCount_sort", table.getRowCount()));
-            }
+        // 4. 使用注解自动构建字段（替代 instanceof 判断）
+        Document autoDoc = documentBuilder.buildDocument(source);
+        for (IndexableField field : autoDoc) {
+            doc.add(field);
         }
 
         // 5. 添加名称字段别名（typeName + "Name"）
@@ -394,19 +387,6 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     }
 
     /**
-     * 向文档中添加文本字段
-     *
-     * @param doc       文档对象
-     * @param fieldName 字段名
-     * @param value     字段值
-     */
-    private void addTextField(Document doc, String fieldName, String value) {
-        if (value != null) {
-            doc.add(new TextField(fieldName, value, Field.Store.NO));
-        }
-    }
-
-    /**
      * 向文档中添加字符串字段
      *
      * @param doc       文档对象
@@ -416,20 +396,6 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     private void addStringField(Document doc, String fieldName, String value) {
         if (value != null) {
             doc.add(new StringField(fieldName, value, Field.Store.NO));
-        }
-    }
-
-    /**
-     * 向文档中添加用于排序的字符串字段（带 DocValues）
-     *
-     * @param doc       文档对象
-     * @param fieldName 字段名
-     * @param value     字段值
-     */
-    private void addStringFieldForSort(Document doc, String fieldName, String value) {
-        if (value != null) {
-            doc.add(new StringField(fieldName, value, Field.Store.NO));
-            doc.add(new SortedDocValuesField(fieldName, new org.apache.lucene.util.BytesRef(value)));
         }
     }
 

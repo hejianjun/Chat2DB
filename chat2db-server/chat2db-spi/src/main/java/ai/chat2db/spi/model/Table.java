@@ -25,20 +25,28 @@ public class Table implements IndexModel {
      * 表名
      */
     @JsonAlias({ "TABLE_NAME" })
+    @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
 
     /**
      * 描述
      */
     @JsonAlias({ "REMARKS" })
-
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
     private String comment;
+
+    /**
+     * 数据库名
+     */
+    @JsonAlias("TABLE_CAT")
+    @LuceneField(name = "databaseName", type = LuceneFieldType.STRING)
+    private String databaseName;
 
     /**
      * DB 名
      */
     @JsonAlias({ "TABLE_SCHEM" })
-
+    @LuceneField(name = "schemaName", type = LuceneFieldType.STRING)
     private String schemaName;
 
     /**
@@ -67,12 +75,6 @@ public class Table implements IndexModel {
      * DB类型
      */
     private String dbType;
-
-    /**
-     * 数据库名
-     */
-    @JsonAlias("TABLE_CAT")
-    private String databaseName;
 
     /**
      * 表类型
@@ -116,7 +118,9 @@ public class Table implements IndexModel {
     /**
      * AI生成的注释
      */
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
     private String aiComment;
+    
     /**
      * 版本
      */
@@ -125,6 +129,7 @@ public class Table implements IndexModel {
     /**
      * 预估行数
      */
+    @LuceneField(name = "rowCount", type = LuceneFieldType.LONG, sort = true)
     private Long rowCount;
 
     @Override
