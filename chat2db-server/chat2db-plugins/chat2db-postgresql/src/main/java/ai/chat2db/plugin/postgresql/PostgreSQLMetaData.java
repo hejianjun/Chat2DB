@@ -18,7 +18,6 @@ import ai.chat2db.spi.util.SortUtils;
 import com.google.common.collect.Lists;
 import jakarta.validation.constraints.NotEmpty;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.util.CollectionUtils;
 
 import static ai.chat2db.plugin.postgresql.consts.SQLConst.FUNCTION_SQL;
 import static ai.chat2db.spi.util.SortUtils.sortDatabase;
@@ -30,49 +29,52 @@ public class PostgreSQLMetaData extends DefaultMetaService implements MetaData {
 
     private List<String> systemDatabases = Arrays.asList("postgres");
     
-    private static final String SELECT_TABLE_ROWS_SQL = "SELECT c.relname, c.reltuples::bigint AS row_count FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '%s' AND c.relkind = 'r'";
+    private static final String SELECT_TABLES_SQL = "SELECT c.relname AS table_name, " +
+            "obj_description(c.oid, 'pg_class') AS table_comment, " +
+            "c.reltuples::bigint AS row_count " +
+            "FROM pg_class c " +
+            "JOIN pg_namespace n ON n.oid = c.relnamespace " +
+            "WHERE n.nspname = '%s' AND c.relkind = 'r'";
     
     @Override
     public List<Table> tables(Connection connection, @NotEmpty String databaseName, String schemaName, String tableName) {
-        List<Table> tables = SQLExecutor.getInstance().tables(connection, 
-            StringUtils.isEmpty(databaseName) ? null : databaseName, 
-            StringUtils.isEmpty(schemaName) ? null : schemaName, 
-            tableName, new String[]{"TABLE", "SYSTEM TABLE"});
-        
-        if (CollectionUtils.isEmpty(tables)) {
-            return tables;
-        }
+        List<Table> tables = new ArrayList<>();
         
         String schema = StringUtils.isEmpty(schemaName) ? "public" : schemaName;
-        Map<String, Long> rowCountMap = getTableRowCounts(connection, schema);
-        for (Table table : tables) {
-            Long rowCount = rowCountMap.get(table.getName());
-            if (rowCount != null) {
-                table.setRowCount(rowCount);
-            }
+        String sql = String.format(SELECT_TABLES_SQL, schema);
+        if (StringUtils.isNotBlank(tableName)) {
+            sql += String.format(" AND c.relname = '%s'", tableName);
         }
-        
-        return tables;
-    }
-    
-    private Map<String, Long> getTableRowCounts(Connection connection, String schemaName) {
-        Map<String, Long> rowCountMap = new HashMap<>();
-        String sql = String.format(SELECT_TABLE_ROWS_SQL, schemaName);
+        sql += " ORDER BY c.relname";
         
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 while (resultSet.next()) {
-                    String tableName = resultSet.getString("relname");
-                    Long rowCount = resultSet.getLong("row_count");
-                    rowCountMap.put(tableName, rowCount);
+                    Table table = Table.builder()
+                            .name(resultSet.getString("table_name"))
+                            .comment(resultSet.getString("table_comment"))
+                            .databaseName(databaseName)
+                            .schemaName(schema)
+                            .type("BASE TABLE")
+                            .build();
+                    
+                    // 设置预估行数（reltuples 是估算值，可能为 -1 或 0）
+                    long rowCount = resultSet.getLong("row_count");
+                    if (rowCount >= 0) {
+                        table.setRowCount(rowCount);
+                    }
+                    
+                    tables.add(table);
                 }
                 return null;
             });
         } catch (Exception e) {
-            // 如果查询失败，忽略行数信息
+            // 如果查询失败，回退到 JDBC 元数据方式
+            return SQLExecutor.getInstance().tables(connection, databaseName, schemaName, tableName, 
+                    new String[]{"TABLE", "SYSTEM TABLE"});
         }
         
-        return rowCountMap;
+        return tables;
     }
     
     @Override
