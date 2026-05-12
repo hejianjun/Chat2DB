@@ -73,7 +73,6 @@ public class ViewServiceImpl implements ViewService {
             if (CollectionUtils.isEmpty(views)) {
                 return;
             }
-            views.forEach(v -> v.setVersion(version));
             mgr.updateDocuments(views, version);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);

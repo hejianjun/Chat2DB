@@ -71,7 +71,6 @@ public class ProcedureServiceImpl implements ProcedureService {
             if (CollectionUtils.isEmpty(procedures)) {
                 return;
             }
-            procedures.forEach(p -> p.setVersion(version));
             mgr.updateDocuments(procedures, version);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);

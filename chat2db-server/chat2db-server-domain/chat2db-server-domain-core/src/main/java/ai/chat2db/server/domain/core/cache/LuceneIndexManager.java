@@ -190,6 +190,10 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 ));
     }
 
+    public void updateDocuments(List<? extends T> sources, Long version) {
+        this.updateDocuments(sources, true, version == null ? 0 : version);
+    }
+
     /**
      * 批量更新文档到Lucene索引
      * 逻辑说明：
@@ -200,7 +204,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * 5. 批量创建文档并更新
      */
     @SneakyThrows
-    public void updateDocuments(List<? extends T> sources, Long version) {
+    public void updateDocuments(List<? extends T> sources, boolean all, long version) {
         if (CollectionUtils.isEmpty(sources)) {
             return;
         }
@@ -208,8 +212,14 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         lock.writeLock().lock();
         try {
             // 获取全部相关旧数据
-            BooleanQuery query = buildBooleanQuery(model)
-                    .build();
+            String fld = StringUtils.uncapitalize(model.getClassType().getSimpleName() + "Name");
+            BooleanQuery.Builder booleanQuery = buildBooleanQuery(model);
+            if (!all) {
+                BooleanQuery.Builder nameQuery = new BooleanQuery.Builder();
+                sources.forEach(source -> nameQuery.add(new TermQuery(new Term(fld, source.getName())), BooleanClause.Occur.SHOULD));
+                booleanQuery.add(nameQuery.build(), BooleanClause.Occur.MUST);
+            }
+            BooleanQuery query = booleanQuery.build();
             Map<String, JSONObject> sourceMap = buildSourceMap(query, 1000);
             List<Document> docs = sources.stream()
                     .peek(source -> source.setVersion(version))

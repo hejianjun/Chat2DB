@@ -71,7 +71,6 @@ public class FunctionServiceImpl implements FunctionService {
             if (CollectionUtils.isEmpty(functions)) {
                 return;
             }
-            functions.forEach(f -> f.setVersion(version));
             mgr.updateDocuments(functions, version);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);

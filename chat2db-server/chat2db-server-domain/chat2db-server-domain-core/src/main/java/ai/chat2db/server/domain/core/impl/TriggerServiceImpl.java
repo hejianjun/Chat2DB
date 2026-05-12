@@ -71,7 +71,6 @@ public class TriggerServiceImpl implements TriggerService {
             if (CollectionUtils.isEmpty(triggers)) {
                 return;
             }
-            triggers.forEach(t -> t.setVersion(version));
             mgr.updateDocuments(triggers, version);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);
