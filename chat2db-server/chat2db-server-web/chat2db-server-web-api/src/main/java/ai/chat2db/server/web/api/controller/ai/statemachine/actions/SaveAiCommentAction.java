@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
@@ -218,25 +219,27 @@ public class SaveAiCommentAction extends BaseChatAction {
     }
 
     private void saveColumnAiComments(Long dataSourceId, String databaseName, String schemaName,
-                                      String tableName, List<ColumnComment> columnComments) {
+                                       String tableName, List<ColumnComment> columnComments) {
         try {
             LuceneIndexManager<TableColumn> manager = managerFactory.getManager(dataSourceId);
 
-            for (ColumnComment col : columnComments) {
-                if (StringUtils.isBlank(col.getColumnName()) || StringUtils.isBlank(col.getComment())) {
-                    continue;
-                }
+            List<TableColumn> columns = columnComments.stream()
+                    .filter(col -> StringUtils.isNotBlank(col.getColumnName()) && StringUtils.isNotBlank(col.getComment()))
+                    .map(col -> {
+                        TableColumn column = new TableColumn();
+                        column.setDatabaseName(databaseName);
+                        column.setSchemaName(schemaName);
+                        column.setTableName(tableName);
+                        column.setName(col.getColumnName());
+                        column.setAiComment(col.getComment());
+                        return column;
+                    })
+                    .collect(Collectors.toList());
 
-                TableColumn column = new TableColumn();
-                column.setDatabaseName(databaseName);
-                column.setSchemaName(schemaName);
-                column.setTableName(tableName);
-                column.setName(col.getColumnName());
-                column.setAiComment(col.getComment());
-
-                manager.updateDocument(column);
-                log.info("[SaveAiCommentAction] Saved column aiComment: {}.{} = {}",
-                        tableName, col.getColumnName(), col.getComment());
+            if (CollectionUtils.isNotEmpty(columns)) {
+                long version = System.currentTimeMillis();
+                manager.updateDocuments(columns, false, version);
+                log.info("[SaveAiCommentAction] Saved {} column aiComments for table: {}", columns.size(), tableName);
             }
         } catch (Exception e) {
             log.error("[SaveAiCommentAction] Failed to save column aiComments", e);
