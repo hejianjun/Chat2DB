@@ -471,7 +471,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             const list: ITreeNode[] = res.data?.map((t: any) => {
               return {
                 uuid: uuid(),
-                name: t.functionName,
+                name: t.name,
                 treeNodeType: TreeNodeType.FUNCTION,
                 key: t.name,
                 pinned: t.pinned,
@@ -479,7 +479,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 isLeaf: true,
                 extraParams: {
                   ..._extraParams,
-                  functionName: t.functionName,
+                  functionName: t.name,
                 },
               };
             });
@@ -510,7 +510,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             const list: ITreeNode[] = res.data?.map((t: any) => {
               return {
                 uuid: uuid(),
-                name: t.procedureName,
+                name: t.name,
                 treeNodeType: TreeNodeType.PROCEDURE,
                 key: t.name,
                 pinned: t.pinned,
@@ -518,7 +518,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 isLeaf: true,
                 extraParams: {
                   ..._extraParams,
-                  procedureName: t.procedureName,
+                  procedureName: t.name,
                 },
               };
             });
@@ -549,7 +549,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             const list: ITreeNode[] = res.data?.map((t: any) => {
               return {
                 uuid: uuid(),
-                name: t.triggerName,
+                name: t.name,
                 treeNodeType: TreeNodeType.TRIGGER,
                 key: t.name,
                 pinned: t.pinned,
@@ -557,7 +557,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 isLeaf: true,
                 extraParams: {
                   ..._extraParams,
-                  triggerName: t.triggerName,
+                  triggerName: t.name,
                 },
               };
             });
