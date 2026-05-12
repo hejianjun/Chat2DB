@@ -153,11 +153,27 @@ public class SaveAiCommentAction extends BaseChatAction {
 
     private void saveBatchTableAiComments(Long dataSourceId, String databaseName, String schemaName,
                                           List<BatchTableComment> batchComments) {
-        for (BatchTableComment btc : batchComments) {
-            if (StringUtils.isBlank(btc.getTableName()) || StringUtils.isBlank(btc.getTableComment())) {
-                continue;
+        try {
+            LuceneIndexManager<Table> manager = managerFactory.getManager(dataSourceId);
+
+            List<Table> tables = batchComments.stream()
+                    .filter(btc -> StringUtils.isNotBlank(btc.getTableName()) && StringUtils.isNotBlank(btc.getTableComment()))
+                    .map(btc -> {
+                        Table table = new Table();
+                        table.setDatabaseName(databaseName);
+                        table.setSchemaName(schemaName);
+                        table.setName(btc.getTableName());
+                        table.setAiComment(btc.getTableComment());
+                        return table;
+                    })
+                    .collect(Collectors.toList());
+
+            if (CollectionUtils.isNotEmpty(tables)) {
+                manager.updateDocuments(tables, null, false);
+                log.info("[SaveAiCommentAction] Saved {} batch table aiComments", tables.size());
             }
-            saveTableAiComment(dataSourceId, databaseName, schemaName, btc.getTableName(), btc.getTableComment());
+        } catch (Exception e) {
+            log.error("[SaveAiCommentAction] Failed to save batch table aiComments", e);
         }
     }
 
@@ -219,7 +235,7 @@ public class SaveAiCommentAction extends BaseChatAction {
     }
 
     private void saveColumnAiComments(Long dataSourceId, String databaseName, String schemaName,
-                                       String tableName, List<ColumnComment> columnComments) {
+                                      String tableName, List<ColumnComment> columnComments) {
         try {
             LuceneIndexManager<TableColumn> manager = managerFactory.getManager(dataSourceId);
 
@@ -238,7 +254,7 @@ public class SaveAiCommentAction extends BaseChatAction {
 
             if (CollectionUtils.isNotEmpty(columns)) {
                 long version = System.currentTimeMillis();
-                manager.updateDocuments(columns, false, version);
+                manager.updateDocuments(columns, version, false);
                 log.info("[SaveAiCommentAction] Saved {} column aiComments for table: {}", columns.size(), tableName);
             }
         } catch (Exception e) {

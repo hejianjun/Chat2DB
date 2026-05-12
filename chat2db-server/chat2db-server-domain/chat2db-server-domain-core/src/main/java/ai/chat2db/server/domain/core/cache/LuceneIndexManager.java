@@ -191,7 +191,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     }
 
     public void updateDocuments(List<? extends T> sources, Long version) {
-        this.updateDocuments(sources, true, version == null ? 0 : version);
+        this.updateDocuments(sources, version == null ? 0 : version, true);
     }
 
     /**
@@ -204,7 +204,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * 5. 批量创建文档并更新
      */
     @SneakyThrows
-    public void updateDocuments(List<? extends T> sources, boolean all, long version) {
+    public void updateDocuments(List<? extends T> sources, Long version, boolean all) {
         if (CollectionUtils.isEmpty(sources)) {
             return;
         }
