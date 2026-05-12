@@ -36,6 +36,23 @@ public class TriggerServiceImpl implements TriggerService {
     }
 
     @Override
+    public ListResult<Trigger> triggersWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh) {
+        LuceneIndexManager<Trigger> mgr = managerFactory.getManager(dataSourceId);
+        Trigger queryModel = Trigger.builder()
+                .databaseName(databaseName)
+                .schemaName(schemaName)
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (refresh || version == null) {
+            loadAndCacheMetadata(mgr, databaseName, schemaName, version);
+        }
+
+        List<Trigger> triggers = mgr.search(queryModel, null, searchKey);
+        return ListResult.of(triggers);
+    }
+
+    @Override
     public DataResult<Trigger> detail(String databaseName, String schemaName, String triggerName) {
         return DataResult.of(Chat2DBContext.getMetaData().trigger(Chat2DBContext.getConnection(), databaseName, schemaName, triggerName));
     }
@@ -50,7 +67,7 @@ public class TriggerServiceImpl implements TriggerService {
         Long version = mgr.getMaxVersion(queryModel);
 
         if (param.isRefresh() || version == null) {
-            loadAndCacheMetadata(mgr, param, version);
+            loadAndCacheMetadata(mgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
 
         List<Trigger> triggers = mgr.search(queryModel, null, param.getSearchKey());
@@ -62,18 +79,19 @@ public class TriggerServiceImpl implements TriggerService {
         return result;
     }
 
-    private void loadAndCacheMetadata(LuceneIndexManager<Trigger> mgr, TreeSearchParam param, Long version) {
+    private void loadAndCacheMetadata(LuceneIndexManager<Trigger> mgr, String databaseName, String schemaName, Long currentVersion) {
         mgr.getLock().writeLock().lock();
         try {
             Connection conn = Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
-            List<Trigger> triggers = meta.triggers(conn, param.getDatabaseName(), param.getSchemaName());
+            List<Trigger> triggers = meta.triggers(conn, databaseName, schemaName);
             if (CollectionUtils.isEmpty(triggers)) {
                 return;
             }
-            mgr.updateDocuments(triggers, version);
+            mgr.updateDocuments(triggers, currentVersion);
+            log.info("[Trigger] Cached {} triggers for database: {}", triggers.size(), databaseName);
         } catch (Exception e) {
-            log.error("loadAndCacheMetadata error,version:{}", version, e);
+            log.error("[Trigger] loadAndCacheMetadata error", e);
         } finally {
             mgr.getLock().writeLock().unlock();
         }

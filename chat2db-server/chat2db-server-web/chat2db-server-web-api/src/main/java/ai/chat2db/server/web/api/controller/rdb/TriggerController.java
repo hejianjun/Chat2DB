@@ -25,7 +25,8 @@ public class TriggerController {
 
     @GetMapping("/list")
     public WebPageResult<Trigger> list(@Valid TriggerPageRequest request) {
-        ListResult<Trigger> listResult = triggerService.triggers(request.getDatabaseName(), request.getSchemaName());
+        ListResult<Trigger> listResult = triggerService.triggersWithCache(request.getDataSourceId(),
+                request.getDatabaseName(), request.getSchemaName(), request.getSearchKey(), request.isRefresh());
         Long total = CollectionUtils.isNotEmpty(listResult.getData()) ? Long.valueOf(listResult.getData().size()) : 0L;
         Integer pageSize = listResult.getData() != null ? listResult.getData().size() : 0;
         return WebPageResult.of(listResult.getData(), total, 1, pageSize);

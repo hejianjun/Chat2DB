@@ -23,6 +23,18 @@ public interface ViewService {
      */
     ListResult<Table> views(@NotEmpty String databaseName, String schemaName);
 
+    /**
+     * Querying all views under a schema with Lucene cache.
+     *
+     * @param dataSourceId data source id
+     * @param databaseName database name
+     * @param schemaName schema name
+     * @param searchKey search keyword
+     * @param refresh if true, refresh the cache
+     * @return
+     */
+    ListResult<Table> viewsWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh);
+
 
     /**
      * Querying the details of a view.

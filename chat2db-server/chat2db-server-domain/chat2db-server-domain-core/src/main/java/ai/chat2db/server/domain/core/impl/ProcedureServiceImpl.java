@@ -36,6 +36,23 @@ public class ProcedureServiceImpl implements ProcedureService {
     }
 
     @Override
+    public ListResult<Procedure> proceduresWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh) {
+        LuceneIndexManager<Procedure> mgr = managerFactory.getManager(dataSourceId);
+        Procedure queryModel = Procedure.builder()
+                .databaseName(databaseName)
+                .schemaName(schemaName)
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (refresh || version == null) {
+            loadAndCacheMetadata(mgr, databaseName, schemaName, version);
+        }
+
+        List<Procedure> procedures = mgr.search(queryModel, null, searchKey);
+        return ListResult.of(procedures);
+    }
+
+    @Override
     public DataResult<Procedure> detail(String databaseName, String schemaName, String procedureName) {
         return DataResult.of(Chat2DBContext.getMetaData().procedure(Chat2DBContext.getConnection(), databaseName, schemaName, procedureName));
     }
@@ -50,7 +67,7 @@ public class ProcedureServiceImpl implements ProcedureService {
         Long version = mgr.getMaxVersion(queryModel);
 
         if (param.isRefresh() || version == null) {
-            loadAndCacheMetadata(mgr, param, version);
+            loadAndCacheMetadata(mgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
 
         List<Procedure> procedures = mgr.search(queryModel, null, param.getSearchKey());
@@ -62,18 +79,19 @@ public class ProcedureServiceImpl implements ProcedureService {
         return result;
     }
 
-    private void loadAndCacheMetadata(LuceneIndexManager<Procedure> mgr, TreeSearchParam param, Long version) {
+    private void loadAndCacheMetadata(LuceneIndexManager<Procedure> mgr, String databaseName, String schemaName, Long currentVersion) {
         mgr.getLock().writeLock().lock();
         try {
             Connection conn = Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
-            List<Procedure> procedures = meta.procedures(conn, param.getDatabaseName(), param.getSchemaName());
+            List<Procedure> procedures = meta.procedures(conn, databaseName, schemaName);
             if (CollectionUtils.isEmpty(procedures)) {
                 return;
             }
-            mgr.updateDocuments(procedures, version);
+            mgr.updateDocuments(procedures, currentVersion);
+            log.info("[Procedure] Cached {} procedures for database: {}", procedures.size(), databaseName);
         } catch (Exception e) {
-            log.error("loadAndCacheMetadata error,version:{}", version, e);
+            log.error("[Procedure] loadAndCacheMetadata error", e);
         } finally {
             mgr.getLock().writeLock().unlock();
         }

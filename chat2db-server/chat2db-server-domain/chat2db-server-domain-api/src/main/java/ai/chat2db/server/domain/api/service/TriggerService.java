@@ -20,6 +20,18 @@ public interface TriggerService {
     ListResult<Trigger> triggers(@NotEmpty String databaseName, String schemaName);
 
     /**
+     * Querying all triggers under a schema with Lucene cache.
+     *
+     * @param dataSourceId data source id
+     * @param databaseName database name
+     * @param schemaName schema name
+     * @param searchKey search keyword
+     * @param refresh if true, refresh the cache
+     * @return
+     */
+    ListResult<Trigger> triggersWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh);
+
+    /**
      * Querying trigger information.
      * @param databaseName
      * @param schemaName

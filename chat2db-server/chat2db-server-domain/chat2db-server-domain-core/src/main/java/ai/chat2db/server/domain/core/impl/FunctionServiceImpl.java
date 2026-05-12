@@ -36,6 +36,23 @@ public class FunctionServiceImpl implements FunctionService {
     }
 
     @Override
+    public ListResult<Function> functionsWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh) {
+        LuceneIndexManager<Function> mgr = managerFactory.getManager(dataSourceId);
+        Function queryModel = Function.builder()
+                .databaseName(databaseName)
+                .schemaName(schemaName)
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (refresh || version == null) {
+            loadAndCacheMetadata(mgr, databaseName, schemaName, version);
+        }
+
+        List<Function> functions = mgr.search(queryModel, null, searchKey);
+        return ListResult.of(functions);
+    }
+
+    @Override
     public DataResult<Function> detail(String databaseName, String schemaName, String functionName) {
         return DataResult.of(Chat2DBContext.getMetaData().function(Chat2DBContext.getConnection(), databaseName, schemaName, functionName));
     }
@@ -50,7 +67,7 @@ public class FunctionServiceImpl implements FunctionService {
         Long version = mgr.getMaxVersion(queryModel);
 
         if (param.isRefresh() || version == null) {
-            loadAndCacheMetadata(mgr, param, version);
+            loadAndCacheMetadata(mgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
 
         List<Function> functions = mgr.search(queryModel, null, param.getSearchKey());
@@ -62,18 +79,19 @@ public class FunctionServiceImpl implements FunctionService {
         return result;
     }
 
-    private void loadAndCacheMetadata(LuceneIndexManager<Function> mgr, TreeSearchParam param, Long version) {
+    private void loadAndCacheMetadata(LuceneIndexManager<Function> mgr, String databaseName, String schemaName, Long version) {
         mgr.getLock().writeLock().lock();
         try {
             Connection conn = Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
-            List<Function> functions = meta.functions(conn, param.getDatabaseName(), param.getSchemaName());
+            List<Function> functions = meta.functions(conn, databaseName, schemaName);
             if (CollectionUtils.isEmpty(functions)) {
                 return;
             }
             mgr.updateDocuments(functions, version);
+            log.info("[Function] Cached {} functions for database: {}", functions.size(), databaseName);
         } catch (Exception e) {
-            log.error("loadAndCacheMetadata error,version:{}", version, e);
+            log.error("[Function] loadAndCacheMetadata error", e);
         } finally {
             mgr.getLock().writeLock().unlock();
         }

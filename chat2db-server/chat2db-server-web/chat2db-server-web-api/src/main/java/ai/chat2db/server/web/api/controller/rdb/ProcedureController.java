@@ -24,8 +24,8 @@ public class ProcedureController {
 
     @GetMapping("/list")
     public WebPageResult<Procedure> list(@Valid ProcedurePageRequest request) {
-        ListResult<Procedure> procedureListResult = procedureService.procedures(request.getDatabaseName(),
-            request.getSchemaName());
+        ListResult<Procedure> procedureListResult = procedureService.proceduresWithCache(request.getDataSourceId(),
+                request.getDatabaseName(), request.getSchemaName(), request.getSearchKey(), request.isRefresh());
         return WebPageResult.of(procedureListResult.getData(), Long.valueOf(procedureListResult.getData().size()), 1,
             procedureListResult.getData().size());
     }

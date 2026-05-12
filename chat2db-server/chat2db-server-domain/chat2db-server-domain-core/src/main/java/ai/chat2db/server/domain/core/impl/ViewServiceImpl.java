@@ -36,6 +36,23 @@ public class ViewServiceImpl implements ViewService {
     }
 
     @Override
+    public ListResult<Table> viewsWithCache(Long dataSourceId, String databaseName, String schemaName, String searchKey, boolean refresh) {
+        LuceneIndexManager<Table> mgr = managerFactory.getManager(dataSourceId);
+        Table queryModel = Table.builder()
+                .databaseName(databaseName)
+                .schemaName(schemaName)
+                .build();
+        Long version = mgr.getMaxVersion(queryModel);
+
+        if (refresh || version == null) {
+            loadAndCacheMetadata(mgr, databaseName, schemaName, version);
+        }
+
+        List<Table> views = mgr.search(queryModel, null, searchKey);
+        return ListResult.of(views);
+    }
+
+    @Override
     public DataResult<Table> detail(String databaseName, String schemaName, String tableName) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
         Table table = metaSchema.view(Chat2DBContext.getConnection(), databaseName, schemaName, tableName);
@@ -52,7 +69,7 @@ public class ViewServiceImpl implements ViewService {
         Long version = mgr.getMaxVersion(queryModel);
 
         if (param.isRefresh() || version == null) {
-            loadAndCacheMetadata(mgr, param, version);
+            loadAndCacheMetadata(mgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
 
         List<Table> views = mgr.search(queryModel, null, param.getSearchKey());
@@ -64,18 +81,19 @@ public class ViewServiceImpl implements ViewService {
         return result;
     }
 
-    private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, TreeSearchParam param, Long version) {
+    private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, String databaseName, String schemaName, Long currentVersion) {
         mgr.getLock().writeLock().lock();
         try {
             Connection conn = Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
-            List<Table> views = meta.views(conn, param.getDatabaseName(), param.getSchemaName());
+            List<Table> views = meta.views(conn, databaseName, schemaName);
             if (CollectionUtils.isEmpty(views)) {
                 return;
             }
-            mgr.updateDocuments(views, version);
+            mgr.updateDocuments(views, currentVersion);
+            log.info("[View] Cached {} views for database: {}", views.size(), databaseName);
         } catch (Exception e) {
-            log.error("loadAndCacheMetadata error,version:{}", version, e);
+            log.error("[View] loadAndCacheMetadata error", e);
         } finally {
             mgr.getLock().writeLock().unlock();
         }

@@ -24,8 +24,8 @@ public class FunctionController {
 
     @GetMapping("/list")
     public WebPageResult<Function> list(@Valid FunctionPageRequest request) {
-        ListResult<Function> functionListResult = functionService.functions(request.getDatabaseName(),
-            request.getSchemaName());
+        ListResult<Function> functionListResult = functionService.functionsWithCache(request.getDataSourceId(),
+                request.getDatabaseName(), request.getSchemaName(), request.getSearchKey(), request.isRefresh());
         return WebPageResult.of(functionListResult.getData(), Long.valueOf(functionListResult.getData().size()), 1,
             functionListResult.getData().size());
     }
