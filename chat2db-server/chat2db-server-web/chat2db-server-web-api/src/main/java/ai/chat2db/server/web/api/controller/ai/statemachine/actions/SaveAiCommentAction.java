@@ -253,8 +253,7 @@ public class SaveAiCommentAction extends BaseChatAction {
                     .collect(Collectors.toList());
 
             if (CollectionUtils.isNotEmpty(columns)) {
-                long version = System.currentTimeMillis();
-                manager.updateDocuments(columns, version, false);
+                manager.updateDocuments(columns, null, false);
                 log.info("[SaveAiCommentAction] Saved {} column aiComments for table: {}", columns.size(), tableName);
             }
         } catch (Exception e) {

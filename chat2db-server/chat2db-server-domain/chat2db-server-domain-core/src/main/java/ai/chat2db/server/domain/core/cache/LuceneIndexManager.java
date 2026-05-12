@@ -190,12 +190,17 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 ));
     }
 
+    /**
+     * 批量更新文档到Lucene索引,version留空则初始化
+     * @param sources
+     * @param version
+     */
     public void updateDocuments(List<? extends T> sources, Long version) {
-        this.updateDocuments(sources, version == null ? 0 : version, true);
+        this.updateDocuments(sources, version == null ? 1L : version, true);
     }
 
     /**
-     * 批量更新文档到Lucene索引
+     * 批量更新文档到Lucene索引,version留空则忽略版本控制
      * 逻辑说明：
      * 1. 参数校验
      * 2. 类型一致性检查
