@@ -31,6 +31,7 @@ import { useConnectionStore } from '@/pages/main/store/connection';
 
 // ----- services -----
 import historyService from '@/service/history';
+import sqlService from '@/service/sql';
 
 import indexedDB from '@/indexedDB';
 import connectToEventSource from '@/utils/eventSource';
@@ -94,6 +95,7 @@ const WorkspaceTabs = memo(() => {
             status: item.status,
             ddl: item.ddl,
             connectable: item.connectable,
+            name: item.name, // 添加名称用于动态创建 loadSQL
           },
         };
       }) || [];
@@ -328,6 +330,77 @@ const WorkspaceTabs = memo(() => {
   // 渲染sql执行器
   const renderSQLExecute = (item: IWorkspaceTab) => {
     const { uniqueData } = item;
+    
+    // 动态创建 loadSQL (当从 consoleList 恢复时 loadSQL 会丢失)
+    const getLoadSQL = () => {
+      if (uniqueData.loadSQL) {
+        return uniqueData.loadSQL;
+      }
+      
+      // 根据 tab 类型动态创建 loadSQL
+      const commonParams = {
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData?.databaseName,
+        schemaName: uniqueData?.schemaName,
+      };
+      
+      switch (item.type) {
+        case WorkspaceTabType.FUNCTION:
+          return () => {
+            console.log('[loadSQL] Calling getFunctionDetail with:', { dataSourceId: commonParams.dataSourceId, databaseName: commonParams.databaseName, schemaName: commonParams.schemaName, functionName: uniqueData.functionName || uniqueData.name });
+            return sqlService.getFunctionDetail({
+              ...commonParams,
+              functionName: uniqueData.functionName || uniqueData.name,
+            } as any).then((res) => {
+              console.log('[loadSQL] getFunctionDetail response:', res);
+              return res.functionBody || '';
+            });
+          };
+          
+        case WorkspaceTabType.PROCEDURE:
+          return () => {
+            console.log('[loadSQL] Calling getProcedureDetail with:', { dataSourceId: commonParams.dataSourceId, databaseName: commonParams.databaseName, schemaName: commonParams.schemaName, procedureName: uniqueData.procedureName || uniqueData.name });
+            return sqlService.getProcedureDetail({
+              ...commonParams,
+              procedureName: uniqueData.procedureName || uniqueData.name,
+            } as any).then((res) => {
+              console.log('[loadSQL] getProcedureDetail response:', res);
+              return res.procedureBody || '';
+            });
+          };
+          
+        case WorkspaceTabType.TRIGGER:
+          return () => {
+            console.log('[loadSQL] Calling getTriggerDetail with:', { dataSourceId: commonParams.dataSourceId, databaseName: commonParams.databaseName, schemaName: commonParams.schemaName, triggerName: uniqueData.triggerName || uniqueData.name });
+            return sqlService.getTriggerDetail({
+              ...commonParams,
+              triggerName: uniqueData.triggerName || uniqueData.name,
+            } as any).then((res) => {
+              console.log('[loadSQL] getTriggerDetail response:', res);
+              return res.triggerBody || '';
+            });
+          };
+          
+        case WorkspaceTabType.VIEW:
+          return () => {
+            console.log('[loadSQL] Calling getViewDetail with:', { dataSourceId: commonParams.dataSourceId, databaseName: commonParams.databaseName, schemaName: commonParams.schemaName, tableName: uniqueData.tableName || uniqueData.name });
+            return sqlService.getViewDetail({
+              ...commonParams,
+              tableName: uniqueData.tableName || uniqueData.name,
+            } as any).then((res) => {
+              console.log('[loadSQL] getViewDetail response:', res);
+              return res.ddl || '';
+            });
+          };
+          
+        default:
+          return undefined;
+      }
+    };
+    
+    const loadSQL = getLoadSQL();
+    console.log('[renderSQLExecute] item.type:', item.type, 'loadSQL exists:', !!loadSQL);
+    
     return (
       <SQLExecute
         boundInfo={{
@@ -343,7 +416,7 @@ const WorkspaceTabs = memo(() => {
           supportSchema: uniqueData.supportSchema,
         }}
         initDDL={uniqueData.ddl}
-        loadSQL={uniqueData.loadSQL}
+        loadSQL={loadSQL}
       />
     );
   };

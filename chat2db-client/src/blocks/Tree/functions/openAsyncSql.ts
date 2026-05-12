@@ -16,7 +16,7 @@ export const openView = (props:{
     databaseName: treeNodeData.extraParams?.databaseName,
     schemaName: treeNodeData.extraParams?.schemaName,
     loadSQL: ()=>{
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         sqlService
         .getViewDetail({
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
@@ -26,8 +26,17 @@ export const openView = (props:{
           tableName: treeNodeData.name
         } as any)
         .then((res) => {
-          // 更新ddl
-          resolve(res.ddl);
+          console.log('[openView] API response:', res);
+          if (res && res.ddl) {
+            resolve(res.ddl);
+          } else {
+            console.warn('[openView] ddl is empty, response:', res);
+            resolve('-- View DDL not available or empty');
+          }
+        })
+        .catch((err) => {
+          console.error('[openView] Failed to get view detail:', err);
+          reject(err);
         });
       });
     }
@@ -38,6 +47,7 @@ export const openFunction = (props:{
   addWorkspaceTab: any;
   treeNodeData: any;
 }) => {
+  console.log('[openFunction] Called with treeNodeData:', props.treeNodeData);
   const { treeNodeData } = props;
   createConsole({
     name: treeNodeData.name,
@@ -48,7 +58,7 @@ export const openFunction = (props:{
     databaseName: treeNodeData.extraParams?.databaseName,
     schemaName: treeNodeData.extraParams?.schemaName,
     loadSQL: ()=>{
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         sqlService
         .getFunctionDetail({
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
@@ -58,8 +68,17 @@ export const openFunction = (props:{
           functionName: treeNodeData.name
         } as any)
         .then((res) => {
-          // 更新ddl
-          resolve(res.functionBody);
+          console.log('[openFunction] API response:', res);
+          if (res && res.functionBody) {
+            resolve(res.functionBody);
+          } else {
+            console.warn('[openFunction] functionBody is empty, response:', res);
+            resolve('-- Function body not available or empty');
+          }
+        })
+        .catch((err) => {
+          console.error('[openFunction] Failed to get function detail:', err);
+          reject(err);
         });
       });
     }
@@ -80,7 +99,7 @@ export const openProcedure = (props:{
     databaseName: treeNodeData.extraParams?.databaseName,
     schemaName: treeNodeData.extraParams?.schemaName,
     loadSQL: ()=>{
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         sqlService
         .getProcedureDetail({
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
@@ -90,8 +109,17 @@ export const openProcedure = (props:{
           procedureName: treeNodeData.name
         } as any)
         .then((res) => {
-          // 更新ddl
-          resolve(res.procedureBody);
+          console.log('[openProcedure] API response:', res);
+          if (res && res.procedureBody) {
+            resolve(res.procedureBody);
+          } else {
+            console.warn('[openProcedure] procedureBody is empty, response:', res);
+            resolve('-- Procedure body not available or empty');
+          }
+        })
+        .catch((err) => {
+          console.error('[openProcedure] Failed to get procedure detail:', err);
+          reject(err);
         });
       });
     }
@@ -112,7 +140,7 @@ export const openTrigger = (props:{
     databaseName: treeNodeData.extraParams?.databaseName,
     schemaName: treeNodeData.extraParams?.schemaName,
     loadSQL: ()=>{
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         sqlService
         .getTriggerDetail({
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
@@ -122,8 +150,17 @@ export const openTrigger = (props:{
           triggerName: treeNodeData.name
         } as any)
         .then((res) => {
-          // 更新ddl
-          resolve(res.triggerBody);
+          console.log('[openTrigger] API response:', res);
+          if (res && res.triggerBody) {
+            resolve(res.triggerBody);
+          } else {
+            console.warn('[openTrigger] triggerBody is empty, response:', res);
+            resolve('-- Trigger body not available or empty');
+          }
+        })
+        .catch((err) => {
+          console.error('[openTrigger] Failed to get trigger detail:', err);
+          reject(err);
         });
       });
     }

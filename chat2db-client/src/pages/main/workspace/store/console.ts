@@ -64,6 +64,7 @@ export const createConsole = (params: ICreateConsoleParams) => {
   const workspaceTabList = useWorkspaceStore.getState().workspaceTabList;
   const consoleList = useWorkspaceStore.getState().consoleList;
   const currentConnectionDetails = useWorkspaceStore.getState().currentConnectionDetails;
+  console.log('[createConsole] params.loadSQL exists:', !!params.loadSQL);
   const newConsole = {
     ...params,
     name: params.name || `untitled-${params.databaseName || params.schemaName} (${params.dataSourceName})`,
@@ -74,6 +75,7 @@ export const createConsole = (params: ICreateConsoleParams) => {
     supportDatabase: currentConnectionDetails?.supportDatabase,
     supportSchema: currentConnectionDetails?.supportSchema,
   };
+  console.log('[createConsole] newConsole.loadSQL exists:', !!newConsole.loadSQL);
 
   return new Promise((resolve) => {
     if ((workspaceTabList?.length || 0) >= 20) {
@@ -109,6 +111,7 @@ export const createConsole = (params: ICreateConsoleParams) => {
         },
       ];
 
+      console.log('[createConsole] Setting workspaceTabList, uniqueData.loadSQL exists:', !!newList[newList.length - 1].uniqueData.loadSQL);
       setWorkspaceTabList(newList);
       setActiveConsoleId(res);
       resolve(res);

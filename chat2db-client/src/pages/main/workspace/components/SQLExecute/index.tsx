@@ -23,6 +23,8 @@ const SQLExecute = memo<IProps>((props) => {
   const [boundInfo, setBoundInfo] = useState<IBoundInfo>(_boundInfo);
   const activeConsoleId = useWorkspaceStore((state) => state.activeConsoleId);
 
+  console.log('[SQLExecute] Render, loadSQL exists:', !!loadSQL);
+
   // 注册 consoleRef 到全局 map 中
   useEffect(() => {
     const consoleId = boundInfo.consoleId;
@@ -37,10 +39,16 @@ const SQLExecute = memo<IProps>((props) => {
   useEffect(() => {
     if (loadSQL) {
       loadSQL().then((sql) => {
-        consoleRef.current?.editorRef?.setValue(sql, 'cover');
+        if (sql) {
+          consoleRef.current?.editorRef?.setValue(sql, 'cover');
+        } else {
+          console.warn('loadSQL returned empty value');
+        }
+      }).catch((err) => {
+        console.error('Failed to load SQL:', err);
       });
     }
-  }, []);
+  }, [loadSQL]);
 
   return (
     <div className={classnames(styles.sqlExecute)}>
