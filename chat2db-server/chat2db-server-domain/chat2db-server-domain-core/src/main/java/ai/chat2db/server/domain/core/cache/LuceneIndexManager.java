@@ -238,7 +238,11 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         }
         lock.writeLock().lock();
         try {
-            BooleanQuery query = buildBooleanQuery(source).build();
+            String fld = StringUtils.uncapitalize(source.getClassType().getSimpleName() + "Name");
+            TermQuery termQuery = new TermQuery(new Term(fld, source.getName()));
+            BooleanQuery query = buildBooleanQuery(source)
+                    .add(termQuery, BooleanClause.Occur.FILTER)
+                    .build();
             Map<String, JSONObject> sourceMap = buildSourceMap(query, 1);
             Document document = createDocument(source, sourceMap);
             writer.updateDocuments(query, Collections.singletonList(document));
