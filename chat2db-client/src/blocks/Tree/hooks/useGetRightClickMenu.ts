@@ -43,15 +43,50 @@ interface IOperationColumnConfigItem {
 }
 
 interface IRightClickMenu {
-  key: number;
+  key: number | string;
   onClick: (treeNodeData: ITreeNode) => void;
-  type: OperationColumn;
+  type: OperationColumn | string;
   doubleClickTrigger?: boolean;
   labelProps: {
     icon: string;
     label: string;
   };
+  children?: IRightClickMenu[];
 }
+
+// 将"导入数据""导出数据""生成数据"合并到二级菜单"数据操作"
+const DATA_OPS: (OperationColumn | string)[] = [
+  OperationColumn.ImportData,
+  OperationColumn.ExportData,
+  OperationColumn.GenerateData,
+];
+
+const groupDataOperations = (list: IRightClickMenu[]): IRightClickMenu[] => {
+  const dataOps = list.filter((m) => DATA_OPS.includes(m.type));
+  if (dataOps.length === 0) return list;
+  const result: IRightClickMenu[] = [];
+  let inserted = false;
+  list.forEach((m) => {
+    if (DATA_OPS.includes(m.type)) {
+      if (!inserted) {
+        result.push({
+          key: 'dataOperation',
+          type: 'dataOperation',
+          onClick: () => {},
+          labelProps: {
+            icon: '\ue653',
+            label: i18n('workspace.menu.dataOperation'),
+          },
+          children: dataOps,
+        });
+        inserted = true;
+      }
+    } else {
+      result.push(m);
+    }
+  });
+  return result;
+};
 
 export const useGetRightClickMenu = (props: IProps) => {
   const { treeNodeData, loadData } = props;
@@ -459,7 +494,7 @@ export const useGetRightClickMenu = (props: IProps) => {
 
       // 生成数据
       [OperationColumn.GenerateData]: {
-        text: '生成数据',
+        text: i18n('workspace.menu.generateData'),
         icon: '\ue6b9',
         handle: () => {
           handleGenerateData(treeNodeData);
@@ -484,7 +519,7 @@ export const useGetRightClickMenu = (props: IProps) => {
         });
       }
     });
-    return finalList;
+    return groupDataOperations(finalList);
   }, [treeNodeData]);
 
   return rightClickMenu;
@@ -885,7 +920,7 @@ export const getRightClickMenu = (props: IProps) => {
 
     // 生成数据
     [OperationColumn.GenerateData]: {
-      text: '生成数据',
+      text: i18n('workspace.menu.generateData'),
       icon: '\ue6b9',
       handle: () => {
         handleGenerateData(treeNodeData);
@@ -910,7 +945,7 @@ export const getRightClickMenu = (props: IProps) => {
       });
     }
   });
-  return finalList;
+  return groupDataOperations(finalList);
 };
 
 const handleGenerateData = (treeNodeData: ITreeNode) => {

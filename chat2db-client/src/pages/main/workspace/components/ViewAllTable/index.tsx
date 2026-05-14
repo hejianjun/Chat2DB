@@ -148,19 +148,25 @@ export default memo<IProps>((props) => {
         });
       },
     });
-    const dropdownsItems: any = rightClickMenu.map((item) => {
-      return {
+    const buildMenuItem = (item: any): any => {
+      const menuItem: any = {
         key: item.key,
         type: item.type,
-        onClick: () => {
-          setOpenDropdown(false);
-          item.onClick(record);
-        },
         label: <MenuLabel icon={item.labelProps.icon} label={item.labelProps.label} />,
       };
-    });
+      if (item.children && item.children.length > 0) {
+        menuItem.children = item.children.map(buildMenuItem);
+      } else {
+        menuItem.onClick = () => {
+          setOpenDropdown(false);
+          item.onClick(record);
+        };
+      }
+      return menuItem;
+    };
+    const dropdownsItems: any = rightClickMenu.map(buildMenuItem);
 
-    const excludeList = [
+    const excludeList: any[] = [
       OperationColumn.OpenTable,
       OperationColumn.CreateConsole,
       // OperationColumn.Pin,
@@ -169,6 +175,7 @@ export default memo<IProps>((props) => {
       OperationColumn.CopyName,
       OperationColumn.DeprecatedTable,
       OperationColumn.TruncateTable,
+      'dataOperation', // 数据操作（二级菜单：导入/导出/生成数据）
     ];
 
     return dropdownsItems.filter((item) => excludeList.includes(item.type));

@@ -511,15 +511,21 @@ const TreeNode = memo((props: TreeNodeIProps) => {
   });
 
   const treeNodeDom = useMemo(() => {
-    const dropdownsItems: any = rightClickMenu.map((item) => {
-      return {
+    const buildMenuItem = (item: any): any => {
+      const menuItem: any = {
         key: item.key,
-        onClick: () => {
-          item.onClick(treeNodeData);
-        },
         label: <MenuLabel icon={item.labelProps.icon} label={item.labelProps.label} />,
       };
-    });
+      if (item.children && item.children.length > 0) {
+        menuItem.children = item.children.map(buildMenuItem);
+      } else {
+        menuItem.onClick = () => {
+          item.onClick(treeNodeData);
+        };
+      }
+      return menuItem;
+    };
+    const dropdownsItems: any = rightClickMenu.map(buildMenuItem);
     return (
       <Dropdown
         trigger={['contextMenu']}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
-import { useTranslation } from 'react-i18next';
 import styles from './index.less';
 
 const { Option } = Select;
@@ -36,8 +35,7 @@ const DataGenerationModal: React.FC<DataGenerationModalProps> = ({
   onOk,
   tableInfo
 }) => {
-  const { t } = useTranslation();
-  const [form] = Form.useForm();
+    const [form] = Form.useForm();
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
