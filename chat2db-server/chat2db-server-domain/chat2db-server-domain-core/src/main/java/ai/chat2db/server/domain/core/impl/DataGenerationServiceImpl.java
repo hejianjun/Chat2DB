@@ -75,7 +75,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
             for (TableColumn column : tableColumns) {
                 ColumnConfigParam config = new ColumnConfigParam();
                 config.setColumnName(column.getName());
-                String dataType = column.getDataType() != null ? column.getDataType().toString() : "VARCHAR";
+                String dataType = column.getDataType() != null ? column.getDataType() : "VARCHAR";
                 config.setDataType(dataType);
                 config.setComment(column.getComment());
                 config.setNullable(column.getNullable() != null && column.getNullable() == 1);

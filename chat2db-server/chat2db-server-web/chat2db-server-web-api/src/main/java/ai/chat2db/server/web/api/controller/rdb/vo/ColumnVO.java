@@ -43,7 +43,7 @@ public class ColumnVO {
      * 比如 varchar ,double
      */
 
-    private Integer dataType;
+    private String dataType;
 
 
     /**

@@ -46,7 +46,6 @@ public class TableColumn implements IndexModel {
      * 列的类型
      * 比如 varchar(100) ,double(10,6)
      */
-
     @JsonAlias({"TYPE_NAME","type_name"})
     @LuceneField(name = "columnType", type = LuceneFieldType.TEXT)
     private String columnType;
@@ -55,15 +54,13 @@ public class TableColumn implements IndexModel {
      * 列的数据类型
      * 比如 varchar ,double
      */
-
     @JsonAlias({"DATA_TYPE","data_type"})
-    private Integer dataType;
+    private String dataType;
 
 
     /**
      * 默认值
      */
-
     @JsonAlias({"COLUMN_DEF","column_def"})
     private String defaultValue;
 
