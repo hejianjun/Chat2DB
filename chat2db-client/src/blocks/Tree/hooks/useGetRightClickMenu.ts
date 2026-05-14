@@ -497,7 +497,13 @@ export const useGetRightClickMenu = (props: IProps) => {
         text: i18n('workspace.menu.generateData'),
         icon: '\ue6b9',
         handle: () => {
-          handleGenerateData(treeNodeData);
+          const { openDataGenerationModal } = useWorkspaceStore.getState();
+          openDataGenerationModal?.({
+            dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+            databaseName: treeNodeData.extraParams?.databaseName!,
+            schemaName: treeNodeData.extraParams?.schemaName,
+            tableName: treeNodeData.name!,
+          });
         },
       },
     };
@@ -923,7 +929,13 @@ export const getRightClickMenu = (props: IProps) => {
       text: i18n('workspace.menu.generateData'),
       icon: '\ue6b9',
       handle: () => {
-        handleGenerateData(treeNodeData);
+        const { openDataGenerationModal } = useWorkspaceStore.getState();
+        openDataGenerationModal?.({
+          dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          databaseName: treeNodeData.extraParams?.databaseName!,
+          schemaName: treeNodeData.extraParams?.schemaName,
+          tableName: treeNodeData.name!,
+        });
       },
     },
   };
@@ -946,21 +958,6 @@ export const getRightClickMenu = (props: IProps) => {
     }
   });
   return groupDataOperations(finalList);
-};
-
-const handleGenerateData = (treeNodeData: ITreeNode) => {
-  // 触发数据生成对话框
-  if (window.dispatchEvent) {
-    const event = new CustomEvent('openDataGenerationModal', {
-      detail: {
-        dataSourceId: treeNodeData.extraParams?.dataSourceId,
-        databaseName: treeNodeData.extraParams?.databaseName,
-        schemaName: treeNodeData.extraParams?.schemaName,
-        tableName: treeNodeData.name,
-      }
-    });
-    window.dispatchEvent(event);
-  }
 };
 
 const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void) => {

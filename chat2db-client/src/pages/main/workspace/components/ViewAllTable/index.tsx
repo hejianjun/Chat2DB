@@ -16,7 +16,6 @@ import { getRightClickMenu } from '@/blocks/Tree/hooks/useGetRightClickMenu';
 import MenuLabel from '@/components/MenuLabel';
 import { setCurrentWorkspaceGlobalExtend, setPendingAiChat, setCurrentWorkspaceExtend, IBatchTableCommentResult } from '@/pages/main/workspace/store/common';
 import { deprecatedTable } from '@/blocks/Tree/functions/deprecatedTable';
-import DataGenerationModal from '@/components/DataGenerationModal';
 
 // ----- store -----
 import { addWorkspaceTab } from '@/pages/main/workspace/store/console';
@@ -51,8 +50,6 @@ export default memo<IProps>((props) => {
   const [appendValue, setAppendValue] = useState<string>('');
   const [form] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [dataGenerationModalVisible, setDataGenerationModalVisible] = useState<boolean>(false);
-  const [selectedTableForGeneration, setSelectedTableForGeneration] = useState<any>(null);
 
   useEffect(() => {
     getTable({
@@ -66,26 +63,6 @@ export default memo<IProps>((props) => {
       setOpenDropdown(undefined);
     }
   }, [openDropdown]);
-
-  useEffect(() => {
-    // 监听数据生成对话框打开事件
-    const handleOpenDataGenerationModal = (event: any) => {
-      const { dataSourceId, databaseName, schemaName, tableName } = event.detail;
-      setSelectedTableForGeneration({
-        dataSourceId,
-        databaseName,
-        schemaName,
-        tableName,
-      });
-      setDataGenerationModalVisible(true);
-    };
-
-    window.addEventListener('openDataGenerationModal', handleOpenDataGenerationModal);
-    
-    return () => {
-      window.removeEventListener('openDataGenerationModal', handleOpenDataGenerationModal);
-    };
-  }, []);
 
   const getTable = (params: IPageParams) => {
     setCurrentPageNo(params.pageNo);
@@ -590,21 +567,6 @@ export default memo<IProps>((props) => {
           executeSuccessCallBack={executeSuccessCallBack}
         />
       </Modal>
-
-      <DataGenerationModal
-        visible={dataGenerationModalVisible}
-        onCancel={() => {
-          setDataGenerationModalVisible(false);
-          setSelectedTableForGeneration(null);
-        }}
-        onOk={(config) => {
-          console.log('Data generation config:', config);
-          setDataGenerationModalVisible(false);
-          setSelectedTableForGeneration(null);
-          // TODO: 处理数据生成完成后的逻辑
-        }}
-        tableInfo={selectedTableForGeneration}
-      />
     </div>
   );
 });
