@@ -16,9 +16,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 数据生成规则服务实现
- */
 @Slf4j
 @Service
 public class DataGenerationRuleServiceImpl implements DataGenerationRuleService {
@@ -26,17 +23,32 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
     private DataGenerationRuleMapper getMapper() {
         return Dbutils.getMapper(DataGenerationRuleMapper.class);
     }
+
+    private DataGenerationRuleQueryParam toQueryParam(DataGenerationRuleDO rule) {
+        DataGenerationRuleQueryParam param = new DataGenerationRuleQueryParam();
+        param.setId(rule.getId());
+        param.setDataSourceId(rule.getDataSourceId());
+        param.setDatabaseName(rule.getDatabaseName());
+        param.setSchemaName(rule.getSchemaName());
+        param.setTableName(rule.getTableName());
+        param.setColumnName(rule.getColumnName());
+        param.setGenerationType(rule.getGenerationType());
+        param.setSubType(rule.getSubType());
+        param.setCustomParams(rule.getCustomParams());
+        param.setComment(rule.getComment());
+        param.setUserId(rule.getUserId());
+        return param;
+    }
+
     @Override
     public ActionResult saveRule(DataGenerationRuleSaveParam param) {
         try {
             DataGenerationRuleDO rule = new DataGenerationRuleDO();
 
             if (param.getId() != null) {
-                // 更新现有规则
                 rule.setId(param.getId());
                 rule.setGenerationType(param.getGenerationType());
-                rule.setRowCount(param.getRowCount());
-                rule.setBatchSize(param.getBatchSize());
+                rule.setSubType(param.getSubType());
                 rule.setCustomParams(param.getCustomParams());
                 rule.setComment(param.getComment());
                 rule.setGmtModified(LocalDateTime.now());
@@ -44,19 +56,16 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
                 int result = getMapper().updateById(rule);
                 if (result > 0) {
                     return ActionResult.isSuccess();
-                } else {
-                    return ActionResult.fail("UPDATE_RULE_ERROR", "更新规则失败", null);
                 }
+                return ActionResult.fail("UPDATE_RULE_ERROR", "更新规则失败", null);
             } else {
-                // 创建新规则
                 rule.setDataSourceId(param.getDataSourceId());
                 rule.setDatabaseName(param.getDatabaseName());
                 rule.setSchemaName(param.getSchemaName());
                 rule.setTableName(param.getTableName());
                 rule.setColumnName(param.getColumnName());
                 rule.setGenerationType(param.getGenerationType());
-                rule.setRowCount(param.getRowCount());
-                rule.setBatchSize(param.getBatchSize());
+                rule.setSubType(param.getSubType());
                 rule.setCustomParams(param.getCustomParams());
                 rule.setComment(param.getComment());
                 rule.setUserId(param.getUserId());
@@ -66,9 +75,8 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
                 int result = getMapper().insert(rule);
                 if (result > 0) {
                     return ActionResult.isSuccess();
-                } else {
-                    return ActionResult.fail("SAVE_RULE_ERROR", "保存规则失败", null);
                 }
+                return ActionResult.fail("SAVE_RULE_ERROR", "保存规则失败", null);
             }
         } catch (Exception e) {
             log.error("Failed to save data generation rule", e);
@@ -77,10 +85,61 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
     }
 
     @Override
+    public ActionResult batchSaveRules(List<DataGenerationRuleSaveParam> params) {
+        if (params == null || params.isEmpty()) {
+            return ActionResult.isSuccess();
+        }
+        try {
+            DataGenerationRuleSaveParam first = params.get(0);
+            Long dataSourceId = first.getDataSourceId();
+            String databaseName = first.getDatabaseName();
+            String schemaName = first.getSchemaName();
+            String tableName = first.getTableName();
+            Long userId = first.getUserId();
+
+            QueryWrapper<DataGenerationRuleDO> deleteWrapper = new QueryWrapper<>();
+            deleteWrapper.eq("data_source_id", dataSourceId);
+            deleteWrapper.eq("database_name", databaseName);
+            if (schemaName != null) {
+                deleteWrapper.eq("schema_name", schemaName);
+            } else {
+                deleteWrapper.isNull("schema_name");
+            }
+            deleteWrapper.eq("table_name", tableName);
+            getMapper().delete(deleteWrapper);
+
+            LocalDateTime now = LocalDateTime.now();
+            List<DataGenerationRuleDO> rules = new ArrayList<>();
+            for (DataGenerationRuleSaveParam p : params) {
+                DataGenerationRuleDO rule = new DataGenerationRuleDO();
+                rule.setDataSourceId(dataSourceId);
+                rule.setDatabaseName(databaseName);
+                rule.setSchemaName(schemaName);
+                rule.setTableName(tableName);
+                rule.setColumnName(p.getColumnName());
+                rule.setGenerationType(p.getGenerationType());
+                rule.setSubType(p.getSubType());
+                rule.setCustomParams(p.getCustomParams());
+                rule.setComment(p.getComment());
+                rule.setUserId(userId);
+                rule.setGmtCreate(now);
+                rule.setGmtModified(now);
+                rules.add(rule);
+            }
+            for (DataGenerationRuleDO rule : rules) {
+                getMapper().insert(rule);
+            }
+            return ActionResult.isSuccess();
+        } catch (Exception e) {
+            log.error("Failed to batch save data generation rules", e);
+            return ActionResult.fail("BATCH_SAVE_RULES_ERROR", "批量保存规则失败: " + e.getMessage(), null);
+        }
+    }
+
+    @Override
     public ListResult<DataGenerationRuleQueryParam> queryRules(DataGenerationRuleQueryParam param) {
         try {
             QueryWrapper<DataGenerationRuleDO> queryWrapper = new QueryWrapper<>();
-
             if (param.getId() != null) {
                 queryWrapper.eq("id", param.getId());
             }
@@ -102,29 +161,13 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
             if (param.getUserId() != null) {
                 queryWrapper.eq("user_id", param.getUserId());
             }
-
             queryWrapper.orderByDesc("gmt_modified");
 
             List<DataGenerationRuleDO> rules = getMapper().selectList(queryWrapper);
             List<DataGenerationRuleQueryParam> result = new ArrayList<>();
-
             for (DataGenerationRuleDO rule : rules) {
-                DataGenerationRuleQueryParam queryParam = new DataGenerationRuleQueryParam();
-                queryParam.setId(rule.getId());
-                queryParam.setDataSourceId(rule.getDataSourceId());
-                queryParam.setDatabaseName(rule.getDatabaseName());
-                queryParam.setSchemaName(rule.getSchemaName());
-                queryParam.setTableName(rule.getTableName());
-                queryParam.setColumnName(rule.getColumnName());
-                queryParam.setGenerationType(rule.getGenerationType());
-                queryParam.setRowCount(rule.getRowCount());
-                queryParam.setBatchSize(rule.getBatchSize());
-                queryParam.setCustomParams(rule.getCustomParams());
-                queryParam.setComment(rule.getComment());
-                queryParam.setUserId(rule.getUserId());
-                result.add(queryParam);
+                result.add(toQueryParam(rule));
             }
-
             return ListResult.of(result);
         } catch (Exception e) {
             log.error("Failed to query data generation rules", e);
@@ -138,9 +181,8 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
             int result = getMapper().deleteById(id);
             if (result > 0) {
                 return ActionResult.isSuccess();
-            } else {
-                return ActionResult.fail("DELETE_RULE_ERROR", "删除规则失败", null);
             }
+            return ActionResult.fail("DELETE_RULE_ERROR", "删除规则失败", null);
         } catch (Exception e) {
             log.error("Failed to delete data generation rule", e);
             return ActionResult.fail("DELETE_RULE_ERROR", "删除规则失败: " + e.getMessage(), null);
@@ -154,31 +196,15 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
             queryWrapper.eq("data_source_id", dataSourceId);
             queryWrapper.eq("database_name", databaseName);
             queryWrapper.eq("table_name", tableName);
-
             if (schemaName != null) {
                 queryWrapper.eq("schema_name", schemaName);
             }
 
             List<DataGenerationRuleDO> rules = getMapper().selectList(queryWrapper);
             List<DataGenerationRuleQueryParam> result = new ArrayList<>();
-            
             for (DataGenerationRuleDO rule : rules) {
-                DataGenerationRuleQueryParam queryParam = new DataGenerationRuleQueryParam();
-                queryParam.setId(rule.getId());
-                queryParam.setDataSourceId(rule.getDataSourceId());
-                queryParam.setDatabaseName(rule.getDatabaseName());
-                queryParam.setSchemaName(rule.getSchemaName());
-                queryParam.setTableName(rule.getTableName());
-                queryParam.setColumnName(rule.getColumnName());
-                queryParam.setGenerationType(rule.getGenerationType());
-                queryParam.setRowCount(rule.getRowCount());
-                queryParam.setBatchSize(rule.getBatchSize());
-                queryParam.setCustomParams(rule.getCustomParams());
-                queryParam.setComment(rule.getComment());
-                queryParam.setUserId(rule.getUserId());
-                result.add(queryParam);
+                result.add(toQueryParam(rule));
             }
-            
             return ListResult.of(result);
         } catch (Exception e) {
             log.error("Failed to get data generation rules by table", e);

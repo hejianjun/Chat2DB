@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@TableName("data_generation_rule")
-public class DataGenerationRuleDO implements Serializable {
+@TableName("data_generation_config")
+public class DataGenerationConfigDO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -36,19 +36,11 @@ public class DataGenerationRuleDO implements Serializable {
     @TableField("table_name")
     private String tableName;
 
-    @TableField("column_name")
-    private String columnName;
+    @TableField("row_count")
+    private Integer rowCount;
 
-    @TableField("generation_type")
-    private String generationType;
-
-    @TableField("sub_type")
-    private String subType;
-
-    @TableField("custom_params")
-    private String customParams;
-
-    private String comment;
+    @TableField("batch_size")
+    private Integer batchSize;
 
     @TableField("user_id")
     private Long userId;

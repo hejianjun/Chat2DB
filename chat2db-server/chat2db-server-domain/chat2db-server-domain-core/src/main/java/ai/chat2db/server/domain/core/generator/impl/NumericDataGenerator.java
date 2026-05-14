@@ -1,72 +1,70 @@
 package ai.chat2db.server.domain.core.generator.impl;
 
 import ai.chat2db.server.domain.core.generator.DataGenerator;
+import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import net.datafaker.Faker;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 
-/**
- * 数值数据生成器
- */
 @Component
 public class NumericDataGenerator implements DataGenerator {
 
     @Override
     public Object generate(Faker faker, ColumnConfig columnConfig) {
-        String columnName = columnConfig.getColumnName().toLowerCase();
-        String dataType = columnConfig.getDataType().toLowerCase();
-        
-        if (dataType.contains("int") || dataType.contains("integer")) {
-            if (columnName.contains("age") || columnName.contains("年龄")) {
-                return faker.number().numberBetween(18, 80);
-            } else if (columnName.contains("score") || columnName.contains("分数") || columnName.contains("评分")) {
-                return faker.number().numberBetween(0, 100);
-            } else if (columnName.contains("count") || columnName.contains("数量") || columnName.contains("计数")) {
-                return faker.number().numberBetween(1, 1000);
-            } else {
-                return faker.number().numberBetween(1, Integer.MAX_VALUE / 1000);
-            }
-        } else if (dataType.contains("decimal") || dataType.contains("numeric") || dataType.contains("money")) {
-            if (columnName.contains("price") || columnName.contains("价格") || columnName.contains("金额")) {
-                return new BigDecimal(faker.number().randomDouble(2, 10, 10000))
-                    .setScale(2, RoundingMode.HALF_UP);
-            } else if (columnName.contains("salary") || columnName.contains("薪资") || columnName.contains("工资")) {
-                return new BigDecimal(faker.number().randomDouble(2, 3000, 50000))
-                    .setScale(2, RoundingMode.HALF_UP);
-            } else {
+        String subType = columnConfig.getSubType();
+        if (subType == null) {
+            subType = "integer";
+        }
+
+        Map<String, Object> params = columnConfig.getCustomParams();
+        int min = getIntParam(params, "min", 0);
+        int max = getIntParam(params, "max", 10000);
+
+        return switch (subType) {
+            case "integer" -> faker.number().numberBetween(min, max);
+            case "decimal" -> {
                 int scale = columnConfig.getScale() != null ? columnConfig.getScale() : 2;
-                return new BigDecimal(faker.number().randomDouble(scale, 0, 1000000))
-                    .setScale(scale, RoundingMode.HALF_UP);
+                yield new BigDecimal(faker.number().randomDouble(scale, min, max))
+                        .setScale(scale, RoundingMode.HALF_UP);
             }
-        } else if (dataType.contains("float") || dataType.contains("double")) {
-            if (columnName.contains("rate") || columnName.contains("比率") || columnName.contains("百分比")) {
-                return faker.number().randomDouble(4, 0, 1);
-            } else {
-                return faker.number().randomDouble(6, 0, 1000000);
-            }
-        } else {
-            // 默认生成整数
-            return faker.number().numberBetween(1, 1000);
+            case "price" -> new BigDecimal(faker.number().randomDouble(2, 10, 10000))
+                    .setScale(2, RoundingMode.HALF_UP);
+            case "age" -> faker.number().numberBetween(18, 80);
+            case "score" -> faker.number().numberBetween(0, 100);
+            default -> faker.number().numberBetween(min, max);
+        };
+    }
+
+    private int getIntParam(Map<String, Object> params, String key, int defaultValue) {
+        if (params == null || !params.containsKey(key)) {
+            return defaultValue;
+        }
+        Object val = params.get(key);
+        if (val instanceof Number) {
+            return ((Number) val).intValue();
+        }
+        try {
+            return Integer.parseInt(val.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 
     @Override
-    public boolean supports(String dataType) {
-        return "number".equals(dataType) || 
-               "numeric".equals(dataType) || 
-               "integer".equals(dataType) ||
-               "decimal".equals(dataType) ||
-               "float".equals(dataType) ||
-               "double".equals(dataType) ||
-               "money".equals(dataType) ||
-               "age".equals(dataType) ||
-               "score".equals(dataType);
-    }
-
-    @Override
-    public String getGeneratorType() {
-        return "numeric";
+    public GeneratorMetadata getMetadata() {
+        return GeneratorMetadata.full("numeric", "数值", List.of(
+                new GeneratorMetadata.SubTypeOption("integer", "整数"),
+                new GeneratorMetadata.SubTypeOption("decimal", "小数"),
+                new GeneratorMetadata.SubTypeOption("price", "价格"),
+                new GeneratorMetadata.SubTypeOption("age", "年龄"),
+                new GeneratorMetadata.SubTypeOption("score", "评分")
+        ), List.of(
+                new GeneratorMetadata.ConfigField("min", "最小值", "number", 0),
+                new GeneratorMetadata.ConfigField("max", "最大值", "number", 10000)
+        ));
     }
 }

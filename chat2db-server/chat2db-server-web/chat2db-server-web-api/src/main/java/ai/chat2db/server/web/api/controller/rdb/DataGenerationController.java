@@ -3,21 +3,16 @@ package ai.chat2db.server.web.api.controller.rdb;
 import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
-import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
+import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
-import ai.chat2db.server.web.api.controller.rdb.request.DataGenerationRequestVO;
 import ai.chat2db.server.web.api.controller.rdb.converter.DataGenerationConverter;
+import ai.chat2db.server.web.api.controller.rdb.request.DataGenerationRequestVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
-/**
- * 数据生成控制器
- */
 @Slf4j
 @RestController
 @ConnectionInfoAspect
@@ -27,9 +22,6 @@ public class DataGenerationController {
     @Autowired
     private DataGenerationService dataGenerationService;
 
-    /**
-     * 获取表列信息用于数据生成配置
-     */
     @PostMapping("/config")
     public ListResult<ai.chat2db.server.domain.api.param.ColumnConfigParam> getTableColumns(
             @RequestBody DataGenerationRequestVO requestVO) {
@@ -42,10 +34,6 @@ public class DataGenerationController {
         }
     }
 
-
-    /**
-     * 生成数据预览（10行）
-     */
     @PostMapping("/preview")
     public DataResult<DataGenerationPreviewVO> generatePreview(
             @RequestBody DataGenerationRequestVO requestVO) {
@@ -60,9 +48,6 @@ public class DataGenerationController {
         }
     }
 
-    /**
-     * 执行数据生成（异步任务）
-     */
     @PostMapping("/execute")
     public DataResult<Long> executeDataGeneration(
             @RequestBody DataGenerationRequestVO requestVO) {
@@ -75,9 +60,6 @@ public class DataGenerationController {
         }
     }
 
-    /**
-     * 获取支持的数据生成类型列表
-     */
     @GetMapping("/supported-types")
     public ListResult<String> getSupportedGenerationTypes() {
         try {
@@ -85,6 +67,16 @@ public class DataGenerationController {
         } catch (Exception e) {
             log.error("Failed to get supported generation types", e);
             return ListResult.error("获取支持的生成类型失败: " + e.getMessage(), null);
+        }
+    }
+
+    @GetMapping("/metadata")
+    public ListResult<GeneratorMetadata> getAllGeneratorMetadata() {
+        try {
+            return dataGenerationService.getAllGeneratorMetadata();
+        } catch (Exception e) {
+            log.error("Failed to get all generator metadata", e);
+            return ListResult.error("获取生成器元数据失败: " + e.getMessage(), null);
         }
     }
 }

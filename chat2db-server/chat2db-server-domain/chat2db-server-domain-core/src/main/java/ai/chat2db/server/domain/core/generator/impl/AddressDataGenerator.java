@@ -1,49 +1,42 @@
 package ai.chat2db.server.domain.core.generator.impl;
 
 import ai.chat2db.server.domain.core.generator.DataGenerator;
+import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import net.datafaker.Faker;
 import org.springframework.stereotype.Component;
 
-/**
- * 地址数据生成器
- */
+import java.util.List;
+
 @Component
 public class AddressDataGenerator implements DataGenerator {
 
     @Override
     public Object generate(Faker faker, ColumnConfig columnConfig) {
-        String columnName = columnConfig.getColumnName().toLowerCase();
-        
-        if (columnName.contains("street") || columnName.contains("街道") || columnName.contains("街")) {
-            return faker.address().streetAddress();
-        } else if (columnName.contains("city") || columnName.contains("城市")) {
-            return faker.address().city();
-        } else if (columnName.contains("state") || columnName.contains("省份") || columnName.contains("州")) {
-            return faker.address().state();
-        } else if (columnName.contains("zip") || columnName.contains("postal") || columnName.contains("邮编")) {
-            return faker.address().zipCode();
-        } else if (columnName.contains("country") || columnName.contains("国家")) {
-            return faker.address().country();
-        } else if (columnName.contains("full") || columnName.contains("完整") || columnName.contains("全部")) {
-            return faker.address().fullAddress();
-        } else {
-            // 默认生成完整地址
-            return faker.address().fullAddress();
+        String subType = columnConfig.getSubType();
+        if (subType == null) {
+            subType = "fullAddress";
         }
+
+        return switch (subType) {
+            case "street" -> faker.address().streetAddress();
+            case "city" -> faker.address().city();
+            case "state" -> faker.address().state();
+            case "zip" -> faker.address().zipCode();
+            case "country" -> faker.address().country();
+            case "fullAddress" -> faker.address().fullAddress();
+            default -> faker.address().fullAddress();
+        };
     }
 
     @Override
-    public boolean supports(String dataType) {
-        return "address".equals(dataType) || 
-               "street".equals(dataType) || 
-               "city".equals(dataType) ||
-               "state".equals(dataType) ||
-               "zip".equals(dataType) ||
-               "country".equals(dataType);
-    }
-
-    @Override
-    public String getGeneratorType() {
-        return "address";
+    public GeneratorMetadata getMetadata() {
+        return GeneratorMetadata.of("address", "地址", List.of(
+                new GeneratorMetadata.SubTypeOption("street", "街道"),
+                new GeneratorMetadata.SubTypeOption("city", "城市"),
+                new GeneratorMetadata.SubTypeOption("state", "省份"),
+                new GeneratorMetadata.SubTypeOption("zip", "邮编"),
+                new GeneratorMetadata.SubTypeOption("country", "国家"),
+                new GeneratorMetadata.SubTypeOption("fullAddress", "完整地址")
+        ));
     }
 }

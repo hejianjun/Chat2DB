@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Form, Input, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Modal, Form, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
 import styles from './index.less';
 import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
+import createRequest from '@/service/base';
 
 const { Option } = Select;
 
@@ -12,17 +13,50 @@ export interface IDataGenerationModalParams {
   tableName: string;
 }
 
+interface GeneratorSubType {
+  value: string;
+  label: string;
+}
+
+interface GeneratorConfigField {
+  key: string;
+  label: string;
+  type: string;
+  defaultValue: any;
+}
+
+interface GeneratorMetadata {
+  generatorType: string;
+  label: string;
+  subTypes: GeneratorSubType[];
+  configFields: GeneratorConfigField[];
+}
+
 interface ColumnConfig {
   columnName: string;
   dataType: string;
   comment?: string;
   generationType: string;
+  subType?: string;
   nullable: boolean;
+  maxLength?: number;
+  scale?: number;
+  customParams?: Record<string, any>;
 }
 
-interface DataGenerationConfig {
-  rowCount: number;
-  columnConfigs: Record<string, string>;
+interface PreviewRow {
+  [key: string]: any;
+}
+
+interface PreviewVO {
+  tableName: string;
+  previewData: PreviewRow[];
+  columns: {
+    columnName: string;
+    dataType: string;
+    generationType: string;
+    comment?: string;
+  }[];
 }
 
 const DataGenerationModal: React.FC = () => {
@@ -31,59 +65,67 @@ const DataGenerationModal: React.FC = () => {
   const [tableInfo, setTableInfo] = useState<IDataGenerationModalParams | null>(null);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
-  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [generatorMetadata, setGeneratorMetadata] = useState<GeneratorMetadata[]>([]);
+  const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const tableInfoRef = useRef<IDataGenerationModalParams | null>(null);
 
-  // 支持的数据生成类型
-  const generationTypes = [
-    { value: 'text', label: '文本' },
-    { value: 'name', label: '姓名' },
-    { value: 'email', label: '邮箱' },
-    { value: 'phone', label: '电话' },
-    { value: 'address', label: '地址' },
-    { value: 'company', label: '公司' },
-    { value: 'date', label: '日期' },
-    { value: 'datetime', label: '日期时间' },
-    { value: 'number', label: '数字' },
-    { value: 'numeric', label: '数值' },
-  ];
-
-  const openDataGenerationModal = (params: IDataGenerationModalParams) => {
+  const openDataGenerationModal = useCallback((params: IDataGenerationModalParams) => {
     setOpen(true);
     setTableInfo(params);
     tableInfoRef.current = params;
-  };
+  }, []);
 
   useEffect(() => {
     setOpenDataGenerationModal(openDataGenerationModal);
-  }, []);
+  }, [openDataGenerationModal]);
+
+  useEffect(() => {
+    if (open) {
+      loadGeneratorMetadata();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open && tableInfo) {
       loadTableColumns();
     }
-  }, [open]);
+  }, [open, tableInfo]);
+
+  const loadGeneratorMetadata = async () => {
+    try {
+      const request = createRequest<{ data: GeneratorMetadata[] }>(
+        '/api/rdb/table/generate-data/metadata',
+        'get'
+      );
+      const res = await request();
+      if (res?.data) {
+        setGeneratorMetadata(res.data);
+      }
+    } catch (error) {
+      console.error('Failed to load generator metadata', error);
+    }
+  };
 
   const loadTableColumns = async () => {
+    if (!tableInfo) return;
     setLoading(true);
     try {
-      // TODO: 调用API获取表列信息
-      // const response = await dataGenerationService.getTableColumns(tableInfo);
-      // setColumns(response.data);
-      
-      // 模拟数据
-      const mockColumns: ColumnConfig[] = [
-        { columnName: 'id', dataType: 'BIGINT', comment: '主键ID', generationType: 'number', nullable: false },
-        { columnName: 'name', dataType: 'VARCHAR', comment: '姓名', generationType: 'name', nullable: false },
-        { columnName: 'email', dataType: 'VARCHAR', comment: '邮箱地址', generationType: 'email', nullable: true },
-        { columnName: 'phone', dataType: 'VARCHAR', comment: '电话号码', generationType: 'phone', nullable: true },
-        { columnName: 'address', dataType: 'TEXT', comment: '地址', generationType: 'address', nullable: true },
-        { columnName: 'created_at', dataType: 'TIMESTAMP', comment: '创建时间', generationType: 'datetime', nullable: false },
-      ];
-      setColumns(mockColumns);
+      const request = createRequest<{ data: ColumnConfig[] }>(
+        '/api/rdb/table/generate-data/config',
+        'post'
+      );
+      const res = await request({
+        dataSourceId: tableInfo.dataSourceId,
+        databaseName: tableInfo.databaseName,
+        schemaName: tableInfo.schemaName,
+        tableName: tableInfo.tableName,
+      });
+      if (res?.data) {
+        setColumns(res.data);
+      }
     } catch (error) {
       message.error('加载表列信息失败');
     } finally {
@@ -92,40 +134,43 @@ const DataGenerationModal: React.FC = () => {
   };
 
   const handleAiGuess = async () => {
-    setLoading(true);
-    try {
-      // TODO: 调用AI推断API
-      // const response = await dataGenerationService.aiInferGenerationTypes(tableInfo);
-      // 更新columns的generationType
-      
-      message.success('AI推断完成');
-    } catch (error) {
-      message.error('AI推断失败');
-    } finally {
-      setLoading(false);
-    }
+    message.info('AI推断功能开发中');
+  };
+
+  const buildColumnConfigs = () => {
+    return columns.map(col => ({
+      columnName: col.columnName,
+      dataType: col.dataType,
+      generationType: col.generationType,
+      subType: col.subType,
+      nullable: col.nullable,
+      maxLength: col.maxLength,
+      scale: col.scale,
+      customParams: col.customParams,
+    }));
   };
 
   const handlePreview = async () => {
-    const values = await form.validateFields();
+    if (!tableInfo) return;
     setLoading(true);
     try {
-      // TODO: 调用预览API
-      // const response = await dataGenerationService.generatePreview({
-      //   ...tableInfo,
-      //   rowCount: 10,
-      //   columnConfigs: values.columnConfigs
-      // });
-      // setPreviewData(response.data.previewData);
-      // setShowPreview(true);
-      
-      // 模拟预览数据
-      const mockPreview = [
-        { id: 1, name: '张三', email: 'zhangsan@example.com', phone: '13800138000', address: '北京市朝阳区', created_at: '2023-01-01 10:00:00' },
-        { id: 2, name: '李四', email: 'lisi@example.com', phone: '13800138001', address: '上海市浦东新区', created_at: '2023-01-02 10:00:00' },
-      ];
-      setPreviewData(mockPreview);
-      setShowPreview(true);
+      const rowCount = form.getFieldValue('rowCount') || 10;
+      const request = createRequest<{ data: PreviewVO }>(
+        '/api/rdb/table/generate-data/preview',
+        'post'
+      );
+      const res = await request({
+        dataSourceId: tableInfo.dataSourceId,
+        databaseName: tableInfo.databaseName,
+        schemaName: tableInfo.schemaName,
+        tableName: tableInfo.tableName,
+        rowCount,
+        columnConfigs: buildColumnConfigs(),
+      });
+      if (res?.data) {
+        setPreviewData(res.data.previewData || []);
+        setShowPreview(true);
+      }
     } catch (error) {
       message.error('生成预览失败');
     } finally {
@@ -134,48 +179,64 @@ const DataGenerationModal: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    const values = await form.validateFields();
+    if (!tableInfo) return;
     setGenerating(true);
     setProgress(0);
-    
     try {
-      // TODO: 调用数据生成API
-      // const response = await dataGenerationService.executeDataGeneration({
-      //   ...tableInfo,
-      //   ...values
-      // });
-      
-      // 模拟进度更新
-      const progressInterval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(progressInterval);
-            return 100;
-          }
-          return prev + 10;
-        });
-      }, 500);
-
-      setTimeout(() => {
-        clearInterval(progressInterval);
-        setProgress(100);
-        setGenerating(false);
-        message.success('数据生成完成');
+      const rowCount = form.getFieldValue('rowCount') || 100;
+      const request = createRequest<{ data: number }>(
+        '/api/rdb/table/generate-data/execute',
+        'post'
+      );
+      const res = await request({
+        dataSourceId: tableInfo.dataSourceId,
+        databaseName: tableInfo.databaseName,
+        schemaName: tableInfo.schemaName,
+        tableName: tableInfo.tableName,
+        rowCount,
+        columnConfigs: buildColumnConfigs(),
+      });
+      if (res?.data) {
+        message.success('数据生成任务已创建， taskId: ' + res.data);
         setOpen(false);
-      }, 5000);
-      
+      }
     } catch (error) {
       message.error('数据生成失败');
+    } finally {
       setGenerating(false);
+      setProgress(0);
     }
   };
 
   const handleColumnTypeChange = (columnName: string, generationType: string) => {
-    setColumns(prev => prev.map(col => 
-      col.columnName === columnName 
-        ? { ...col, generationType }
-        : col
+    setColumns(prev => prev.map(col => {
+      if (col.columnName === columnName) {
+        const meta = generatorMetadata.find(m => m.generatorType === generationType);
+        const defaultSubType = meta?.subTypes?.[0]?.value;
+        return { ...col, generationType, subType: defaultSubType };
+      }
+      return col;
+    }));
+  };
+
+  const handleSubTypeChange = (columnName: string, subType: string) => {
+    setColumns(prev => prev.map(col =>
+      col.columnName === columnName ? { ...col, subType } : col
     ));
+  };
+
+  const handleCustomParamChange = (columnName: string, fieldKey: string, value: any) => {
+    setColumns(prev => prev.map(col => {
+      if (col.columnName === columnName) {
+        const customParams = { ...(col.customParams || {}), [fieldKey]: value };
+        return { ...col, customParams };
+      }
+      return col;
+    }));
+  };
+
+  const getGeneratorMeta = (generationType: string): GeneratorMetadata | undefined => {
+    return generatorMetadata.find(m => m.generatorType === generationType);
   };
 
   const columnsConfig = [
@@ -183,54 +244,104 @@ const DataGenerationModal: React.FC = () => {
       title: '列名',
       dataIndex: 'columnName',
       key: 'columnName',
-      width: 150,
+      width: 140,
     },
     {
       title: '数据类型',
       dataIndex: 'dataType',
       key: 'dataType',
-      width: 120,
+      width: 100,
     },
     {
       title: '注释',
       dataIndex: 'comment',
       key: 'comment',
-      width: 150,
+      width: 100,
     },
     {
       title: '生成类型',
       key: 'generationType',
-      width: 150,
-      render: (text: string, record: ColumnConfig) => (
+      width: 130,
+      render: (_: any, record: ColumnConfig) => (
         <Select
           value={record.generationType}
           onChange={(value) => handleColumnTypeChange(record.columnName, value)}
           style={{ width: '100%' }}
           size="small"
         >
-          {generationTypes.map(type => (
-            <Option key={type.value} value={type.value}>
-              {type.label}
+          {generatorMetadata.map(meta => (
+            <Option key={meta.generatorType} value={meta.generatorType}>
+              {meta.label}
             </Option>
           ))}
         </Select>
       ),
     },
+    {
+      title: '子类型',
+      key: 'subType',
+      width: 130,
+      render: (_: any, record: ColumnConfig) => {
+        const meta = getGeneratorMeta(record.generationType);
+        if (!meta?.subTypes?.length) return null;
+        return (
+          <Select
+            value={record.subType}
+            onChange={(value) => handleSubTypeChange(record.columnName, value)}
+            style={{ width: '100%' }}
+            size="small"
+            placeholder="选择子类型"
+          >
+            {meta.subTypes.map(st => (
+              <Option key={st.value} value={st.value}>
+                {st.label}
+              </Option>
+            ))}
+          </Select>
+        );
+      },
+    },
+    {
+      title: '自定义参数',
+      key: 'customParams',
+      width: 200,
+      render: (_: any, record: ColumnConfig) => {
+        const meta = getGeneratorMeta(record.generationType);
+        if (!meta?.configFields?.length) return null;
+        return (
+          <Space size={4} wrap>
+            {meta.configFields.map(field => (
+              <InputNumber
+                key={field.key}
+                size="small"
+                style={{ width: 80 }}
+                placeholder={field.label}
+                value={(record.customParams as any)?.[field.key] ?? field.defaultValue}
+                onChange={(value) => handleCustomParamChange(record.columnName, field.key, value)}
+              />
+            ))}
+          </Space>
+        );
+      },
+    },
   ];
 
-  const previewColumns = columns.map(col => ({
-    title: col.columnName,
-    dataIndex: col.columnName,
-    key: col.columnName,
-    width: 120,
-  }));
+  const previewColumns = previewData.length > 0
+    ? Object.keys(previewData[0]).map(key => ({
+        title: key,
+        dataIndex: key,
+        key,
+        width: 120,
+        ellipsis: true,
+      }))
+    : [];
 
   return (
     <Modal
       title="生成数据"
       open={open}
       onCancel={() => setOpen(false)}
-      width={900}
+      width={1100}
       footer={[
         <Button key="cancel" onClick={() => setOpen(false)}>
           取消
@@ -245,12 +356,12 @@ const DataGenerationModal: React.FC = () => {
     >
       <Form form={form} layout="vertical">
         <Form.Item label="生成行数" name="rowCount" initialValue={100}>
-          <InputNumber min={1} max={100000} style={{ width: '100%' }} />
+          <InputNumber min={1} max={100000} style={{ width: 200 }} />
         </Form.Item>
-        
+
         <Space style={{ marginBottom: 16 }}>
           <Button onClick={handleAiGuess} loading={loading}>
-            猜一猜
+            AI猜一猜
           </Button>
         </Space>
 
@@ -261,7 +372,7 @@ const DataGenerationModal: React.FC = () => {
           pagination={false}
           size="small"
           loading={loading}
-          scroll={{ y: 200 }}
+          scroll={{ y: 250 }}
         />
 
         {showPreview && (
@@ -270,7 +381,7 @@ const DataGenerationModal: React.FC = () => {
             <Table
               columns={previewColumns}
               dataSource={previewData}
-              rowKey="id"
+              rowKey={(record, index) => String(index)}
               pagination={false}
               size="small"
               scroll={{ x: true, y: 150 }}

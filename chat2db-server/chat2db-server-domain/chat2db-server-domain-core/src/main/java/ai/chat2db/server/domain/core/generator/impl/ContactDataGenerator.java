@@ -1,43 +1,36 @@
 package ai.chat2db.server.domain.core.generator.impl;
 
 import ai.chat2db.server.domain.core.generator.DataGenerator;
+import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import net.datafaker.Faker;
 import org.springframework.stereotype.Component;
 
-/**
- * 联系方式数据生成器
- */
+import java.util.List;
+
 @Component
 public class ContactDataGenerator implements DataGenerator {
 
     @Override
     public Object generate(Faker faker, ColumnConfig columnConfig) {
-        String columnName = columnConfig.getColumnName().toLowerCase();
-        
-        if (columnName.contains("email") || columnName.contains("邮箱") || columnName.contains("邮件")) {
-            return faker.internet().emailAddress();
-        } else if (columnName.contains("phone") || columnName.contains("电话") || columnName.contains("手机")) {
-            return faker.phoneNumber().phoneNumber();
-        } else if (columnName.contains("mobile") || columnName.contains("手机号")) {
-            return faker.phoneNumber().cellPhone();
-        } else if (columnName.contains("fax") || columnName.contains("传真")) {
-            return faker.phoneNumber().phoneNumber();
-        } else {
-            // 默认生成邮箱
-            return faker.internet().emailAddress();
+        String subType = columnConfig.getSubType();
+        if (subType == null) {
+            subType = "email";
         }
+
+        return switch (subType) {
+            case "email" -> faker.internet().emailAddress();
+            case "phone" -> faker.phoneNumber().phoneNumber();
+            case "mobile" -> faker.phoneNumber().cellPhone();
+            default -> faker.internet().emailAddress();
+        };
     }
 
     @Override
-    public boolean supports(String dataType) {
-        return "email".equals(dataType) || 
-               "phone".equals(dataType) || 
-               "mobile".equals(dataType) ||
-               "contact".equals(dataType);
-    }
-
-    @Override
-    public String getGeneratorType() {
-        return "contact";
+    public GeneratorMetadata getMetadata() {
+        return GeneratorMetadata.of("contact", "联系方式", List.of(
+                new GeneratorMetadata.SubTypeOption("email", "邮箱"),
+                new GeneratorMetadata.SubTypeOption("phone", "电话"),
+                new GeneratorMetadata.SubTypeOption("mobile", "手机号")
+        ));
     }
 }
