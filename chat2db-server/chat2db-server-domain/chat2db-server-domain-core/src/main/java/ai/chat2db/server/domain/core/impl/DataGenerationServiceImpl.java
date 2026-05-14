@@ -75,7 +75,8 @@ public class DataGenerationServiceImpl implements DataGenerationService {
             for (TableColumn column : tableColumns) {
                 ColumnConfigParam config = new ColumnConfigParam();
                 config.setColumnName(column.getName());
-                config.setDataType(column.getDataType().toString());
+                String dataType = column.getDataType() != null ? column.getDataType().toString() : "VARCHAR";
+                config.setDataType(dataType);
                 config.setComment(column.getComment());
                 config.setNullable(column.getNullable() != null && column.getNullable() == 1);
                 config.setMaxLength(column.getColumnSize());
@@ -93,7 +94,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                         }
                     }
                 } else {
-                    DataGenerator defaultGenerator = dataGeneratorFactory.getDefaultGenerator(column.getDataType().toString());
+                    DataGenerator defaultGenerator = dataGeneratorFactory.getDefaultGenerator(dataType);
                     if (defaultGenerator != null) {
                         GeneratorMetadata metadata = defaultGenerator.getMetadata();
                         config.setGenerationType(metadata.getGeneratorType());
