@@ -24,20 +24,20 @@ import static ai.chat2db.spi.util.SortUtils.sortDatabase;
 public class MysqlMetaData extends DefaultMetaService implements MetaData {
 
     private List<String> systemDatabases = Arrays.asList("information_schema", "performance_schema", "mysql", "sys");
-    
+
     private static final String SELECT_TABLES_SQL = "SELECT TABLE_NAME, TABLE_COMMENT, TABLE_ROWS, ENGINE, CREATE_TIME, UPDATE_TIME " +
             "FROM information_schema.tables WHERE TABLE_SCHEMA = '%s' AND TABLE_TYPE IN ('BASE TABLE', 'SYSTEM TABLE')";
-    
+
     @Override
     public List<Table> tables(Connection connection, @NotEmpty String databaseName, String schemaName, String tableName) {
         List<Table> tables = new ArrayList<>();
-        
+
         String sql = String.format(SELECT_TABLES_SQL, databaseName);
         if (StringUtils.isNotBlank(tableName)) {
             sql += String.format(" AND TABLE_NAME = '%s'", tableName);
         }
         sql += " ORDER BY TABLE_NAME";
-        
+
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 while (resultSet.next()) {
@@ -49,30 +49,30 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                             .type("BASE TABLE")
                             .engine(resultSet.getString("ENGINE"))
                             .build();
-                    
+
                     // 设置预估行数（InnoDB 等引擎可能返回 NULL）
                     long rowCount = resultSet.getLong("TABLE_ROWS");
                     if (!resultSet.wasNull()) {
                         table.setRowCount(rowCount);
                     }
-                    
+
                     tables.add(table);
                 }
                 return null;
             });
         } catch (Exception e) {
             // 如果查询失败，回退到 JDBC 元数据方式
-            return SQLExecutor.getInstance().tables(connection, databaseName, schemaName, tableName, 
+            return SQLExecutor.getInstance().tables(connection, databaseName, schemaName, tableName,
                     new String[]{"TABLE", "SYSTEM TABLE"});
         }
-        
+
         return tables;
     }
-    
+
     @Override
     public List<Database> databases(Connection connection) {
         List<Database> databases = SQLExecutor.getInstance().databases(connection);
-        return sortDatabase(databases,systemDatabases,connection);
+        return sortDatabase(databases, systemDatabases, connection);
     }
 
 
@@ -80,9 +80,9 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
     public String tableDDL(Connection connection, @NotEmpty String databaseName, String schemaName,
                            @NotEmpty String tableName) {
         String sql;
-        if(StringUtils.isEmpty(databaseName)) {
+        if (StringUtils.isEmpty(databaseName)) {
             sql = "SHOW CREATE TABLE " + format(tableName);
-        }else{
+        } else {
             sql = "SHOW CREATE TABLE " + format(databaseName) + "."
                     + format(tableName);
         }
@@ -112,18 +112,18 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         function.setDatabaseName(databaseName);
         function.setSchemaName(schemaName);
         function.setName(functionName);
-        
+
         // 首先尝试使用 information_schema.routines 获取信息
         String sql = String.format(ROUTINES_SQL, "FUNCTION", databaseName, functionName);
         log.info("[MySQL] Querying function detail: {}", sql);
-        
+
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 if (resultSet.next()) {
                     function.setSpecificName(resultSet.getString("SPECIFIC_NAME"));
                     function.setComment(resultSet.getString("ROUTINE_COMMENT"));
                     function.setFunctionBody(resultSet.getString("ROUTINE_DEFINITION"));
-                    log.info("[MySQL] Function {} found, body length: {}", functionName, 
+                    log.info("[MySQL] Function {} found, body length: {}", functionName,
                             function.getFunctionBody() != null ? function.getFunctionBody().length() : 0);
                 } else {
                     log.warn("[MySQL] Function {} not found in information_schema.routines", functionName);
@@ -133,19 +133,19 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         } catch (Exception e) {
             log.error("[MySQL] Failed to query function from information_schema: {}", e.getMessage());
         }
-        
+
         // 如果 ROUTINE_DEFINITION 为空，尝试使用 SHOW CREATE FUNCTION
         if (StringUtils.isBlank(function.getFunctionBody())) {
             String showCreateSql = "SHOW CREATE FUNCTION `" + databaseName + "`.`" + functionName + "`";
             log.info("[MySQL] Trying SHOW CREATE FUNCTION: {}", showCreateSql);
-            
+
             try {
                 SQLExecutor.getInstance().execute(connection, showCreateSql, resultSet -> {
                     if (resultSet.next()) {
                         String createFunc = resultSet.getString("Create Function");
                         if (StringUtils.isNotBlank(createFunc)) {
                             function.setFunctionBody(createFunc);
-                            log.info("[MySQL] Got function body from SHOW CREATE FUNCTION, length: {}", 
+                            log.info("[MySQL] Got function body from SHOW CREATE FUNCTION, length: {}",
                                     createFunc.length());
                         }
                     }
@@ -155,7 +155,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 log.error("[MySQL] SHOW CREATE FUNCTION failed: {}", e.getMessage());
             }
         }
-        
+
         return function;
     }
 
@@ -181,7 +181,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
             return triggers;
         });
     }
-    
+
     /**
      * MySQL 的 JDBC 驱动 getProcedures() 会同时返回 FUNCTION 和 PROCEDURE
      * 这里使用自定义 SQL 只返回 PROCEDURE 类型
@@ -189,12 +189,12 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<Procedure> procedures(Connection connection, String databaseName, String schemaName) {
         String sql = "SELECT SPECIFIC_NAME, ROUTINE_COMMENT, ROUTINE_SCHEMA " +
-                     "FROM information_schema.routines " +
-                     "WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_SCHEMA = '" + databaseName + "' " +
-                     "ORDER BY ROUTINE_NAME";
-        
+                "FROM information_schema.routines " +
+                "WHERE ROUTINE_TYPE = 'PROCEDURE' AND ROUTINE_SCHEMA = '" + databaseName + "' " +
+                "ORDER BY ROUTINE_NAME";
+
         log.info("[MySQL] Querying procedures: {}", sql);
-        
+
         final List<Procedure> resultHolder = new ArrayList<>();
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
@@ -217,10 +217,10 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 return allProcedures;
             }
         }
-        
+
         return resultHolder;
     }
-    
+
     /**
      * MySQL 的 JDBC 驱动 getFunctions() 可能返回不准确
      * 这里使用自定义 SQL 只返回 FUNCTION 类型
@@ -228,12 +228,12 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<ai.chat2db.spi.model.Function> functions(Connection connection, String databaseName, String schemaName) {
         String sql = "SELECT SPECIFIC_NAME, ROUTINE_COMMENT, ROUTINE_SCHEMA " +
-                     "FROM information_schema.routines " +
-                     "WHERE ROUTINE_TYPE = 'FUNCTION' AND ROUTINE_SCHEMA = '" + databaseName + "' " +
-                     "ORDER BY ROUTINE_NAME";
-        
+                "FROM information_schema.routines " +
+                "WHERE ROUTINE_TYPE = 'FUNCTION' AND ROUTINE_SCHEMA = '" + databaseName + "' " +
+                "ORDER BY ROUTINE_NAME";
+
         log.info("[MySQL] Querying functions: {}", sql);
-        
+
         final List<ai.chat2db.spi.model.Function> resultHolder = new ArrayList<>();
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
@@ -256,7 +256,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 return allFunctions;
             }
         }
-        
+
         return resultHolder;
     }
 
@@ -268,16 +268,16 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         trigger.setDatabaseName(databaseName);
         trigger.setSchemaName(schemaName);
         trigger.setName(triggerName);
-        
+
         String sql = String.format(TRIGGER_SQL, databaseName, triggerName);
         log.info("[MySQL] Querying trigger detail: {}", sql);
-        
+
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 if (resultSet.next()) {
                     trigger.setEventManipulation(resultSet.getString("EVENT_MANIPULATION"));
                     trigger.setTriggerBody(resultSet.getString("ACTION_STATEMENT"));
-                    log.info("[MySQL] Trigger {} found, body length: {}", triggerName, 
+                    log.info("[MySQL] Trigger {} found, body length: {}", triggerName,
                             trigger.getTriggerBody() != null ? trigger.getTriggerBody().length() : 0);
                 } else {
                     log.warn("[MySQL] Trigger {} not found in information_schema.triggers", triggerName);
@@ -287,7 +287,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         } catch (Exception e) {
             log.error("[MySQL] Failed to query trigger from information_schema: {}", e.getMessage());
         }
-        
+
         return trigger;
     }
 
@@ -298,18 +298,18 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         procedure.setDatabaseName(databaseName);
         procedure.setSchemaName(schemaName);
         procedure.setName(procedureName);
-        
+
         // 首先尝试使用 information_schema.routines 获取信息
         String sql = String.format(ROUTINES_SQL, "PROCEDURE", databaseName, procedureName);
         log.info("[MySQL] Querying procedure detail: {}", sql);
-        
+
         try {
             SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 if (resultSet.next()) {
                     procedure.setSpecificName(resultSet.getString("SPECIFIC_NAME"));
                     procedure.setComment(resultSet.getString("ROUTINE_COMMENT"));
                     procedure.setProcedureBody(resultSet.getString("ROUTINE_DEFINITION"));
-                    log.info("[MySQL] Procedure {} found, body length: {}", procedureName, 
+                    log.info("[MySQL] Procedure {} found, body length: {}", procedureName,
                             procedure.getProcedureBody() != null ? procedure.getProcedureBody().length() : 0);
                 } else {
                     log.warn("[MySQL] Procedure {} not found in information_schema.routines", procedureName);
@@ -319,19 +319,19 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
         } catch (Exception e) {
             log.error("[MySQL] Failed to query procedure from information_schema: {}", e.getMessage());
         }
-        
+
         // 如果 ROUTINE_DEFINITION 为空，尝试使用 SHOW CREATE PROCEDURE
         if (StringUtils.isBlank(procedure.getProcedureBody())) {
             String showCreateSql = "SHOW CREATE PROCEDURE `" + databaseName + "`.`" + procedureName + "`";
             log.info("[MySQL] Trying SHOW CREATE PROCEDURE: {}", showCreateSql);
-            
+
             try {
                 SQLExecutor.getInstance().execute(connection, showCreateSql, resultSet -> {
                     if (resultSet.next()) {
                         String createProc = resultSet.getString("Create Procedure");
                         if (StringUtils.isNotBlank(createProc)) {
                             procedure.setProcedureBody(createProc);
-                            log.info("[MySQL] Got procedure body from SHOW CREATE PROCEDURE, length: {}", 
+                            log.info("[MySQL] Got procedure body from SHOW CREATE PROCEDURE, length: {}",
                                     createProc.length());
                         }
                     }
@@ -341,7 +341,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 log.error("[MySQL] SHOW CREATE PROCEDURE failed: {}", e.getMessage());
             }
         }
-        
+
         return procedure;
     }
 
@@ -361,7 +361,8 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 column.setTableName(resultSet.getString("TABLE_NAME"));
                 column.setOldName(resultSet.getString("COLUMN_NAME"));
                 column.setName(resultSet.getString("COLUMN_NAME"));
-                column.setColumnType(resultSet.getString("DATA_TYPE").toUpperCase());
+                column.setColumnType(resultSet.getString("COLUMN_TYPE"));
+                column.setDataType(resultSet.getInt("DATA_TYPE"));
                 column.setDefaultValue(resultSet.getString("COLUMN_DEFAULT"));
                 column.setAutoIncrement(resultSet.getString("EXTRA").contains("auto_increment"));
                 column.setComment(resultSet.getString("COLUMN_COMMENT"));
