@@ -8,6 +8,7 @@ import CreateDatabase from '@/components/CreateDatabase';
 import ImportDataModal from '@/components/ImportDataModal';
 import ExportDataModal from '@/components/ExportDataModal';
 import ExportSchemaDocModal from '@/components/ExportSchemaDocModal';
+import DataGenerationModal from '@/components/DataGenerationModal';
 import Iconfont from '@/components/Iconfont';
 import { useConnectionStore } from '@/pages/main/store/connection';
 import { setMainPageActiveTab } from '@/pages/main/store/main';
@@ -48,6 +49,7 @@ const WorkspaceLeft = memo(() => {
       <ImportDataModal />
       <ExportDataModal />
       <ExportSchemaDocModal />
+      <DataGenerationModal />
     </>
   );
 });

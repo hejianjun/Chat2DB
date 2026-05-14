@@ -82,30 +82,6 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     }
 
     @Override
-    public DataResult<Map<String, String>> aiInferGenerationTypes(DataGenerationRequest request) {
-        try {
-            // TODO: 实现AI类型推断逻辑
-            // 这里可以调用AI服务来推断每列的数据生成类型
-            Map<String, String> inferredTypes = new HashMap<>();
-            
-            // 基于列名的简单推断逻辑
-            ListResult<ColumnConfigParam> columnsResult = getTableColumns(request);
-            if (columnsResult.success() && columnsResult.getData() != null) {
-                for (ColumnConfigParam column : columnsResult.getData()) {
-                    String columnName = column.getColumnName().toLowerCase();
-                    String inferredType = inferTypeFromColumnName(columnName);
-                    inferredTypes.put(column.getColumnName(), inferredType);
-                }
-            }
-
-            return DataResult.of(inferredTypes);
-        } catch (Exception e) {
-            log.error("Failed to AI infer generation types", e);
-            return DataResult.error("AI_INFER_ERROR", "AI推断失败: " + e.getMessage());
-        }
-    }
-
-    @Override
     public DataResult<DataGenerationPreviewVO> generatePreview(DataGenerationRequest request) {
         try {
             ListResult<ColumnConfigParam> columnsResult = getTableColumns(request);

@@ -42,20 +42,6 @@ public class DataGenerationController {
         }
     }
 
-    /**
-     * AI推断列的数据生成类型
-     */
-    @PostMapping("/ai-guess-types")
-    public DataResult<Map<String, String>> aiInferGenerationTypes(
-            @RequestBody DataGenerationRequestVO requestVO) {
-        try {
-            DataGenerationRequest request = DataGenerationConverter.voToRequest(requestVO);
-            return dataGenerationService.aiInferGenerationTypes(request);
-        } catch (Exception e) {
-            log.error("Failed to AI infer generation types", e);
-            return DataResult.error("AI_INFER_ERROR", "AI推断失败: " + e.getMessage());
-        }
-    }
 
     /**
      * 生成数据预览（10行）

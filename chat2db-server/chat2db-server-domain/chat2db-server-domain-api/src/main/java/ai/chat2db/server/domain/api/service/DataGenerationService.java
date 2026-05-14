@@ -22,14 +22,6 @@ public interface DataGenerationService {
     ListResult<ColumnConfigParam> getTableColumns(DataGenerationRequest request);
 
     /**
-     * AI推断列的数据生成类型
-     *
-     * @param request 请求数据
-     * @return 列名到生成类型的映射
-     */
-    DataResult<Map<String, String>> aiInferGenerationTypes(DataGenerationRequest request);
-
-    /**
      * 生成数据预览（10行）
      *
      * @param request 请求数据

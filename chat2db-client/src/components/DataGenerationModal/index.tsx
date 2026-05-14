@@ -1,19 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Form, Input, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
 import styles from './index.less';
+import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
 
 const { Option } = Select;
 
-interface DataGenerationModalProps {
-  visible: boolean;
-  onCancel: () => void;
-  onOk: (config: DataGenerationConfig) => void;
-  tableInfo: {
-    dataSourceId: number;
-    databaseName: string;
-    schemaName?: string;
-    tableName: string;
-  };
+export interface IDataGenerationModalParams {
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  tableName: string;
 }
 
 interface ColumnConfig {
@@ -29,19 +25,17 @@ interface DataGenerationConfig {
   columnConfigs: Record<string, string>;
 }
 
-const DataGenerationModal: React.FC<DataGenerationModalProps> = ({
-  visible,
-  onCancel,
-  onOk,
-  tableInfo
-}) => {
-    const [form] = Form.useForm();
+const DataGenerationModal: React.FC = () => {
+  const [form] = Form.useForm();
+  const [open, setOpen] = useState(false);
+  const [tableInfo, setTableInfo] = useState<IDataGenerationModalParams | null>(null);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const tableInfoRef = useRef<IDataGenerationModalParams | null>(null);
 
   // 支持的数据生成类型
   const generationTypes = [
@@ -57,11 +51,21 @@ const DataGenerationModal: React.FC<DataGenerationModalProps> = ({
     { value: 'numeric', label: '数值' },
   ];
 
+  const openDataGenerationModal = (params: IDataGenerationModalParams) => {
+    setOpen(true);
+    setTableInfo(params);
+    tableInfoRef.current = params;
+  };
+
   useEffect(() => {
-    if (visible) {
+    setOpenDataGenerationModal(openDataGenerationModal);
+  }, []);
+
+  useEffect(() => {
+    if (open && tableInfo) {
       loadTableColumns();
     }
-  }, [visible]);
+  }, [open]);
 
   const loadTableColumns = async () => {
     setLoading(true);
@@ -157,7 +161,7 @@ const DataGenerationModal: React.FC<DataGenerationModalProps> = ({
         setProgress(100);
         setGenerating(false);
         message.success('数据生成完成');
-        onOk(values);
+        setOpen(false);
       }, 5000);
       
     } catch (error) {
@@ -224,11 +228,11 @@ const DataGenerationModal: React.FC<DataGenerationModalProps> = ({
   return (
     <Modal
       title="生成数据"
-      open={visible}
-      onCancel={onCancel}
+      open={open}
+      onCancel={() => setOpen(false)}
       width={900}
       footer={[
-        <Button key="cancel" onClick={onCancel}>
+        <Button key="cancel" onClick={() => setOpen(false)}>
           取消
         </Button>,
         <Button key="preview" onClick={handlePreview} loading={loading}>
