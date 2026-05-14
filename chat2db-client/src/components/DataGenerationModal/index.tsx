@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal, Form, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
-import styles from './index.less';
 import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
 import createRequest from '@/service/base';
 
@@ -11,6 +10,35 @@ export interface IDataGenerationModalParams {
   databaseName: string;
   schemaName?: string;
   tableName: string;
+}
+
+interface TableInfo {
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  tableName: string;
+}
+
+interface ColumnConfigVO {
+  columnName: string;
+  dataType: string;
+  generationType: string;
+  subType: string;
+  comment?: string;
+  nullable: boolean;
+  maxLength?: number;
+  scale?: number;
+  customParams?: Record<string, any>;
+}
+
+interface GenerateRequest {
+  dataSourceId: number;
+  databaseName: string;
+  schemaName?: string;
+  tableName: string;
+  rowCount?: number;
+  columnConfigs?: ColumnConfigVO[];
+  batchSize?: number;
 }
 
 interface GeneratorSubType {
@@ -59,6 +87,14 @@ interface PreviewVO {
   }[];
 }
 
+const loadGeneratorMetadata = createRequest<void, GeneratorMetadata[]>('/api/rdb/table/generate-data/metadata', { method: 'get' });
+
+const loadTableColumns = createRequest<TableInfo, ColumnConfig[]>('/api/rdb/table/generate-data/config', { method: 'post' });
+
+const generatePreview = createRequest<GenerateRequest, PreviewVO>('/api/rdb/table/generate-data/preview', { method: 'post' });
+
+const executeGeneration = createRequest<GenerateRequest, number>('/api/rdb/table/generate-data/execute', { method: 'post' });
+
 const DataGenerationModal: React.FC = () => {
   const [form] = Form.useForm();
   const [open, setOpen] = useState(false);
@@ -76,6 +112,8 @@ const DataGenerationModal: React.FC = () => {
     setOpen(true);
     setTableInfo(params);
     tableInfoRef.current = params;
+    setPreviewData([]);
+    setShowPreview(false);
   }, []);
 
   useEffect(() => {
@@ -83,48 +121,37 @@ const DataGenerationModal: React.FC = () => {
   }, [openDataGenerationModal]);
 
   useEffect(() => {
-    if (open) {
-      loadGeneratorMetadata();
+    if (open && generatorMetadata.length === 0) {
+      loadGeneratorMetadata({})
+        .then((res) => {
+          if (res) {
+            setGeneratorMetadata(res);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to load generator metadata', error);
+        });
     }
   }, [open]);
 
   useEffect(() => {
     if (open && tableInfo) {
-      loadTableColumns();
+      fetchTableColumns();
     }
   }, [open, tableInfo]);
 
-  const loadGeneratorMetadata = async () => {
-    try {
-      const request = createRequest<{ data: GeneratorMetadata[] }>(
-        '/api/rdb/table/generate-data/metadata',
-        'get'
-      );
-      const res = await request();
-      if (res?.data) {
-        setGeneratorMetadata(res.data);
-      }
-    } catch (error) {
-      console.error('Failed to load generator metadata', error);
-    }
-  };
-
-  const loadTableColumns = async () => {
+  const fetchTableColumns = async () => {
     if (!tableInfo) return;
     setLoading(true);
     try {
-      const request = createRequest<{ data: ColumnConfig[] }>(
-        '/api/rdb/table/generate-data/config',
-        'post'
-      );
-      const res = await request({
+      const res = await loadTableColumns({
         dataSourceId: tableInfo.dataSourceId,
         databaseName: tableInfo.databaseName,
         schemaName: tableInfo.schemaName,
         tableName: tableInfo.tableName,
       });
-      if (res?.data) {
-        setColumns(res.data);
+      if (res) {
+        setColumns(res);
       }
     } catch (error) {
       message.error('加载表列信息失败');
@@ -133,16 +160,12 @@ const DataGenerationModal: React.FC = () => {
     }
   };
 
-  const handleAiGuess = async () => {
-    message.info('AI推断功能开发中');
-  };
-
-  const buildColumnConfigs = () => {
+  const buildColumnConfigs = (): ColumnConfigVO[] => {
     return columns.map(col => ({
       columnName: col.columnName,
       dataType: col.dataType,
       generationType: col.generationType,
-      subType: col.subType,
+      subType: col.subType || '',
       nullable: col.nullable,
       maxLength: col.maxLength,
       scale: col.scale,
@@ -150,16 +173,16 @@ const DataGenerationModal: React.FC = () => {
     }));
   };
 
+  const handleAiGuess = async () => {
+    message.info('AI推断功能开发中');
+  };
+
   const handlePreview = async () => {
     if (!tableInfo) return;
     setLoading(true);
     try {
       const rowCount = form.getFieldValue('rowCount') || 10;
-      const request = createRequest<{ data: PreviewVO }>(
-        '/api/rdb/table/generate-data/preview',
-        'post'
-      );
-      const res = await request({
+      const res = await generatePreview({
         dataSourceId: tableInfo.dataSourceId,
         databaseName: tableInfo.databaseName,
         schemaName: tableInfo.schemaName,
@@ -167,8 +190,8 @@ const DataGenerationModal: React.FC = () => {
         rowCount,
         columnConfigs: buildColumnConfigs(),
       });
-      if (res?.data) {
-        setPreviewData(res.data.previewData || []);
+      if (res) {
+        setPreviewData(res.previewData || []);
         setShowPreview(true);
       }
     } catch (error) {
@@ -184,11 +207,7 @@ const DataGenerationModal: React.FC = () => {
     setProgress(0);
     try {
       const rowCount = form.getFieldValue('rowCount') || 100;
-      const request = createRequest<{ data: number }>(
-        '/api/rdb/table/generate-data/execute',
-        'post'
-      );
-      const res = await request({
+      const res = await executeGeneration({
         dataSourceId: tableInfo.dataSourceId,
         databaseName: tableInfo.databaseName,
         schemaName: tableInfo.schemaName,
@@ -196,8 +215,8 @@ const DataGenerationModal: React.FC = () => {
         rowCount,
         columnConfigs: buildColumnConfigs(),
       });
-      if (res?.data) {
-        message.success('数据生成任务已创建， taskId: ' + res.data);
+      if (res) {
+        message.success('数据生成任务已创建，任务ID: ' + res);
         setOpen(false);
       }
     } catch (error) {

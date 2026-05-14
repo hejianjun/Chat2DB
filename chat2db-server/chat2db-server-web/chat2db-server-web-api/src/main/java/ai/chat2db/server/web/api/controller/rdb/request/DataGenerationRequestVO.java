@@ -1,12 +1,13 @@
 package ai.chat2db.server.web.api.controller.rdb.request;
 
+import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequestInfo;
 import lombok.Data;
 
 import java.util.List;
 import java.util.Map;
 
 @Data
-public class DataGenerationRequestVO {
+public class DataGenerationRequestVO implements DataSourceBaseRequestInfo {
 
     private Long dataSourceId;
 
