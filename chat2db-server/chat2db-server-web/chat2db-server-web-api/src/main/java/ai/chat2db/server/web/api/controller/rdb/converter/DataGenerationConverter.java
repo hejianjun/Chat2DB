@@ -25,7 +25,6 @@ public class DataGenerationConverter {
         request.setTableName(vo.getTableName());
         request.setRowCount(vo.getRowCount());
         request.setColumnConfigs(vo.getColumnConfigs());
-        request.setUseAiInference(vo.getUseAiInference());
         request.setBatchSize(vo.getBatchSize());
         request.setPreviewMode(vo.getPreviewMode());
 

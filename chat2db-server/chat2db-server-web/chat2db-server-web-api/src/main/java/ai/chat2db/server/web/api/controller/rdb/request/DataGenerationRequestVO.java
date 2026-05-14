@@ -41,11 +41,6 @@ public class DataGenerationRequestVO {
     private Map<String, String> columnConfigs;
 
     /**
-     * 是否使用AI推断类型
-     */
-    private Boolean useAiInference;
-
-    /**
      * 批量大小
      */
     private Integer batchSize = 1000;
