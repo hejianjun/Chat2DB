@@ -57,4 +57,5 @@ export enum OperationColumn {
   ExportSchemaDoc = 'exportSchemaDoc', // 导出数据结构
   DeprecatedTable = 'deprecatedTable', // 废弃表
   RestoreTable = 'restoreTable', // 恢复废弃表
+  GenerateData = 'generateData', // 生成数据
 }

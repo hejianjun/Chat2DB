@@ -153,5 +153,13 @@
             <artifactId>ik-analyzer</artifactId>
             <version>7.4.0</version>
         </dependency>
+        <!-- DataFaker for data generation (modern replacement for JavaFaker) -->
+        <!-- Temporarily commented out to isolate Spring Boot startup issue -->
+
+        <dependency>
+            <groupId>net.datafaker</groupId>
+            <artifactId>datafaker</artifactId>
+            <version>2.1.0</version>
+        </dependency>
     </dependencies>
 </project>

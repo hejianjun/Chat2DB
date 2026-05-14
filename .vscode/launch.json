@@ -6,6 +6,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "Chat2dbLiteApplication",
+            "request": "launch",
+            "mainClass": "ai.chat2db.server.start.Chat2dbLiteApplication",
+            "projectName": "chat2db-server-start"
+        },
+        {
+            "type": "java",
             "name": "Current File",
             "request": "launch",
             "mainClass": "${file}"

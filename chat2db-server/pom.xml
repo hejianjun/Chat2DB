@@ -17,7 +17,7 @@
 
     <properties>
         <!-- 当前项目的版本 用了flatten 仅修改这一个地方即可-->
-        <revision>2.0.0-SNAPSHOT</revision>
+        <revision>2.1.16-SNAPSHOT</revision>
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.source>17</maven.compiler.source>
         <java.version>17</java.version>

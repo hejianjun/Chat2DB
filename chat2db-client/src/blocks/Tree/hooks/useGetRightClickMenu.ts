@@ -456,6 +456,15 @@ export const useGetRightClickMenu = (props: IProps) => {
           });
         },
       },
+
+      // 生成数据
+      [OperationColumn.GenerateData]: {
+        text: '生成数据',
+        icon: '\ue6b9',
+        handle: () => {
+          handleGenerateData(treeNodeData);
+        },
+      },
     };
 
     // 根据配置生成右键菜单
@@ -873,6 +882,15 @@ export const getRightClickMenu = (props: IProps) => {
         });
       },
     },
+
+    // 生成数据
+    [OperationColumn.GenerateData]: {
+      text: '生成数据',
+      icon: '\ue6b9',
+      handle: () => {
+        handleGenerateData(treeNodeData);
+      },
+    },
   };
 
   // 根据配置生成右键菜单
@@ -893,6 +911,21 @@ export const getRightClickMenu = (props: IProps) => {
     }
   });
   return finalList;
+};
+
+const handleGenerateData = (treeNodeData: ITreeNode) => {
+  // 触发数据生成对话框
+  if (window.dispatchEvent) {
+    const event = new CustomEvent('openDataGenerationModal', {
+      detail: {
+        dataSourceId: treeNodeData.extraParams?.dataSourceId,
+        databaseName: treeNodeData.extraParams?.databaseName,
+        schemaName: treeNodeData.extraParams?.schemaName,
+        tableName: treeNodeData.name,
+      }
+    });
+    window.dispatchEvent(event);
+  }
 };
 
 const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void) => {

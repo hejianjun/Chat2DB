@@ -21,4 +21,9 @@ public enum TaskTypeEnum {
      * upload table structure
      */
     UPLOAD_TABLE_STRUCTURE,
+
+    /**
+     * generate table data
+     */
+    GENERATE_TABLE_DATA,
 }
