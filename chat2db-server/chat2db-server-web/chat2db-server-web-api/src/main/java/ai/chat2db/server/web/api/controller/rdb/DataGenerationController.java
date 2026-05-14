@@ -2,7 +2,9 @@ package ai.chat2db.server.web.api.controller.rdb;
 
 import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
+import ai.chat2db.server.domain.api.service.DataGenerationRuleService;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
+import ai.chat2db.server.domain.api.param.ColumnGenerationRuleParam;
 import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -21,6 +23,9 @@ public class DataGenerationController {
 
     @Autowired
     private DataGenerationService dataGenerationService;
+
+    @Autowired
+    private DataGenerationRuleService ruleService;
 
     @PostMapping("/config")
     public ListResult<ai.chat2db.server.domain.api.param.ColumnConfigParam> getTableColumns(
@@ -60,16 +65,6 @@ public class DataGenerationController {
         }
     }
 
-    @GetMapping("/supported-types")
-    public ListResult<String> getSupportedGenerationTypes() {
-        try {
-            return dataGenerationService.getSupportedGenerationTypes();
-        } catch (Exception e) {
-            log.error("Failed to get supported generation types", e);
-            return ListResult.error("获取支持的生成类型失败: " + e.getMessage(), null);
-        }
-    }
-
     @GetMapping("/metadata")
     public ListResult<GeneratorMetadata> getAllGeneratorMetadata() {
         try {
@@ -77,6 +72,20 @@ public class DataGenerationController {
         } catch (Exception e) {
             log.error("Failed to get all generator metadata", e);
             return ListResult.error("获取生成器元数据失败: " + e.getMessage(), null);
+        }
+    }
+
+    @GetMapping("/generation-rule/list")
+    public ListResult<ColumnGenerationRuleParam> getRulesByTable(
+            @RequestParam Long dataSourceId,
+            @RequestParam String databaseName,
+            @RequestParam(required = false) String schemaName,
+            @RequestParam String tableName) {
+        try {
+            return ruleService.getRulesByTable(dataSourceId, databaseName, schemaName, tableName);
+        } catch (Exception e) {
+            log.error("Failed to get data generation rules by table", e);
+            return ListResult.error("GET_RULES_ERROR", "获取规则失败: " + e.getMessage());
         }
     }
 }

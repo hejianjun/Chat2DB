@@ -1,11 +1,12 @@
-package ai.chat2db.server.web.api.controller.rdb.vo;
+package ai.chat2db.server.domain.api.param;
 
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 @Data
-public class DataGenerationRuleVO implements Serializable {
+public class ColumnGenerationRuleParam implements Serializable {
 
     private static final long serialVersionUID = 1L;
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Form, Button, Table, Select, InputNumber, message, Progress, Space } from 'antd';
+import { Modal, Form, Button, Table, Select, InputNumber, message, Space } from 'antd';
 import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
 import createRequest from '@/service/base';
 
@@ -60,6 +60,13 @@ interface GeneratorMetadata {
   configFields: GeneratorConfigField[];
 }
 
+interface SavedRule {
+  columnName: string;
+  generationType: string;
+  subType: string;
+  customParams: string;
+}
+
 interface ColumnConfig {
   columnName: string;
   dataType: string;
@@ -91,6 +98,8 @@ const loadGeneratorMetadata = createRequest<void, GeneratorMetadata[]>('/api/rdb
 
 const loadTableColumns = createRequest<TableInfo, ColumnConfig[]>('/api/rdb/table/generate-data/config', { method: 'post' });
 
+const loadSavedRules = createRequest<TableInfo, SavedRule[]>('/api/rdb/table/generate-data/generation-rule/list', { method: 'get' });
+
 const generatePreview = createRequest<GenerateRequest, PreviewVO>('/api/rdb/table/generate-data/preview', { method: 'post' });
 
 const executeGeneration = createRequest<GenerateRequest, number>('/api/rdb/table/generate-data/execute', { method: 'post' });
@@ -104,8 +113,6 @@ const DataGenerationModal: React.FC = () => {
   const [generatorMetadata, setGeneratorMetadata] = useState<GeneratorMetadata[]>([]);
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
   const tableInfoRef = useRef<IDataGenerationModalParams | null>(null);
 
   const openDataGenerationModal = useCallback((params: IDataGenerationModalParams) => {
@@ -124,13 +131,9 @@ const DataGenerationModal: React.FC = () => {
     if (open && generatorMetadata.length === 0) {
       loadGeneratorMetadata({})
         .then((res) => {
-          if (res) {
-            setGeneratorMetadata(res);
-          }
+          if (res) setGeneratorMetadata(res);
         })
-        .catch((error) => {
-          console.error('Failed to load generator metadata', error);
-        });
+        .catch(console.error);
     }
   }, [open]);
 
@@ -144,16 +147,16 @@ const DataGenerationModal: React.FC = () => {
     if (!tableInfo) return;
     setLoading(true);
     try {
-      const res = await loadTableColumns({
+      const columnsRes = await loadTableColumns({
         dataSourceId: tableInfo.dataSourceId,
         databaseName: tableInfo.databaseName,
         schemaName: tableInfo.schemaName,
         tableName: tableInfo.tableName,
       });
-      if (res) {
-        setColumns(res);
+      if (columnsRes) {
+        setColumns(columnsRes);
       }
-    } catch (error) {
+    } catch {
       message.error('加载表列信息失败');
     } finally {
       setLoading(false);
@@ -173,10 +176,6 @@ const DataGenerationModal: React.FC = () => {
     }));
   };
 
-  const handleAiGuess = async () => {
-    message.info('AI推断功能开发中');
-  };
-
   const handlePreview = async () => {
     if (!tableInfo) return;
     setLoading(true);
@@ -194,7 +193,7 @@ const DataGenerationModal: React.FC = () => {
         setPreviewData(res.previewData || []);
         setShowPreview(true);
       }
-    } catch (error) {
+    } catch {
       message.error('生成预览失败');
     } finally {
       setLoading(false);
@@ -203,8 +202,6 @@ const DataGenerationModal: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!tableInfo) return;
-    setGenerating(true);
-    setProgress(0);
     try {
       const rowCount = form.getFieldValue('rowCount') || 100;
       const res = await executeGeneration({
@@ -219,11 +216,8 @@ const DataGenerationModal: React.FC = () => {
         message.success('数据生成任务已创建，任务ID: ' + res);
         setOpen(false);
       }
-    } catch (error) {
+    } catch {
       message.error('数据生成失败');
-    } finally {
-      setGenerating(false);
-      setProgress(0);
     }
   };
 
@@ -231,8 +225,7 @@ const DataGenerationModal: React.FC = () => {
     setColumns(prev => prev.map(col => {
       if (col.columnName === columnName) {
         const meta = generatorMetadata.find(m => m.generatorType === generationType);
-        const defaultSubType = meta?.subTypes?.[0]?.value;
-        return { ...col, generationType, subType: defaultSubType };
+        return { ...col, generationType, subType: meta?.subTypes?.[0]?.value };
       }
       return col;
     }));
@@ -254,29 +247,14 @@ const DataGenerationModal: React.FC = () => {
     }));
   };
 
-  const getGeneratorMeta = (generationType: string): GeneratorMetadata | undefined => {
+  const getGeneratorMeta = (generationType: string) => {
     return generatorMetadata.find(m => m.generatorType === generationType);
   };
 
-  const columnsConfig = [
-    {
-      title: '列名',
-      dataIndex: 'columnName',
-      key: 'columnName',
-      width: 140,
-    },
-    {
-      title: '数据类型',
-      dataIndex: 'dataType',
-      key: 'dataType',
-      width: 100,
-    },
-    {
-      title: '注释',
-      dataIndex: 'comment',
-      key: 'comment',
-      width: 100,
-    },
+  const tableColumns = [
+    { title: '列名', dataIndex: 'columnName', key: 'columnName', width: 140 },
+    { title: '数据类型', dataIndex: 'dataType', key: 'dataType', width: 100 },
+    { title: '注释', dataIndex: 'comment', key: 'comment', width: 100 },
     {
       title: '生成类型',
       key: 'generationType',
@@ -289,9 +267,7 @@ const DataGenerationModal: React.FC = () => {
           size="small"
         >
           {generatorMetadata.map(meta => (
-            <Option key={meta.generatorType} value={meta.generatorType}>
-              {meta.label}
-            </Option>
+            <Option key={meta.generatorType} value={meta.generatorType}>{meta.label}</Option>
           ))}
         </Select>
       ),
@@ -312,9 +288,7 @@ const DataGenerationModal: React.FC = () => {
             placeholder="选择子类型"
           >
             {meta.subTypes.map(st => (
-              <Option key={st.value} value={st.value}>
-                {st.label}
-              </Option>
+              <Option key={st.value} value={st.value}>{st.label}</Option>
             ))}
           </Select>
         );
@@ -346,13 +320,7 @@ const DataGenerationModal: React.FC = () => {
   ];
 
   const previewColumns = previewData.length > 0
-    ? Object.keys(previewData[0]).map(key => ({
-        title: key,
-        dataIndex: key,
-        key,
-        width: 120,
-        ellipsis: true,
-      }))
+    ? Object.keys(previewData[0]).map(key => ({ title: key, dataIndex: key, key, width: 120, ellipsis: true }))
     : [];
 
   return (
@@ -362,15 +330,9 @@ const DataGenerationModal: React.FC = () => {
       onCancel={() => setOpen(false)}
       width={1100}
       footer={[
-        <Button key="cancel" onClick={() => setOpen(false)}>
-          取消
-        </Button>,
-        <Button key="preview" onClick={handlePreview} loading={loading}>
-          预览
-        </Button>,
-        <Button key="generate" type="primary" onClick={handleGenerate} loading={generating}>
-          确定生成
-        </Button>,
+        <Button key="cancel" onClick={() => setOpen(false)}>取消</Button>,
+        <Button key="preview" onClick={handlePreview} loading={loading}>预览</Button>,
+        <Button key="generate" type="primary" onClick={handleGenerate} loading={loading}>确定生成</Button>,
       ]}
     >
       <Form form={form} layout="vertical">
@@ -378,20 +340,14 @@ const DataGenerationModal: React.FC = () => {
           <InputNumber min={1} max={100000} style={{ width: 200 }} />
         </Form.Item>
 
-        <Space style={{ marginBottom: 16 }}>
-          <Button onClick={handleAiGuess} loading={loading}>
-            AI猜一猜
-          </Button>
-        </Space>
-
         <Table
-          columns={columnsConfig}
+          columns={tableColumns}
           dataSource={columns}
           rowKey="columnName"
           pagination={false}
           size="small"
           loading={loading}
-          scroll={{ y: 250 }}
+          scroll={{ y: 300 }}
         />
 
         {showPreview && (
@@ -405,13 +361,6 @@ const DataGenerationModal: React.FC = () => {
               size="small"
               scroll={{ x: true, y: 150 }}
             />
-          </div>
-        )}
-
-        {generating && (
-          <div style={{ marginTop: 16 }}>
-            <h4>生成进度</h4>
-            <Progress percent={progress} status={progress === 100 ? 'success' : 'active'} />
           </div>
         )}
       </Form>
