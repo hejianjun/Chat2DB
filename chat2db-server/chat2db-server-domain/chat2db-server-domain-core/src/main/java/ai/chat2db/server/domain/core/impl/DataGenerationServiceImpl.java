@@ -27,6 +27,7 @@ import ai.chat2db.spi.sql.ConnectInfo;
 import lombok.extern.slf4j.Slf4j;
 import net.datafaker.Faker;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
@@ -221,7 +222,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                                                        List<ColumnConfigParam> columns,
                                                        int rowCount) {
         List<Map<String, Object>> dataRows = new ArrayList<>();
-        Faker faker = new Faker();
+        Faker faker = new Faker(LocaleContextHolder.getLocale());
 
         for (int i = 0; i < rowCount; i++) {
             Map<String, Object> row = new LinkedHashMap<>();
