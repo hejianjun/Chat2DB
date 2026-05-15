@@ -20,6 +20,7 @@ import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
@@ -28,6 +29,9 @@ import net.datafaker.Faker;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -222,6 +226,9 @@ public class DataGenerationServiceImpl implements DataGenerationService {
         for (int i = 0; i < rowCount; i++) {
             Map<String, Object> row = new LinkedHashMap<>();
             for (ColumnConfigParam column : columns) {
+                if (Boolean.TRUE.equals(column.getAutoIncrement())) {
+                    continue;
+                }
                 String expression = column.getExpression();
 
                 ExpressionDataGenerator.ColumnGenerationConfig config =
@@ -275,7 +282,64 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     }
 
     private void insertBatchData(DataGenerationRequest request, List<Map<String, Object>> batchData) {
-        log.debug("Inserting batch of {} rows into table {}", batchData.size(), request.getTableName());
+        if (batchData == null || batchData.isEmpty()) {
+            return;
+        }
+
+        List<String> columnNames = new ArrayList<>(batchData.get(0).keySet());
+        if (columnNames.isEmpty()) {
+            return;
+        }
+
+        MetaData metaData = Chat2DBContext.getMetaData();
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(buildTableName(request, metaData)).append(" (");
+        for (int i = 0; i < columnNames.size(); i++) {
+            if (i > 0) sql.append(", ");
+            sql.append(metaData.getMetaDataName(columnNames.get(i)));
+        }
+        sql.append(") VALUES (");
+        for (int i = 0; i < columnNames.size(); i++) {
+            if (i > 0) sql.append(", ");
+            sql.append("?");
+        }
+        sql.append(")");
+
+        Connection connection = Chat2DBContext.getConnection();
+        try (PreparedStatement ps = connection.prepareStatement(sql.toString())) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                for (Map<String, Object> row : batchData) {
+                    for (int i = 0; i < columnNames.size(); i++) {
+                        ps.setObject(i + 1, row.get(columnNames.get(i)));
+                    }
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+                connection.commit();
+            } catch (SQLException e) {
+                connection.rollback();
+                log.error("Batch insert error, SQL: {}", sql, e);
+                throw e;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
+            }
+        } catch (SQLException e) {
+            log.error("Batch insert error, SQL: {}", sql, e);
+            throw new RuntimeException("Batch insert failed", e);
+        }
+    }
+
+    private String buildTableName(DataGenerationRequest request, MetaData metaData) {
+        String tableName = metaData.getMetaDataName(request.getTableName());
+        if (request.getSchemaName() != null && !request.getSchemaName().isBlank()) {
+            tableName = metaData.getMetaDataName(request.getSchemaName()) + "." + tableName;
+        }
+        if (request.getDatabaseName() != null && !request.getDatabaseName().isBlank()) {
+            tableName = metaData.getMetaDataName(request.getDatabaseName()) + "." + tableName;
+        }
+        return tableName;
     }
 
     private void updateTaskProgress(Long taskId, TaskStatusEnum status, int progress) {

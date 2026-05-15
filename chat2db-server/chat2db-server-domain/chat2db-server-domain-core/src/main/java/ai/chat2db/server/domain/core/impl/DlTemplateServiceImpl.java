@@ -179,6 +179,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             tableQueryParam.setSchemaName(schemaName);
             tableQueryParam.setDatabaseName(databaseName);
             tableQueryParam.setRefresh(true);
+            tableQueryParam.setDataSourceId(Chat2DBContext.getConnectInfo().getDataSourceId());
             List<TableColumn> columns = tableService.queryColumns(tableQueryParam);
             if (CollectionUtils.isEmpty(columns)) {
                 return headers;

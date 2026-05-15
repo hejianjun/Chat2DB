@@ -53,6 +53,7 @@ interface SavedConfig {
   expression: string;
   comment?: string;
   nullable: boolean;
+  autoIncrement: boolean;
   maxLength?: number;
   scale?: number;
 }
@@ -63,6 +64,7 @@ interface ColumnConfig {
   comment?: string;
   expression?: string;
   nullable: boolean;
+  autoIncrement: boolean;
   maxLength?: number;
   scale?: number;
 }
@@ -267,39 +269,45 @@ const DataGenerationModal: React.FC = () => {
       title: '预设模板',
       key: 'template',
       width: 200,
-      render: (_: any, record: ColumnConfig) => (
-        <Select
-          value={getMatchedTemplate(record.expression)}
-          onChange={(value) => handleTemplateChange(record.columnName, value)}
-          style={{ width: '100%' }}
-          size="small"
-          placeholder="选择模板"
-          allowClear
-        >
-          {Object.entries(templateGroups).map(([category, items]) => (
-            <Select.OptGroup key={category} label={category}>
-              {items.map(item => (
-                <Option key={`${category} - ${item.label}`} value={`${category} - ${item.label}`}>
-                  {item.label}
-                </Option>
-              ))}
-            </Select.OptGroup>
-          ))}
-        </Select>
-      ),
+      render: (_: any, record: ColumnConfig) => {
+        if (record.autoIncrement) return <span style={{ color: '#999' }}>自增列(跳过)</span>;
+        return (
+          <Select
+            value={getMatchedTemplate(record.expression)}
+            onChange={(value) => handleTemplateChange(record.columnName, value)}
+            style={{ width: '100%' }}
+            size="small"
+            placeholder="选择模板"
+            allowClear
+          >
+            {Object.entries(templateGroups).map(([category, items]) => (
+              <Select.OptGroup key={category} label={category}>
+                {items.map(item => (
+                  <Option key={`${category} - ${item.label}`} value={`${category} - ${item.label}`}>
+                    {item.label}
+                  </Option>
+                ))}
+              </Select.OptGroup>
+            ))}
+          </Select>
+        );
+      },
     },
     {
       title: '表达式',
       key: 'expression',
       width: 300,
-      render: (_: any, record: ColumnConfig) => (
-        <Input
-          size="small"
-          placeholder="#{Name.first_name}"
-          value={record.expression || ''}
-          onChange={(e) => handleExpressionChange(record.columnName, e.target.value)}
-        />
-      ),
+      render: (_: any, record: ColumnConfig) => {
+        if (record.autoIncrement) return <span style={{ color: '#999' }}>自增列(跳过)</span>;
+        return (
+          <Input
+            size="small"
+            placeholder="#{Name.first_name}"
+            value={record.expression || ''}
+            onChange={(e) => handleExpressionChange(record.columnName, e.target.value)}
+          />
+        );
+      },
     },
   ];
 
