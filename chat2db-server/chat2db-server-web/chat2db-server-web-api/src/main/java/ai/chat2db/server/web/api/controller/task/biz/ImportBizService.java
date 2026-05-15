@@ -9,17 +9,23 @@ import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.common.util.I18nUtils;
+import ai.chat2db.server.web.api.controller.task.request.DataImportRequest;
+import ai.chat2db.server.web.api.controller.task.request.FieldMapping;
+import ai.chat2db.server.web.api.controller.task.request.FilePreviewRequest;
+import ai.chat2db.server.web.api.controller.task.response.FilePreviewResult;
+import ai.chat2db.server.web.api.controller.task.response.TableColumnInfo;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
-import ai.chat2db.server.web.api.controller.task.request.DataImportRequest;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -33,10 +39,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 public class ImportBizService {
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     private TaskService taskService;
@@ -88,6 +97,77 @@ public class ImportBizService {
         return dataResult;
     }
 
+    /**
+     * 预览文件表头和目标表字段
+     */
+    public DataResult<FilePreviewResult> previewHeaders(MultipartFile file, FilePreviewRequest request) {
+        Assert.notNull(file, "file can not be null");
+        Assert.notBlank(request.getTableName(), "tableName can not be blank");
+
+        // 保存临时文件
+        File tempFile;
+        try {
+            String originalFilename = file.getOriginalFilename();
+            if (originalFilename == null) {
+                originalFilename = "preview_file";
+            }
+            tempFile = FileUtil.createTempFile(originalFilename, "", true);
+            file.transferTo(tempFile);
+        } catch (Exception e) {
+            log.error("save upload file error", e);
+            throw new BusinessException("dataSource.importError", new Object[]{e.getMessage()}, e);
+        }
+
+        try {
+            FilePreviewResult result = new FilePreviewResult();
+
+            // 获取文件表头
+            String fileType = request.getFileType().toUpperCase();
+            ImportStrategy strategy = strategyFactory.getStrategy(fileType);
+            if (strategy instanceof AbstractImportStrategy abstractStrategy) {
+                List<String> fileHeaders = abstractStrategy.readFileHeaders(tempFile);
+                result.setFileHeaders(fileHeaders);
+            } else {
+                throw new BusinessException("dataSource.unsupportedFileType", new Object[]{fileType});
+            }
+
+            // 获取目标表字段
+            List<TableColumn> columns = getColumnList(request.getDataSourceId(), request.getDatabaseName(),
+                    request.getSchemaName(), request.getTableName());
+            List<TableColumnInfo> tableColumns = columns.stream().map(col -> {
+                TableColumnInfo info = new TableColumnInfo();
+                info.setName(col.getName());
+                info.setType(col.getColumnType());
+                info.setPrimaryKey(Boolean.TRUE.equals(col.getPrimaryKey()));
+                return info;
+            }).collect(Collectors.toList());
+            result.setTableColumns(tableColumns);
+
+            // 自动匹配同名字段
+            List<String> fileHeaders = result.getFileHeaders();
+            Map<String, TableColumn> columnMap = columns.stream()
+                    .collect(Collectors.toMap(TableColumn::getName, col -> col));
+            List<FilePreviewResult.AutoMapping> autoMappings = new ArrayList<>();
+            for (String fileHeader : fileHeaders) {
+                FilePreviewResult.AutoMapping mapping = new FilePreviewResult.AutoMapping();
+                mapping.setSourceField(fileHeader);
+                if (columnMap.containsKey(fileHeader)) {
+                    mapping.setTargetField(fileHeader);
+                    mapping.setMatched(true);
+                } else {
+                    mapping.setTargetField("");
+                    mapping.setMatched(false);
+                }
+                autoMappings.add(mapping);
+            }
+            result.setAutoMappings(autoMappings);
+
+            return DataResult.of(result);
+        } finally {
+            FileUtil.del(tempFile);
+        }
+    }
+
     private DataResult<Long> createImportTask(DataImportRequest request) {
         TaskCreateParam param = new TaskCreateParam();
         param.setTaskName("import_" + request.getTableName());
@@ -121,7 +201,12 @@ public class ImportBizService {
     private void doImportData(File file, DataImportRequest request, Long taskId) {
         String fileType = request.getFileType().toUpperCase();
 
-        List<String> headerList = getColumnList(request);
+        List<TableColumn> columns = getColumnList(request.getDataSourceId(), request.getDatabaseName(),
+                request.getSchemaName(), request.getTableName());
+        List<String> headerList = columns.stream().map(TableColumn::getName).collect(Collectors.toList());
+
+        // 解析字段映射配置
+        List<FieldMapping> fieldMappings = parseFieldMappings(request.getFieldMappings());
 
         ImportStrategy strategy = strategyFactory.getStrategy(fileType);
 
@@ -140,22 +225,33 @@ public class ImportBizService {
                 .columnCount(headerList.size())
                 .connection(connection)
                 .progressUpdater(count -> updateProgressCount(taskId, count))
+                .fieldMappings(fieldMappings)
                 .build();
         strategy.importData(file, importContext);
     }
 
-    private List<String> getColumnList(DataImportRequest request) {
-        TableQueryParam queryParam = new TableQueryParam();
-        queryParam.setDataSourceId(request.getDataSourceId());
-        queryParam.setDatabaseName(request.getDatabaseName());
-        queryParam.setSchemaName(request.getSchemaName());
-        queryParam.setTableName(request.getTableName());
-        List<TableColumn> columns = tableService.queryColumns(queryParam);
-        List<String> columnNames = new ArrayList<>();
-        for (TableColumn column : columns) {
-            columnNames.add(column.getName());
+    /**
+     * 解析字段映射配置
+     */
+    private List<FieldMapping> parseFieldMappings(String fieldMappingsJson) {
+        if (fieldMappingsJson == null || fieldMappingsJson.isBlank()) {
+            return null;
         }
-        return columnNames;
+        try {
+            return objectMapper.readValue(fieldMappingsJson, new TypeReference<List<FieldMapping>>() {});
+        } catch (Exception e) {
+            log.error("parse field mappings error", e);
+            throw new BusinessException("dataSource.invalidFieldMapping", new Object[]{e.getMessage()});
+        }
+    }
+
+    private List<TableColumn> getColumnList(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+        TableQueryParam queryParam = new TableQueryParam();
+        queryParam.setDataSourceId(dataSourceId);
+        queryParam.setDatabaseName(databaseName);
+        queryParam.setSchemaName(schemaName);
+        queryParam.setTableName(tableName);
+        return tableService.queryColumns(queryParam);
     }
 
     private void updateProgressCount(Long taskId, int processedCount) {

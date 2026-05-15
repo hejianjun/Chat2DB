@@ -35,6 +35,34 @@ export interface IImportDataParams {
   dataSourceId?: number;
   databaseName?: string;
   schemaName?: string;
+  fieldMappings?: string;
+}
+
+export interface IPreviewHeadersParams {
+  file: File;
+  tableName: string;
+  fileType: string;
+  dataSourceId?: number;
+  databaseName?: string;
+  schemaName?: string;
+}
+
+export interface ITableColumnInfo {
+  name: string;
+  type: string;
+  primaryKey: boolean;
+}
+
+export interface IAutoMapping {
+  sourceField: string;
+  targetField: string;
+  matched: boolean;
+}
+
+export interface IPreviewHeadersResult {
+  fileHeaders: string[];
+  tableColumns: ITableColumnInfo[];
+  autoMappings: IAutoMapping[];
 }
 
 export interface IExportSchemaDocParams {
@@ -49,7 +77,30 @@ const exportResultData = createRequest<IExportResultDataParams, number>('/api/ex
 const exportSchemaDoc = createRequest<IExportSchemaDocParams, number>('/api/export/export_doc', { method: 'post' });
 const getTask = createRequest<{ id: number }, ITask>('/api/task/get/:id', { method: 'get' });
 
-const importData = (params: IImportDataParams) => {
+const previewFileHeaders = (params: IPreviewHeadersParams): Promise<IPreviewHeadersResult> => {
+  const { file, ...restParams } = params;
+  const formData = new FormData();
+  formData.append('file', file);
+  Object.keys(restParams).forEach((key) => {
+    const value = (restParams as any)[key];
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value));
+    }
+  });
+  
+  return fetch('/api/import/preview_headers', {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  }).then((res) => res.json()).then((res) => {
+    if (res.success) {
+      return res.data;
+    }
+    throw new Error(res.errorMessage || 'Preview failed');
+  });
+};
+
+const importData = (params: IImportDataParams): Promise<number> => {
   const { file, ...restParams } = params;
   const formData = new FormData();
   formData.append('file', file);
@@ -77,4 +128,5 @@ export default {
   exportSchemaDoc,
   importData,
   getTask,
+  previewFileHeaders,
 };

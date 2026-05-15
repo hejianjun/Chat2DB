@@ -6,10 +6,10 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 数据导入请求参数
+ * 文件预览请求参数
  */
 @Data
-public class DataImportRequest extends DataSourceBaseRequest {
+public class FilePreviewRequest extends DataSourceBaseRequest {
 
     /**
      * 目标表名
@@ -18,7 +18,7 @@ public class DataImportRequest extends DataSourceBaseRequest {
     private String tableName;
 
     /**
-     * 文件类型：CSV, XLSX, XLS, SQL
+     * 文件类型：CSV, XLSX, XLS
      */
     @NotNull
     private String fileType;
@@ -32,10 +32,4 @@ public class DataImportRequest extends DataSourceBaseRequest {
      * schema 名
      */
     private String schemaName;
-
-    /**
-     * 字段映射配置（JSON格式）
-     * 格式：[{"sourceField":"源字段","targetField":"目标字段","primaryKey":false}]
-     */
-    private String fieldMappings;
 }
