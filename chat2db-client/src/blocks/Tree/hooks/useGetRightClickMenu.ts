@@ -495,7 +495,7 @@ export const useGetRightClickMenu = (props: IProps) => {
       // 生成数据
       [OperationColumn.GenerateData]: {
         text: i18n('workspace.menu.generateData'),
-        icon: '\ue6b9',
+        icon: '\ue816',
         handle: () => {
           const { openDataGenerationModal } = useWorkspaceStore.getState();
           openDataGenerationModal?.({
@@ -927,7 +927,7 @@ export const getRightClickMenu = (props: IProps) => {
     // 生成数据
     [OperationColumn.GenerateData]: {
       text: i18n('workspace.menu.generateData'),
-      icon: '\ue6b9',
+      icon: '\ue816',
       handle: () => {
         const { openDataGenerationModal } = useWorkspaceStore.getState();
         openDataGenerationModal?.({
