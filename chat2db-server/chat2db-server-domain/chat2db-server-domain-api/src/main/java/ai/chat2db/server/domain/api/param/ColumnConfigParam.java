@@ -15,6 +15,8 @@ public class ColumnConfigParam {
 
     private Boolean nullable;
 
+    private Boolean autoIncrement;
+
     private Integer maxLength;
 
     private Integer scale;

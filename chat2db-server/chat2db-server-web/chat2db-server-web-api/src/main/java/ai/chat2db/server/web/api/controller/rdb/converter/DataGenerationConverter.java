@@ -33,6 +33,7 @@ public class DataGenerationConverter {
                 param.setExpression(voConfig.getExpression());
                 param.setComment(voConfig.getComment());
                 param.setNullable(voConfig.getNullable());
+                param.setAutoIncrement(voConfig.getAutoIncrement());
                 param.setMaxLength(voConfig.getMaxLength());
                 param.setScale(voConfig.getScale());
                 columnConfigs.add(param);

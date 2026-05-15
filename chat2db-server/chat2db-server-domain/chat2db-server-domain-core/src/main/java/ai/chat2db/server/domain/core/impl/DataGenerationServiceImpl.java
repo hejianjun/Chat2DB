@@ -4,18 +4,25 @@ import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.param.ColumnConfigParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.GeneratorTemplate;
+import ai.chat2db.server.domain.api.param.TaskCreateParam;
+import ai.chat2db.server.domain.api.param.TaskUpdateParam;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.api.service.DataGenerationRuleService;
-import ai.chat2db.server.domain.api.param.TaskCreateParam;
 import ai.chat2db.server.domain.api.enums.TaskStatusEnum;
 import ai.chat2db.server.domain.api.enums.TaskTypeEnum;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
 import ai.chat2db.server.domain.core.generator.ExpressionDataGenerator;
+import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
+import ai.chat2db.server.tools.common.model.Context;
+import ai.chat2db.server.tools.common.model.LoginUser;
+import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.spi.model.TableColumn;
+import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
 import lombok.extern.slf4j.Slf4j;
 import net.datafaker.Faker;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +80,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                 config.setDataType(dataType);
                 config.setComment(column.getComment());
                 config.setNullable(column.getNullable() != null && column.getNullable() == 1);
+                config.setAutoIncrement(column.getAutoIncrement() != null && column.getAutoIncrement());
                 config.setMaxLength(column.getColumnSize());
                 config.setScale(column.getDecimalDigits());
 
@@ -145,7 +153,17 @@ public class DataGenerationServiceImpl implements DataGenerationService {
 
             Long taskId = taskResult.getData();
 
-            CompletableFuture.runAsync(() -> executeDataGenerationAsync(taskId, request));
+            LoginUser loginUser = ContextUtils.getLoginUser();
+            ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+
+            CompletableFuture.runAsync(() -> {
+                buildContext(loginUser, connectInfo);
+                try {
+                    executeDataGenerationAsync(taskId, request);
+                } finally {
+                    removeContext();
+                }
+            });
 
             return DataResult.of(taskId);
         } catch (Exception e) {
@@ -262,9 +280,27 @@ public class DataGenerationServiceImpl implements DataGenerationService {
 
     private void updateTaskProgress(Long taskId, TaskStatusEnum status, int progress) {
         try {
-            log.debug("Updating task {} status: {}, progress: {}%", taskId, status, progress);
+            TaskUpdateParam updateParam = new TaskUpdateParam();
+            updateParam.setId(taskId);
+            updateParam.setTaskStatus(status.name());
+            updateParam.setTaskProgress(String.valueOf(progress));
+            taskService.updateStatus(updateParam);
         } catch (Exception e) {
             log.error("Failed to update task progress", e);
         }
+    }
+
+    private void removeContext() {
+        Dbutils.removeSession();
+        ContextUtils.removeContext();
+        Chat2DBContext.removeContext();
+    }
+
+    private void buildContext(LoginUser loginUser, ConnectInfo connectInfo) {
+        ContextUtils.setContext(Context.builder()
+                .loginUser(loginUser)
+                .build());
+        Dbutils.setSession();
+        Chat2DBContext.putContext(connectInfo);
     }
 }

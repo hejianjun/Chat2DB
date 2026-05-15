@@ -31,6 +31,7 @@ public class DataGenerationRequestVO implements DataSourceBaseRequestInfo {
         private String expression;
         private String comment;
         private Boolean nullable;
+        private Boolean autoIncrement;
         private Integer maxLength;
         private Integer scale;
     }
