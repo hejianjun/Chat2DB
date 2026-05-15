@@ -25,7 +25,7 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
 
     private List<String> systemDatabases = Arrays.asList("information_schema", "performance_schema", "mysql", "sys");
 
-    private static final String SELECT_TABLES_SQL = "SELECT TABLE_NAME, TABLE_COMMENT, TABLE_ROWS, ENGINE, CREATE_TIME, UPDATE_TIME " +
+    private static final String SELECT_TABLES_SQL = "SELECT TABLE_NAME, TABLE_COMMENT, TABLE_ROWS, ENGINE, CREATE_TIME, UPDATE_TIME, AUTO_INCREMENT " +
             "FROM information_schema.tables WHERE TABLE_SCHEMA = '%s' AND TABLE_TYPE IN ('BASE TABLE', 'SYSTEM TABLE')";
 
     @Override
@@ -54,6 +54,12 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                     long rowCount = resultSet.getLong("TABLE_ROWS");
                     if (!resultSet.wasNull()) {
                         table.setRowCount(rowCount);
+                    }
+
+                    // 设置自增列的下一个自增值（可能为 NULL）
+                    long autoIncrement = resultSet.getLong("AUTO_INCREMENT");
+                    if (!resultSet.wasNull()) {
+                        table.setIncrementValue(autoIncrement);
                     }
 
                     tables.add(table);
