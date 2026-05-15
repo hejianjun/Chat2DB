@@ -36,6 +36,7 @@ export interface IImportDataParams {
   databaseName?: string;
   schemaName?: string;
   fieldMappings?: string;
+  importMode?: string;
 }
 
 export interface IPreviewHeadersParams {

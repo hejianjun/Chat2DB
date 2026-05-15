@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Modal, Upload, Select, message, Button, Progress, Steps, Table, Space, Spin } from 'antd';
+import { Modal, Upload, Select, message, Button, Progress, Steps, Table, Space, Spin, Radio, Popconfirm } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import i18n from '@/i18n';
@@ -43,6 +43,9 @@ const ImportDataModal = () => {
   const [previewData, setPreviewData] = useState<IPreviewHeadersResult | null>(null);
   const [fieldMappings, setFieldMappings] = useState<IFieldMapping[]>([]);
 
+  // 导入模式
+  const [importMode, setImportMode] = useState<string>('INSERT');
+
   useEffect(() => {
     if (!open) {
       setFile(null);
@@ -51,6 +54,7 @@ const ImportDataModal = () => {
       setCurrentStep(0);
       setPreviewData(null);
       setFieldMappings([]);
+      setImportMode('INSERT');
     }
   }, [open]);
 
@@ -154,11 +158,12 @@ const ImportDataModal = () => {
         databaseName: params.databaseName,
         schemaName: params.schemaName,
         fieldMappings: mappingsJson,
+        importMode,
       } as any);
 
       addLog(`Task created: ${taskId}`);
       startImportPolling(taskId);
-      setCurrentStep(2);
+      setCurrentStep(3);
     } catch (error: any) {
       addLog(`Error: ${error.message}`);
       message.error(i18n('common.text.importFailed'));
@@ -305,6 +310,8 @@ const ImportDataModal = () => {
       case 1:
         return i18n('workspace.table.import.step.fieldMapping');
       case 2:
+        return i18n('workspace.table.import.step.importMode');
+      case 3:
         return i18n('workspace.table.import.step.importProgress');
       default:
         return '';
@@ -394,6 +401,51 @@ const ImportDataModal = () => {
         );
 
       case 2:
+        {
+          const hasPrimaryKey = fieldMappings.some((m) => m.primaryKey);
+          return (
+            <div style={{ padding: '16px 0' }}>
+              <div style={{ marginBottom: 16, color: 'var(--color-text)' }}>
+                {i18n('workspace.table.import.mode.description')}
+              </div>
+              <Radio.Group
+                value={importMode}
+                onChange={(e) => setImportMode(e.target.value)}
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                <Radio value="INSERT">{i18n('workspace.table.import.mode.insert')}</Radio>
+                <Radio value="UPDATE" disabled={!hasPrimaryKey}>
+                  {i18n('workspace.table.import.mode.update')}
+                  {!hasPrimaryKey && (
+                    <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
+                      ({i18n('workspace.table.import.mode.pkRequired')})
+                    </span>
+                  )}
+                </Radio>
+                <Radio value="UPSERT" disabled={!hasPrimaryKey}>
+                  {i18n('workspace.table.import.mode.upsert')}
+                  {!hasPrimaryKey && (
+                    <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
+                      ({i18n('workspace.table.import.mode.pkRequired')})
+                    </span>
+                  )}
+                </Radio>
+                <Radio value="INSERT_IGNORE">{i18n('workspace.table.import.mode.insertIgnore')}</Radio>
+                <Radio value="DELETE" disabled={!hasPrimaryKey}>
+                  {i18n('workspace.table.import.mode.delete')}
+                  {!hasPrimaryKey && (
+                    <span style={{ color: '#999', fontSize: 12, marginLeft: 8 }}>
+                      ({i18n('workspace.table.import.mode.pkRequired')})
+                    </span>
+                  )}
+                </Radio>
+                <Radio value="REPLACE">{i18n('workspace.table.import.mode.replace')}</Radio>
+              </Radio.Group>
+            </div>
+          );
+        }
+
+      case 3:
         return (
           <div style={{ color: 'var(--color-text)' }}>
             <div style={{ marginBottom: 16 }}>
@@ -441,9 +493,33 @@ const ImportDataModal = () => {
         <Button key="previous" onClick={() => setCurrentStep(0)} disabled={importing}>
           {i18n('workspace.table.import.previous')}
         </Button>,
+        <Button key="next" type="primary" onClick={() => setCurrentStep(2)} disabled={previewLoading}>
+          {i18n('workspace.table.import.next')}
+        </Button>,
+      ];
+    } else if (currentStep === 2) {
+      const startButton = importMode === 'REPLACE' ? (
+        <Popconfirm
+          key="start"
+          title={i18n('workspace.table.import.mode.replaceConfirm')}
+          onConfirm={handleImport}
+          okText={i18n('workspace.table.import.start')}
+          cancelText={i18n('workspace.table.import.cancel')}
+        >
+          <Button type="primary" disabled={previewLoading || importing}>
+            {i18n('workspace.table.import.start')}
+          </Button>
+        </Popconfirm>
+      ) : (
         <Button key="start" type="primary" onClick={handleImport} disabled={previewLoading || importing}>
           {i18n('workspace.table.import.start')}
+        </Button>
+      );
+      return [
+        <Button key="previous" onClick={() => setCurrentStep(1)} disabled={importing}>
+          {i18n('workspace.table.import.previous')}
         </Button>,
+        startButton,
       ];
     } else {
       return [
@@ -462,11 +538,12 @@ const ImportDataModal = () => {
         onCancel={handleClose}
         footer={getFooterButtons()}
         width={currentStep === 1 ? 700 : 500}
-        closable={currentStep !== 2}
+        closable={currentStep !== 3}
       >
         <Steps current={currentStep} style={{ marginBottom: 24 }}>
           <Step title={i18n('workspace.table.import.step.selectFile')} />
           <Step title={i18n('workspace.table.import.step.fieldMapping')} />
+          <Step title={i18n('workspace.table.import.step.importMode')} />
           <Step title={i18n('workspace.table.import.step.importProgress')} />
         </Steps>
 

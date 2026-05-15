@@ -2,6 +2,7 @@ package ai.chat2db.plugin.postgresql.builder;
 
 import ai.chat2db.plugin.postgresql.type.PostgreSQLColumnTypeEnum;
 import ai.chat2db.plugin.postgresql.type.PostgreSQLIndexTypeEnum;
+import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.jdbc.DefaultSqlBuilder;
 import ai.chat2db.spi.model.*;
@@ -200,5 +201,41 @@ public class PostgreSQLSqlBuilder extends DefaultSqlBuilder implements SqlBuilde
             sqlBuilder.append("; COMMENT ON SCHEMA \"").append(schema.getName()).append("\" IS '").append(schema.getComment()).append("';");
         }
         return sqlBuilder.toString();
+    }
+
+    @Override
+    protected String buildImportUpsertSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(tableName).append(" (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(") VALUES (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("?");
+        }
+        sql.append(")");
+        if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
+            sql.append(" ON CONFLICT (");
+            for (int i = 0; i < primaryKeyColumns.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append(metaSchema.getMetaDataName(primaryKeyColumns.get(i)));
+            }
+            sql.append(") DO UPDATE SET ");
+            boolean first = true;
+            for (Header header : headerList) {
+                if (primaryKeyColumns.contains(header.getName())) {
+                    continue;
+                }
+                if (!first) sql.append(",");
+                String quotedName = metaSchema.getMetaDataName(header.getName());
+                sql.append(quotedName).append("=EXCLUDED.").append(quotedName);
+                first = false;
+            }
+        }
+        return sql.toString();
     }
 }

@@ -2,12 +2,16 @@ package ai.chat2db.plugin.oracle.builder;
 
 import ai.chat2db.plugin.oracle.type.OracleColumnTypeEnum;
 import ai.chat2db.plugin.oracle.type.OracleIndexTypeEnum;
+import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.jdbc.DefaultSqlBuilder;
+import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import org.apache.commons.lang3.StringUtils;
+
+import java.util.List;
 
 public class OracleSqlBuilder extends DefaultSqlBuilder implements SqlBuilder {
     @Override
@@ -126,16 +130,50 @@ public class OracleSqlBuilder extends DefaultSqlBuilder implements SqlBuilder {
         return sqlBuilder.toString();
     }
 
-//    @Override
-//    public String buildCreateSchemaSql(Schema schema){
-//        StringBuilder sqlBuilder = new StringBuilder();
-//        sqlBuilder.append("CREATE SCHEMA \""+schema.getName()+"\"");
-//        if(StringUtils.isNotBlank(schema.getOwner())){
-//            sqlBuilder.append(" AUTHORIZATION ").append(schema.getOwner());
-//        }
-//        if(StringUtils.isNotBlank(schema.getComment())){
-//            sqlBuilder.append("; COMMENT ON SCHEMA \"").append(schema.getName()).append("\" IS '").append(schema.getComment()).append("';");
-//        }
-//        return sqlBuilder.toString();
-//    }
+    @Override
+    protected String buildImportUpsertSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        if (primaryKeyColumns == null || primaryKeyColumns.isEmpty()) {
+            return buildImportInsertSql(tableName, headerList, metaSchema);
+        }
+        StringBuilder sql = new StringBuilder("MERGE INTO ");
+        sql.append(tableName).append(" t USING (SELECT ");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("? AS ").append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(" FROM DUAL) s ON (");
+        for (int i = 0; i < primaryKeyColumns.size(); i++) {
+            if (i > 0) sql.append(" AND ");
+            String pk = metaSchema.getMetaDataName(primaryKeyColumns.get(i));
+            sql.append("t.").append(pk).append("=s.").append(pk);
+        }
+        sql.append(") WHEN MATCHED THEN UPDATE SET ");
+        boolean first = true;
+        for (Header header : headerList) {
+            if (primaryKeyColumns.contains(header.getName())) {
+                continue;
+            }
+            if (!first) sql.append(",");
+            String quotedName = metaSchema.getMetaDataName(header.getName());
+            sql.append("t.").append(quotedName).append("=s.").append(quotedName);
+            first = false;
+        }
+        sql.append(" WHEN NOT MATCHED THEN INSERT (");
+        first = true;
+        for (Header header : headerList) {
+            if (!first) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(header.getName()));
+            first = false;
+        }
+        sql.append(") VALUES (");
+        first = true;
+        for (Header header : headerList) {
+            if (!first) sql.append(",");
+            sql.append("s.").append(metaSchema.getMetaDataName(header.getName()));
+            first = false;
+        }
+        sql.append(")");
+        return sql.toString();
+    }
 }

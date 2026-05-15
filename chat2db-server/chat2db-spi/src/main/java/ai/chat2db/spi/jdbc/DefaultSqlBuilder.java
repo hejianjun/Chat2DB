@@ -522,4 +522,101 @@ public class DefaultSqlBuilder implements SqlBuilder {
         script.append(buildWhere(headerList, odlRow, metaSchema, keyColumns));
         return script.toString();
     }
+
+    @Override
+    public String buildImportSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns, String mode) {
+        MetaData metaSchema = Chat2DBContext.getMetaData();
+        switch (mode) {
+            case "INSERT":
+                return buildImportInsertSql(tableName, headerList, metaSchema);
+            case "UPDATE":
+                return buildImportUpdateSql(tableName, headerList, primaryKeyColumns, metaSchema);
+            case "UPSERT":
+                return buildImportUpsertSql(tableName, headerList, primaryKeyColumns, metaSchema);
+            case "INSERT_IGNORE":
+                return buildImportInsertIgnoreSql(tableName, headerList, metaSchema);
+            case "DELETE":
+                return buildImportDeleteSql(tableName, headerList, primaryKeyColumns, metaSchema);
+            default:
+                return buildImportInsertSql(tableName, headerList, metaSchema);
+        }
+    }
+
+    protected String buildImportInsertSql(String tableName, List<Header> headerList, MetaData metaSchema) {
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(tableName).append(" (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(") VALUES (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("?");
+        }
+        sql.append(")");
+        return sql.toString();
+    }
+
+    protected String buildImportUpdateSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        StringBuilder sql = new StringBuilder("UPDATE ");
+        sql.append(tableName).append(" SET ");
+        boolean first = true;
+        for (Header header : headerList) {
+            if (primaryKeyColumns != null && primaryKeyColumns.contains(header.getName())) {
+                continue;
+            }
+            if (!first) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(header.getName())).append("=?");
+            first = false;
+        }
+        sql.append(" WHERE ");
+        first = true;
+        if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
+            for (String pk : primaryKeyColumns) {
+                if (!first) sql.append(" AND ");
+                sql.append(metaSchema.getMetaDataName(pk)).append("=?");
+                first = false;
+            }
+        } else {
+            // 无主键时使用所有列作为匹配条件（不推荐，但作为兜底）
+            for (Header header : headerList) {
+                if (!first) sql.append(" AND ");
+                sql.append(metaSchema.getMetaDataName(header.getName())).append("=?");
+                first = false;
+            }
+        }
+        return sql.toString();
+    }
+
+    protected String buildImportUpsertSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        // 默认使用INSERT实现
+        return buildImportInsertSql(tableName, headerList, metaSchema);
+    }
+
+    protected String buildImportInsertIgnoreSql(String tableName, List<Header> headerList, MetaData metaSchema) {
+        // 默认使用INSERT实现
+        return buildImportInsertSql(tableName, headerList, metaSchema);
+    }
+
+    protected String buildImportDeleteSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        StringBuilder sql = new StringBuilder("DELETE FROM ");
+        sql.append(tableName).append(" WHERE ");
+        if (primaryKeyColumns != null && !primaryKeyColumns.isEmpty()) {
+            for (int i = 0; i < primaryKeyColumns.size(); i++) {
+                if (i > 0) sql.append(" AND ");
+                sql.append(metaSchema.getMetaDataName(primaryKeyColumns.get(i))).append("=?");
+            }
+        } else {
+            // 无主键时使用所有列作为匹配条件
+            for (int i = 0; i < headerList.size(); i++) {
+                if (i > 0) sql.append(" AND ");
+                sql.append(metaSchema.getMetaDataName(headerList.get(i).getName())).append("=?");
+            }
+        }
+        return sql.toString();
+    }
 }

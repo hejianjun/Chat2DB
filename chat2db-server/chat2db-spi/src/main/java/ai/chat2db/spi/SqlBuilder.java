@@ -82,6 +82,17 @@ public interface SqlBuilder {
     String generateSqlBasedOnResults(String tableName, List<Header> headerList, List<ResultOperation> operations);
 
     /**
+     * 构建导入SQL（参数化形式，返回SQL模板供PreparedStatement使用）
+     *
+     * @param tableName         表名
+     * @param headerList        表头元数据
+     * @param primaryKeyColumns 主键列名
+     * @param mode              导入模式
+     * @return SQL模板字符串（使用?占位符）
+     */
+    String buildImportSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns, String mode);
+
+    /**
      * Generate add foreign key sql
      */
     default String buildAddForeignKeySql(ForeignKey fk) {

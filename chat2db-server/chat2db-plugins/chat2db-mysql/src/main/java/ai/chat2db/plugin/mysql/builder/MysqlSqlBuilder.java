@@ -15,10 +15,14 @@ import ai.chat2db.spi.enums.EditStatus;
 import ai.chat2db.spi.jdbc.DefaultSqlBuilder;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
+import ai.chat2db.spi.MetaData;
 import cn.hutool.core.util.ArrayUtil;
+
+import java.util.List;
 
 public class MysqlSqlBuilder extends DefaultSqlBuilder implements SqlBuilder {
 
@@ -226,6 +230,53 @@ public class MysqlSqlBuilder extends DefaultSqlBuilder implements SqlBuilder {
             }
         }
         return list1.size() == list2.size() ? -1 : minLength;
+    }
+
+    @Override
+    protected String buildImportUpsertSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        // MySQL: INSERT INTO ... ON DUPLICATE KEY UPDATE col=VALUES(col)
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(tableName).append(" (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(") VALUES (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("?");
+        }
+        sql.append(") ON DUPLICATE KEY UPDATE ");
+        boolean first = true;
+        for (Header header : headerList) {
+            if (primaryKeyColumns != null && primaryKeyColumns.contains(header.getName())) {
+                continue;
+            }
+            if (!first) sql.append(",");
+            String quotedName = metaSchema.getMetaDataName(header.getName());
+            sql.append(quotedName).append("=VALUES(").append(quotedName).append(")");
+            first = false;
+        }
+        return sql.toString();
+    }
+
+    @Override
+    protected String buildImportInsertIgnoreSql(String tableName, List<Header> headerList, MetaData metaSchema) {
+        // MySQL: INSERT IGNORE INTO ...
+        StringBuilder sql = new StringBuilder("INSERT IGNORE INTO ");
+        sql.append(tableName).append(" (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(") VALUES (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("?");
+        }
+        sql.append(")");
+        return sql.toString();
     }
 
 }

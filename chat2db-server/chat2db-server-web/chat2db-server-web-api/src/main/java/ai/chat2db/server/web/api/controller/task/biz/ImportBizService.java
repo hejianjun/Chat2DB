@@ -20,6 +20,7 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.io.FileUtil;
@@ -208,6 +209,25 @@ public class ImportBizService {
         // 解析字段映射配置
         List<FieldMapping> fieldMappings = parseFieldMappings(request.getFieldMappings());
 
+        // 提取主键列
+        List<String> primaryKeyColumns = columns.stream()
+                .filter(col -> Boolean.TRUE.equals(col.getPrimaryKey()))
+                .map(TableColumn::getName)
+                .collect(Collectors.toList());
+
+        // 构建Header列表用于SqlBuilder
+        List<Header> headers = columns.stream().map(col -> Header.builder()
+                .name(col.getName())
+                .dataType(col.getColumnType())
+                .primaryKey(col.getPrimaryKey())
+                .build()).collect(Collectors.toList());
+
+        // 设置默认导入模式
+        String importMode = request.getImportMode();
+        if (importMode == null || importMode.isBlank()) {
+            importMode = "INSERT";
+        }
+
         ImportStrategy strategy = strategyFactory.getStrategy(fileType);
 
         Connection connection = Chat2DBContext.getConnection();
@@ -226,6 +246,9 @@ public class ImportBizService {
                 .connection(connection)
                 .progressUpdater(count -> updateProgressCount(taskId, count))
                 .fieldMappings(fieldMappings)
+                .importMode(importMode)
+                .primaryKeyColumns(primaryKeyColumns)
+                .headers(headers)
                 .build();
         strategy.importData(file, importContext);
     }

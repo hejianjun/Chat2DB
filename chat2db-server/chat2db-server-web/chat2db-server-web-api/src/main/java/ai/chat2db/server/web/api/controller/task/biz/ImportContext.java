@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.task.biz;
 
 import ai.chat2db.server.web.api.controller.task.request.FieldMapping;
+import ai.chat2db.spi.model.Header;
 import lombok.Builder;
 import lombok.Data;
 
@@ -31,4 +32,19 @@ public class ImportContext {
      * key: 源字段名, value: 目标字段名
      */
     private Map<String, String> sourceToTargetMap;
+
+    /**
+     * 导入模式
+     */
+    private String importMode;
+
+    /**
+     * 主键列名列表
+     */
+    private List<String> primaryKeyColumns;
+
+    /**
+     * 表头元数据列表（用于SqlBuilder生成SQL）
+     */
+    private List<Header> headers;
 }

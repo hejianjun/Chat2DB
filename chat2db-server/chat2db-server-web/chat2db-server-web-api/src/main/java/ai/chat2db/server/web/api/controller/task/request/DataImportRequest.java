@@ -38,4 +38,9 @@ public class DataImportRequest extends DataSourceBaseRequest {
      * 格式：[{"sourceField":"源字段","targetField":"目标字段","primaryKey":false}]
      */
     private String fieldMappings;
+
+    /**
+     * 导入模式：INSERT/UPDATE/UPSERT/INSERT_IGNORE/DELETE/REPLACE
+     */
+    private String importMode;
 }

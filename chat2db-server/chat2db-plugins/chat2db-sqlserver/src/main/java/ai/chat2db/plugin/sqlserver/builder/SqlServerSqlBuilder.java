@@ -2,11 +2,14 @@ package ai.chat2db.plugin.sqlserver.builder;
 
 import ai.chat2db.plugin.sqlserver.type.SqlServerColumnTypeEnum;
 import ai.chat2db.plugin.sqlserver.type.SqlServerIndexTypeEnum;
+import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.jdbc.DefaultSqlBuilder;
 import ai.chat2db.spi.model.*;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import org.apache.commons.lang3.StringUtils;
+
+import java.util.List;
 
 public class SqlServerSqlBuilder extends DefaultSqlBuilder implements SqlBuilder {
     @Override
@@ -172,5 +175,58 @@ public class SqlServerSqlBuilder extends DefaultSqlBuilder implements SqlBuilder
                     .append(",'").append(schema.getName()).append("'").append("\ngo\n");
         }
         return sqlBuilder.toString();
+    }
+
+    @Override
+    protected String buildImportUpsertSql(String tableName, List<Header> headerList, List<String> primaryKeyColumns,
+                                          MetaData metaSchema) {
+        // SQL Server: MERGE INTO target USING (VALUES (...)) AS s (cols) ON (pk match) WHEN MATCHED THEN UPDATE WHEN NOT MATCHED THEN INSERT
+        if (primaryKeyColumns == null || primaryKeyColumns.isEmpty()) {
+            return buildImportInsertSql(tableName, headerList, metaSchema);
+        }
+        StringBuilder sql = new StringBuilder("MERGE INTO ");
+        sql.append(tableName).append(" t USING (VALUES (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append("?");
+        }
+        sql.append(")) AS s (");
+        for (int i = 0; i < headerList.size(); i++) {
+            if (i > 0) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(headerList.get(i).getName()));
+        }
+        sql.append(") ON (");
+        for (int i = 0; i < primaryKeyColumns.size(); i++) {
+            if (i > 0) sql.append(" AND ");
+            String pk = metaSchema.getMetaDataName(primaryKeyColumns.get(i));
+            sql.append("t.").append(pk).append("=s.").append(pk);
+        }
+        sql.append(") WHEN MATCHED THEN UPDATE SET ");
+        boolean first = true;
+        for (Header header : headerList) {
+            if (primaryKeyColumns.contains(header.getName())) {
+                continue;
+            }
+            if (!first) sql.append(",");
+            String quotedName = metaSchema.getMetaDataName(header.getName());
+            sql.append("t.").append(quotedName).append("=s.").append(quotedName);
+            first = false;
+        }
+        sql.append(" WHEN NOT MATCHED THEN INSERT (");
+        first = true;
+        for (Header header : headerList) {
+            if (!first) sql.append(",");
+            sql.append(metaSchema.getMetaDataName(header.getName()));
+            first = false;
+        }
+        sql.append(") VALUES (");
+        first = true;
+        for (Header header : headerList) {
+            if (!first) sql.append(",");
+            sql.append("s.").append(metaSchema.getMetaDataName(header.getName()));
+            first = false;
+        }
+        sql.append(");");
+        return sql.toString();
     }
 }
