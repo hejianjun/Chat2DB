@@ -4,8 +4,6 @@ import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
 import ai.chat2db.server.domain.api.service.DataGenerationRuleService;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
-import ai.chat2db.server.domain.api.param.ColumnGenerationRuleParam;
-import ai.chat2db.server.domain.api.param.GeneratorMetadata;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
@@ -65,27 +63,27 @@ public class DataGenerationController {
         }
     }
 
-    @GetMapping("/metadata")
-    public ListResult<GeneratorMetadata> getAllGeneratorMetadata() {
+    @GetMapping("/templates")
+    public ListResult<ai.chat2db.server.domain.api.param.GeneratorTemplate> getAllGeneratorTemplates() {
         try {
-            return dataGenerationService.getAllGeneratorMetadata();
+            return dataGenerationService.getAllGeneratorTemplates();
         } catch (Exception e) {
-            log.error("Failed to get all generator metadata", e);
-            return ListResult.error("获取生成器元数据失败: " + e.getMessage(), null);
+            log.error("Failed to get all generator templates", e);
+            return ListResult.error("获取生成模板失败: " + e.getMessage(), null);
         }
     }
 
     @GetMapping("/generation-rule/list")
-    public ListResult<ColumnGenerationRuleParam> getRulesByTable(
+    public ListResult<ai.chat2db.server.domain.api.param.ColumnConfigParam> getColumnConfigs(
             @RequestParam Long dataSourceId,
             @RequestParam String databaseName,
             @RequestParam(required = false) String schemaName,
             @RequestParam String tableName) {
         try {
-            return ruleService.getRulesByTable(dataSourceId, databaseName, schemaName, tableName);
+            return ruleService.getColumnConfigs(dataSourceId, databaseName, schemaName, tableName);
         } catch (Exception e) {
-            log.error("Failed to get data generation rules by table", e);
-            return ListResult.error("GET_RULES_ERROR", "获取规则失败: " + e.getMessage());
+            log.error("Failed to get column configs", e);
+            return ListResult.error("GET_COLUMN_CONFIGS_ERROR", "获取列配置失败: " + e.getMessage());
         }
     }
 }

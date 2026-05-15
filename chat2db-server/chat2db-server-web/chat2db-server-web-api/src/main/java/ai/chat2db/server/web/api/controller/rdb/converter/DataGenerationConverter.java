@@ -30,13 +30,11 @@ public class DataGenerationConverter {
                 ColumnConfigParam param = new ColumnConfigParam();
                 param.setColumnName(voConfig.getColumnName());
                 param.setDataType(voConfig.getDataType());
-                param.setGenerationType(voConfig.getGenerationType());
-                param.setSubType(voConfig.getSubType());
+                param.setExpression(voConfig.getExpression());
                 param.setComment(voConfig.getComment());
                 param.setNullable(voConfig.getNullable());
                 param.setMaxLength(voConfig.getMaxLength());
                 param.setScale(voConfig.getScale());
-                param.setCustomParams(voConfig.getCustomParams());
                 columnConfigs.add(param);
             }
             request.setColumnConfigs(columnConfigs);

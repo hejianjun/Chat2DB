@@ -2,8 +2,8 @@ package ai.chat2db.server.domain.core.impl;
 
 import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.param.ColumnConfigParam;
-import ai.chat2db.server.domain.api.param.ColumnGenerationRuleParam;
 import ai.chat2db.server.domain.api.param.TableQueryParam;
+import ai.chat2db.server.domain.api.param.GeneratorTemplate;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.TaskService;
@@ -12,14 +12,10 @@ import ai.chat2db.server.domain.api.param.TaskCreateParam;
 import ai.chat2db.server.domain.api.enums.TaskStatusEnum;
 import ai.chat2db.server.domain.api.enums.TaskTypeEnum;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
-import ai.chat2db.server.domain.core.generator.DataGenerator;
-import ai.chat2db.server.domain.core.generator.DataGeneratorFactory;
-import ai.chat2db.server.domain.api.param.GeneratorMetadata;
+import ai.chat2db.server.domain.core.generator.ExpressionDataGenerator;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.spi.model.TableColumn;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import net.datafaker.Faker;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,8 +29,6 @@ import java.util.stream.Collectors;
 @Service
 public class DataGenerationServiceImpl implements DataGenerationService {
 
-    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-
     @Autowired
     private TableService tableService;
 
@@ -42,7 +36,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     private TaskService taskService;
 
     @Autowired
-    private DataGeneratorFactory dataGeneratorFactory;
+    private ExpressionDataGenerator expressionDataGenerator;
 
     @Autowired
     private DataGenerationRuleService ruleService;
@@ -61,13 +55,13 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                 return ListResult.error("GET_TABLE_COLUMNS_ERROR", "获取表列信息失败");
             }
 
-            ListResult<ColumnGenerationRuleParam> savedRules = ruleService.getRulesByTable(
+            ListResult<ColumnConfigParam> savedConfigs = ruleService.getColumnConfigs(
                     request.getDataSourceId(), request.getDatabaseName(), request.getSchemaName(), request.getTableName());
 
-            Map<String, ColumnGenerationRuleParam> ruleMap = new HashMap<>();
-            if (savedRules.success() && savedRules.getData() != null) {
-                for (ColumnGenerationRuleParam rule : savedRules.getData()) {
-                    ruleMap.put(rule.getColumnName(), rule);
+            Map<String, ColumnConfigParam> savedMap = new HashMap<>();
+            if (savedConfigs.success() && savedConfigs.getData() != null) {
+                for (ColumnConfigParam cfg : savedConfigs.getData()) {
+                    savedMap.put(cfg.getColumnName(), cfg);
                 }
             }
 
@@ -82,26 +76,9 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                 config.setMaxLength(column.getColumnSize());
                 config.setScale(column.getDecimalDigits());
 
-                ColumnGenerationRuleParam savedRule = ruleMap.get(column.getName());
-                if (savedRule != null) {
-                    config.setGenerationType(savedRule.getGenerationType());
-                    config.setSubType(savedRule.getSubType());
-                    if (savedRule.getCustomParams() != null) {
-                        try {
-                            config.setCustomParams(JSON_MAPPER.readValue(savedRule.getCustomParams(), Map.class));
-                        } catch (JsonProcessingException e) {
-                            log.warn("Failed to parse custom params for column {}", column.getName(), e);
-                        }
-                    }
-                } else {
-                    DataGenerator defaultGenerator = dataGeneratorFactory.getDefaultGenerator(dataType);
-                    if (defaultGenerator != null) {
-                        GeneratorMetadata metadata = defaultGenerator.getMetadata();
-                        config.setGenerationType(metadata.getGeneratorType());
-                        if (metadata.getSubTypes() != null && !metadata.getSubTypes().isEmpty()) {
-                            config.setSubType(metadata.getSubTypes().get(0).getValue());
-                        }
-                    }
+                ColumnConfigParam saved = savedMap.get(column.getName());
+                if (saved != null && saved.getExpression() != null) {
+                    config.setExpression(saved.getExpression());
                 }
 
                 columns.add(config);
@@ -117,7 +94,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     @Override
     public DataResult<DataGenerationPreviewVO> generatePreview(DataGenerationRequest request) {
         try {
-            saveRules(request);
+            saveConfigs(request);
 
             List<ColumnConfigParam> columns = resolveColumns(request);
             if (columns == null) {
@@ -135,7 +112,6 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                 DataGenerationPreviewVO.ColumnInfo columnInfo = new DataGenerationPreviewVO.ColumnInfo();
                 columnInfo.setColumnName(column.getColumnName());
                 columnInfo.setDataType(column.getDataType());
-                columnInfo.setGenerationType(column.getGenerationType());
                 columnInfo.setComment(column.getComment());
                 columnInfos.add(columnInfo);
             }
@@ -151,7 +127,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     @Override
     public DataResult<Long> executeDataGeneration(DataGenerationRequest request) {
         try {
-            saveRules(request);
+            saveConfigs(request);
 
             TaskCreateParam taskParam = new TaskCreateParam();
             taskParam.setDataSourceId(request.getDataSourceId());
@@ -179,55 +155,20 @@ public class DataGenerationServiceImpl implements DataGenerationService {
     }
 
     @Override
-    public ListResult<String> getSupportedGenerationTypes() {
-        try {
-            List<GeneratorMetadata> metadataList = dataGeneratorFactory.getAllMetadata();
-            List<String> types = metadataList.stream()
-                    .map(GeneratorMetadata::getGeneratorType)
-                    .collect(Collectors.toList());
-            return ListResult.of(types);
-        } catch (Exception e) {
-            log.error("Failed to get supported generation types", e);
-            return ListResult.error("GET_SUPPORTED_TYPES_ERROR", "获取支持的生成类型失败");
-        }
+    public ListResult<GeneratorTemplate> getAllGeneratorTemplates() {
+        return ListResult.of(GeneratorTemplate.getDefaultTemplates());
     }
 
-    @Override
-    public ListResult<GeneratorMetadata> getAllGeneratorMetadata() {
-        try {
-            return ListResult.of(dataGeneratorFactory.getAllMetadata());
-        } catch (Exception e) {
-            log.error("Failed to get all generator metadata", e);
-            return ListResult.error("GET_METADATA_ERROR", "获取生成器元数据失败");
-        }
-    }
-
-    private void saveRules(DataGenerationRequest request) {
+    private void saveConfigs(DataGenerationRequest request) {
         if (request.getColumnConfigs() == null || request.getColumnConfigs().isEmpty()) {
             return;
         }
         try {
-            List<ColumnGenerationRuleParam> rules = new ArrayList<>();
-            for (ColumnConfigParam col : request.getColumnConfigs()) {
-                ColumnGenerationRuleParam rule = new ColumnGenerationRuleParam();
-                rule.setColumnName(col.getColumnName());
-                rule.setGenerationType(col.getGenerationType());
-                rule.setSubType(col.getSubType());
-                if (col.getCustomParams() != null && !col.getCustomParams().isEmpty()) {
-                    try {
-                        rule.setCustomParams(JSON_MAPPER.writeValueAsString(col.getCustomParams()));
-                    } catch (JsonProcessingException e) {
-                        log.warn("Failed to serialize custom params for column {}", col.getColumnName(), e);
-                    }
-                }
-                rule.setComment(col.getComment());
-                rules.add(rule);
-            }
-            ruleService.saveRulesByTable(
+            ruleService.saveColumnConfigs(
                     request.getDataSourceId(), request.getDatabaseName(), request.getSchemaName(),
-                    request.getTableName(), 0L, rules);
+                    request.getTableName(), 0L, request.getColumnConfigs(), request.getRowCount());
         } catch (Exception e) {
-            log.warn("Failed to save generation rules, but continuing operation", e);
+            log.warn("Failed to save generation configs, but continuing operation", e);
         }
     }
 
@@ -236,42 +177,46 @@ public class DataGenerationServiceImpl implements DataGenerationService {
         if (!result.success()) {
             return null;
         }
-        return result.getData();
+        List<ColumnConfigParam> dbColumns = result.getData();
+
+        if (request.getColumnConfigs() != null && !request.getColumnConfigs().isEmpty()) {
+            Map<String, String> expressionMap = request.getColumnConfigs().stream()
+                    .filter(c -> c.getExpression() != null)
+                    .collect(Collectors.toMap(ColumnConfigParam::getColumnName, ColumnConfigParam::getExpression));
+
+            for (ColumnConfigParam col : dbColumns) {
+                String userExpression = expressionMap.get(col.getColumnName());
+                if (userExpression != null) {
+                    col.setExpression(userExpression);
+                }
+            }
+        }
+
+        return dbColumns;
     }
 
     private List<Map<String, Object>> generateDataRows(DataGenerationRequest request,
                                                        List<ColumnConfigParam> columns,
                                                        int rowCount) {
         List<Map<String, Object>> dataRows = new ArrayList<>();
-        Faker faker = dataGeneratorFactory.createFaker();
+        Faker faker = new Faker();
 
         for (int i = 0; i < rowCount; i++) {
-            Map<String, Object> row = new HashMap<>();
+            Map<String, Object> row = new LinkedHashMap<>();
             for (ColumnConfigParam column : columns) {
-                String generationType = column.getGenerationType();
-                if (generationType == null) {
-                    generationType = "text";
-                }
+                String expression = column.getExpression();
 
-                DataGenerator generator = dataGeneratorFactory.getGenerator(generationType);
-                if (generator == null) {
-                    generator = dataGeneratorFactory.getDefaultGenerator(column.getDataType());
-                }
+                ExpressionDataGenerator.ColumnGenerationConfig config =
+                        new ExpressionDataGenerator.ColumnGenerationConfig(
+                                column.getColumnName(),
+                                column.getDataType(),
+                                column.getNullable(),
+                                column.getMaxLength(),
+                                column.getScale()
+                        );
 
-                if (generator != null) {
-                    DataGenerator.ColumnConfig config = new DataGenerator.ColumnConfig();
-                    config.setColumnName(column.getColumnName());
-                    config.setDataType(column.getDataType());
-                    config.setSubType(column.getSubType());
-                    config.setComment(column.getComment());
-                    config.setNullable(column.getNullable());
-                    config.setMaxLength(column.getMaxLength());
-                    config.setScale(column.getScale());
-                    config.setCustomParams(column.getCustomParams());
-
-                    Object value = generator.generate(faker, config);
-                    row.put(column.getColumnName(), value);
-                }
+                Object value = expressionDataGenerator.generate(faker, expression, config);
+                row.put(column.getColumnName(), value);
             }
             dataRows.add(row);
         }

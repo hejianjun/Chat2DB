@@ -36,19 +36,11 @@ public class DataGenerationRuleDO implements Serializable {
     @TableField("table_name")
     private String tableName;
 
-    @TableField("column_name")
-    private String columnName;
+    @TableField("row_count")
+    private Integer rowCount;
 
-    @TableField("generation_type")
-    private String generationType;
-
-    @TableField("sub_type")
-    private String subType;
-
-    @TableField("custom_params")
-    private String customParams;
-
-    private String comment;
+    @TableField("column_configs")
+    private String columnConfigs;
 
     @TableField("user_id")
     private Long userId;

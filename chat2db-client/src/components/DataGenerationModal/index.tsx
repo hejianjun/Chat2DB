@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Form, Button, Table, Select, InputNumber, message, Space } from 'antd';
+import { Modal, Form, Button, Table, Select, Input, InputNumber, message } from 'antd';
 import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
 import createRequest from '@/service/base';
 
@@ -22,13 +22,11 @@ interface TableInfo {
 interface ColumnConfigVO {
   columnName: string;
   dataType: string;
-  generationType: string;
-  subType: string;
+  expression: string;
   comment?: string;
   nullable: boolean;
   maxLength?: number;
   scale?: number;
-  customParams?: Record<string, any>;
 }
 
 interface GenerateRequest {
@@ -41,42 +39,32 @@ interface GenerateRequest {
   batchSize?: number;
 }
 
-interface GeneratorSubType {
-  value: string;
+interface GeneratorTemplate {
   label: string;
+  category: string;
+  expression: string;
+  example: string;
+  suggestedDataType: string;
 }
 
-interface GeneratorConfigField {
-  key: string;
-  label: string;
-  type: string;
-  defaultValue: any;
-}
-
-interface GeneratorMetadata {
-  generatorType: string;
-  label: string;
-  subTypes: GeneratorSubType[];
-  configFields: GeneratorConfigField[];
-}
-
-interface SavedRule {
+interface SavedConfig {
   columnName: string;
-  generationType: string;
-  subType: string;
-  customParams: string;
+  dataType: string;
+  expression: string;
+  comment?: string;
+  nullable: boolean;
+  maxLength?: number;
+  scale?: number;
 }
 
 interface ColumnConfig {
   columnName: string;
   dataType: string;
   comment?: string;
-  generationType: string;
-  subType?: string;
+  expression?: string;
   nullable: boolean;
   maxLength?: number;
   scale?: number;
-  customParams?: Record<string, any>;
 }
 
 interface PreviewRow {
@@ -89,20 +77,28 @@ interface PreviewVO {
   columns: {
     columnName: string;
     dataType: string;
-    generationType: string;
     comment?: string;
   }[];
 }
 
-const loadGeneratorMetadata = createRequest<void, GeneratorMetadata[]>('/api/rdb/table/generate-data/metadata', { method: 'get' });
+const loadGeneratorTemplates = createRequest<void, GeneratorTemplate[]>('/api/rdb/table/generate-data/templates', { method: 'get' });
 
 const loadTableColumns = createRequest<TableInfo, ColumnConfig[]>('/api/rdb/table/generate-data/config', { method: 'post' });
 
-const loadSavedRules = createRequest<TableInfo, SavedRule[]>('/api/rdb/table/generate-data/generation-rule/list', { method: 'get' });
+const loadSavedConfigs = createRequest<TableInfo, SavedConfig[]>('/api/rdb/table/generate-data/generation-rule/list', { method: 'get' });
 
 const generatePreview = createRequest<GenerateRequest, PreviewVO>('/api/rdb/table/generate-data/preview', { method: 'post' });
 
 const executeGeneration = createRequest<GenerateRequest, number>('/api/rdb/table/generate-data/execute', { method: 'post' });
+
+const groupByCategory = (templates: GeneratorTemplate[]): Record<string, GeneratorTemplate[]> => {
+  const groups: Record<string, GeneratorTemplate[]> = {};
+  for (const t of templates) {
+    if (!groups[t.category]) groups[t.category] = [];
+    groups[t.category].push(t);
+  }
+  return groups;
+};
 
 const DataGenerationModal: React.FC = () => {
   const [form] = Form.useForm();
@@ -110,7 +106,8 @@ const DataGenerationModal: React.FC = () => {
   const [tableInfo, setTableInfo] = useState<IDataGenerationModalParams | null>(null);
   const [columns, setColumns] = useState<ColumnConfig[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generatorMetadata, setGeneratorMetadata] = useState<GeneratorMetadata[]>([]);
+  const [templates, setTemplates] = useState<GeneratorTemplate[]>([]);
+  const [templateGroups, setTemplateGroups] = useState<Record<string, GeneratorTemplate[]>>({});
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const tableInfoRef = useRef<IDataGenerationModalParams | null>(null);
@@ -128,10 +125,13 @@ const DataGenerationModal: React.FC = () => {
   }, [openDataGenerationModal]);
 
   useEffect(() => {
-    if (open && generatorMetadata.length === 0) {
-      loadGeneratorMetadata({})
+    if (open && templates.length === 0) {
+      loadGeneratorTemplates({})
         .then((res) => {
-          if (res) setGeneratorMetadata(res);
+          if (res) {
+            setTemplates(res);
+            setTemplateGroups(groupByCategory(res));
+          }
         })
         .catch(console.error);
     }
@@ -147,14 +147,33 @@ const DataGenerationModal: React.FC = () => {
     if (!tableInfo) return;
     setLoading(true);
     try {
-      const columnsRes = await loadTableColumns({
-        dataSourceId: tableInfo.dataSourceId,
-        databaseName: tableInfo.databaseName,
-        schemaName: tableInfo.schemaName,
-        tableName: tableInfo.tableName,
-      });
+      const [columnsRes, savedRes] = await Promise.all([
+        loadTableColumns({
+          dataSourceId: tableInfo.dataSourceId,
+          databaseName: tableInfo.databaseName,
+          schemaName: tableInfo.schemaName,
+          tableName: tableInfo.tableName,
+        }),
+        loadSavedConfigs({
+          dataSourceId: tableInfo.dataSourceId,
+          databaseName: tableInfo.databaseName,
+          schemaName: tableInfo.schemaName,
+          tableName: tableInfo.tableName,
+        }),
+      ]);
+
       if (columnsRes) {
-        setColumns(columnsRes);
+        const savedMap = new Map<string, string>();
+        if (savedRes) {
+          for (const saved of savedRes) {
+            savedMap.set(saved.columnName, saved.expression);
+          }
+        }
+        const merged = columnsRes.map(col => ({
+          ...col,
+          expression: savedMap.get(col.columnName) || col.expression,
+        }));
+        setColumns(merged);
       }
     } catch {
       message.error('加载表列信息失败');
@@ -167,12 +186,10 @@ const DataGenerationModal: React.FC = () => {
     return columns.map(col => ({
       columnName: col.columnName,
       dataType: col.dataType,
-      generationType: col.generationType,
-      subType: col.subType || '',
+      expression: col.expression || '',
       nullable: col.nullable,
       maxLength: col.maxLength,
       scale: col.scale,
-      customParams: col.customParams,
     }));
   };
 
@@ -221,34 +238,25 @@ const DataGenerationModal: React.FC = () => {
     }
   };
 
-  const handleColumnTypeChange = (columnName: string, generationType: string) => {
-    setColumns(prev => prev.map(col => {
-      if (col.columnName === columnName) {
-        const meta = generatorMetadata.find(m => m.generatorType === generationType);
-        return { ...col, generationType, subType: meta?.subTypes?.[0]?.value };
-      }
-      return col;
-    }));
+  const handleTemplateChange = (columnName: string, value: string) => {
+    const template = templates.find(t => `${t.category} - ${t.label}` === value);
+    if (template) {
+      setColumns(prev => prev.map(col =>
+        col.columnName === columnName ? { ...col, expression: template.expression } : col
+      ));
+    }
   };
 
-  const handleSubTypeChange = (columnName: string, subType: string) => {
+  const handleExpressionChange = (columnName: string, expression: string) => {
     setColumns(prev => prev.map(col =>
-      col.columnName === columnName ? { ...col, subType } : col
+      col.columnName === columnName ? { ...col, expression } : col
     ));
   };
 
-  const handleCustomParamChange = (columnName: string, fieldKey: string, value: any) => {
-    setColumns(prev => prev.map(col => {
-      if (col.columnName === columnName) {
-        const customParams = { ...(col.customParams || {}), [fieldKey]: value };
-        return { ...col, customParams };
-      }
-      return col;
-    }));
-  };
-
-  const getGeneratorMeta = (generationType: string) => {
-    return generatorMetadata.find(m => m.generatorType === generationType);
+  const getMatchedTemplate = (expression: string | undefined): string | undefined => {
+    if (!expression) return undefined;
+    const matched = templates.find(t => t.expression === expression);
+    return matched ? `${matched.category} - ${matched.label}` : undefined;
   };
 
   const tableColumns = [
@@ -256,66 +264,42 @@ const DataGenerationModal: React.FC = () => {
     { title: '数据类型', dataIndex: 'dataType', key: 'dataType', width: 100 },
     { title: '注释', dataIndex: 'comment', key: 'comment', width: 100 },
     {
-      title: '生成类型',
-      key: 'generationType',
-      width: 130,
+      title: '预设模板',
+      key: 'template',
+      width: 200,
       render: (_: any, record: ColumnConfig) => (
         <Select
-          value={record.generationType}
-          onChange={(value) => handleColumnTypeChange(record.columnName, value)}
+          value={getMatchedTemplate(record.expression)}
+          onChange={(value) => handleTemplateChange(record.columnName, value)}
           style={{ width: '100%' }}
           size="small"
+          placeholder="选择模板"
+          allowClear
         >
-          {generatorMetadata.map(meta => (
-            <Option key={meta.generatorType} value={meta.generatorType}>{meta.label}</Option>
+          {Object.entries(templateGroups).map(([category, items]) => (
+            <Select.OptGroup key={category} label={category}>
+              {items.map(item => (
+                <Option key={`${category} - ${item.label}`} value={`${category} - ${item.label}`}>
+                  {item.label}
+                </Option>
+              ))}
+            </Select.OptGroup>
           ))}
         </Select>
       ),
     },
     {
-      title: '子类型',
-      key: 'subType',
-      width: 130,
-      render: (_: any, record: ColumnConfig) => {
-        const meta = getGeneratorMeta(record.generationType);
-        if (!meta?.subTypes?.length) return null;
-        return (
-          <Select
-            value={record.subType}
-            onChange={(value) => handleSubTypeChange(record.columnName, value)}
-            style={{ width: '100%' }}
-            size="small"
-            placeholder="选择子类型"
-          >
-            {meta.subTypes.map(st => (
-              <Option key={st.value} value={st.value}>{st.label}</Option>
-            ))}
-          </Select>
-        );
-      },
-    },
-    {
-      title: '自定义参数',
-      key: 'customParams',
-      width: 200,
-      render: (_: any, record: ColumnConfig) => {
-        const meta = getGeneratorMeta(record.generationType);
-        if (!meta?.configFields?.length) return null;
-        return (
-          <Space size={4} wrap>
-            {meta.configFields.map(field => (
-              <InputNumber
-                key={field.key}
-                size="small"
-                style={{ width: 80 }}
-                placeholder={field.label}
-                value={(record.customParams as any)?.[field.key] ?? field.defaultValue}
-                onChange={(value) => handleCustomParamChange(record.columnName, field.key, value)}
-              />
-            ))}
-          </Space>
-        );
-      },
+      title: '表达式',
+      key: 'expression',
+      width: 300,
+      render: (_: any, record: ColumnConfig) => (
+        <Input
+          size="small"
+          placeholder="#{Name.first_name}"
+          value={record.expression || ''}
+          onChange={(e) => handleExpressionChange(record.columnName, e.target.value)}
+        />
+      ),
     },
   ];
 

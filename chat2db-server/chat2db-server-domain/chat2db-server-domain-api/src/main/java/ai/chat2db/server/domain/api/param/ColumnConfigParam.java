@@ -2,8 +2,6 @@ package ai.chat2db.server.domain.api.param;
 
 import lombok.Data;
 
-import java.util.Map;
-
 @Data
 public class ColumnConfigParam {
 
@@ -11,9 +9,7 @@ public class ColumnConfigParam {
 
     private String dataType;
 
-    private String generationType;
-
-    private String subType;
+    private String expression;
 
     private String comment;
 
@@ -22,6 +18,4 @@ public class ColumnConfigParam {
     private Integer maxLength;
 
     private Integer scale;
-
-    private Map<String, Object> customParams;
 }

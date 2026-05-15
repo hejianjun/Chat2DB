@@ -1,6 +1,6 @@
 package ai.chat2db.server.domain.core.impl;
 
-import ai.chat2db.server.domain.api.param.ColumnGenerationRuleParam;
+import ai.chat2db.server.domain.api.param.ColumnConfigParam;
 import ai.chat2db.server.domain.api.service.DataGenerationRuleService;
 import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.domain.repository.entity.DataGenerationRuleDO;
@@ -8,39 +8,28 @@ import ai.chat2db.server.domain.repository.mapper.DataGenerationRuleMapper;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Slf4j
 @Service
 public class DataGenerationRuleServiceImpl implements DataGenerationRuleService {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
     private DataGenerationRuleMapper getMapper() {
         return Dbutils.getMapper(DataGenerationRuleMapper.class);
     }
 
-    private ColumnGenerationRuleParam toParam(DataGenerationRuleDO rule) {
-        ColumnGenerationRuleParam param = new ColumnGenerationRuleParam();
-        param.setId(rule.getId());
-        param.setDataSourceId(rule.getDataSourceId());
-        param.setDatabaseName(rule.getDatabaseName());
-        param.setSchemaName(rule.getSchemaName());
-        param.setTableName(rule.getTableName());
-        param.setColumnName(rule.getColumnName());
-        param.setGenerationType(rule.getGenerationType());
-        param.setSubType(rule.getSubType());
-        param.setCustomParams(rule.getCustomParams());
-        param.setComment(rule.getComment());
-        param.setUserId(rule.getUserId());
-        return param;
-    }
-
     @Override
-    public ListResult<ColumnGenerationRuleParam> getRulesByTable(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+    public ListResult<ColumnConfigParam> getColumnConfigs(Long dataSourceId, String databaseName, String schemaName, String tableName) {
         try {
             QueryWrapper<DataGenerationRuleDO> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("data_source_id", dataSourceId);
@@ -52,47 +41,60 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
                 queryWrapper.isNull("schema_name");
             }
 
-            List<DataGenerationRuleDO> rules = getMapper().selectList(queryWrapper);
-            List<ColumnGenerationRuleParam> result = new ArrayList<>();
-            for (DataGenerationRuleDO rule : rules) {
-                result.add(toParam(rule));
+            DataGenerationRuleDO rule = getMapper().selectOne(queryWrapper);
+            if (rule == null || rule.getColumnConfigs() == null) {
+                return ListResult.of(Collections.emptyList());
             }
-            return ListResult.of(result);
+
+            List<ColumnConfigParam> configs = JSON_MAPPER.readValue(
+                    rule.getColumnConfigs(), new TypeReference<List<ColumnConfigParam>>() {});
+            return ListResult.of(configs);
         } catch (Exception e) {
-            log.error("Failed to get data generation rules by table", e);
-            return ListResult.error("GET_RULES_BY_TABLE_ERROR", "获取规则失败: " + e.getMessage());
+            log.error("Failed to get column configs", e);
+            return ListResult.error("GET_COLUMN_CONFIGS_ERROR", "获取列配置失败: " + e.getMessage());
         }
     }
 
     @Override
-    public ActionResult saveRulesByTable(Long dataSourceId, String databaseName, String schemaName, String tableName, Long userId, List<ColumnGenerationRuleParam> rules) {
-        if (rules == null || rules.isEmpty()) {
+    public ActionResult saveColumnConfigs(Long dataSourceId, String databaseName, String schemaName, String tableName, Long userId, List<ColumnConfigParam> configs, Integer rowCount) {
+        if (configs == null || configs.isEmpty()) {
             return ActionResult.isSuccess();
         }
         try {
-            QueryWrapper<DataGenerationRuleDO> deleteWrapper = new QueryWrapper<>();
-            deleteWrapper.eq("data_source_id", dataSourceId);
-            deleteWrapper.eq("database_name", databaseName);
-            deleteWrapper.eq("table_name", tableName);
+            QueryWrapper<DataGenerationRuleDO> queryWrapper = new QueryWrapper<>();
+            queryWrapper.eq("data_source_id", dataSourceId);
+            queryWrapper.eq("database_name", databaseName);
+            queryWrapper.eq("table_name", tableName);
             if (schemaName != null) {
-                deleteWrapper.eq("schema_name", schemaName);
+                queryWrapper.eq("schema_name", schemaName);
             } else {
-                deleteWrapper.isNull("schema_name");
+                queryWrapper.isNull("schema_name");
             }
-            getMapper().delete(deleteWrapper);
 
+            DataGenerationRuleDO existing = getMapper().selectOne(queryWrapper);
             LocalDateTime now = LocalDateTime.now();
-            for (ColumnGenerationRuleParam r : rules) {
+            String jsonConfigs;
+            try {
+                jsonConfigs = JSON_MAPPER.writeValueAsString(configs);
+            } catch (JsonProcessingException e) {
+                return ActionResult.fail("SERIALIZE_ERROR", "序列化列配置失败: " + e.getMessage(), null);
+            }
+
+            if (existing != null) {
+                existing.setColumnConfigs(jsonConfigs);
+                if (rowCount != null) {
+                    existing.setRowCount(rowCount);
+                }
+                existing.setGmtModified(now);
+                getMapper().updateById(existing);
+            } else {
                 DataGenerationRuleDO rule = new DataGenerationRuleDO();
                 rule.setDataSourceId(dataSourceId);
                 rule.setDatabaseName(databaseName);
                 rule.setSchemaName(schemaName);
                 rule.setTableName(tableName);
-                rule.setColumnName(r.getColumnName());
-                rule.setGenerationType(r.getGenerationType());
-                rule.setSubType(r.getSubType());
-                rule.setCustomParams(r.getCustomParams());
-                rule.setComment(r.getComment());
+                rule.setRowCount(rowCount != null ? rowCount : 100);
+                rule.setColumnConfigs(jsonConfigs);
                 rule.setUserId(userId);
                 rule.setGmtCreate(now);
                 rule.setGmtModified(now);
@@ -100,22 +102,8 @@ public class DataGenerationRuleServiceImpl implements DataGenerationRuleService 
             }
             return ActionResult.isSuccess();
         } catch (Exception e) {
-            log.error("Failed to save data generation rules", e);
-            return ActionResult.fail("SAVE_RULES_ERROR", "保存规则失败: " + e.getMessage(), null);
-        }
-    }
-
-    @Override
-    public ActionResult deleteRule(Long id) {
-        try {
-            int result = getMapper().deleteById(id);
-            if (result > 0) {
-                return ActionResult.isSuccess();
-            }
-            return ActionResult.fail("DELETE_RULE_ERROR", "删除规则失败", null);
-        } catch (Exception e) {
-            log.error("Failed to delete data generation rule", e);
-            return ActionResult.fail("DELETE_RULE_ERROR", "删除规则失败: " + e.getMessage(), null);
+            log.error("Failed to save column configs", e);
+            return ActionResult.fail("SAVE_CONFIGS_ERROR", "保存配置失败: " + e.getMessage(), null);
         }
     }
 }

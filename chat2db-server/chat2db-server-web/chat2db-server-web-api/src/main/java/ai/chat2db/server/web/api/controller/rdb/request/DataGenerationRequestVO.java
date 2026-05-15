@@ -4,7 +4,6 @@ import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRe
 import lombok.Data;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 public class DataGenerationRequestVO implements DataSourceBaseRequestInfo {
@@ -29,12 +28,10 @@ public class DataGenerationRequestVO implements DataSourceBaseRequestInfo {
     public static class ColumnConfigVO {
         private String columnName;
         private String dataType;
-        private String generationType;
-        private String subType;
+        private String expression;
         private String comment;
         private Boolean nullable;
         private Integer maxLength;
         private Integer scale;
-        private Map<String, Object> customParams;
     }
 }
