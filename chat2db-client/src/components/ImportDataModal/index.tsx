@@ -89,6 +89,37 @@ const ImportDataModal = () => {
       return;
     }
 
+    // SQL 文件跳过映射和模式选择，直接开始导入
+    if (fileType === 'SQL') {
+      setImporting(true);
+      setImportModalVisible(true);
+      setImportProgress(0);
+      setLogs([]);
+      addLog('start------');
+
+      try {
+        const taskId = await taskService.importData({
+          file,
+          tableName: params.tableName,
+          fileType,
+          dataSourceId: params.dataSourceId,
+          databaseName: params.databaseName,
+          schemaName: params.schemaName,
+          importMode: 'INSERT',
+        } as any);
+
+        addLog(`Task created: ${taskId}`);
+        startImportPolling(taskId);
+        setCurrentStep(3);
+      } catch (error: any) {
+        addLog(`Error: ${error.message}`);
+        message.error(i18n('common.text.importFailed'));
+        setImporting(false);
+        setImportModalVisible(false);
+      }
+      return;
+    }
+
     setPreviewLoading(true);
     try {
       const result = await taskService.previewFileHeaders({
