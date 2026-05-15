@@ -111,8 +111,10 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
       form.setFieldsValue({ ...record });
       setEditingData(record);
       // 根据当前字段类型，设置编辑配置
+      // 需要匹配基础类型名，忽略长度等信息（如 bigint(20) -> BIGINT）
+      const baseColumnType = record.columnType?.toUpperCase().replace(/\(.*\)/, '').trim();
       databaseSupportField.columnTypes.forEach((i) => {
-        if (i.typeName === record.columnType) {
+        if (i.typeName === baseColumnType) {
           setEditingConfig({
             ...i,
             editKey: record.key!,
@@ -410,8 +412,10 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
 
         if (name === 'columnType') {
           // 根据当前字段类型，设置编辑配置
+          // 需要匹配基础类型名，忽略长度等信息（如 bigint(20) -> BIGINT）
+          const baseType = value?.toUpperCase().replace(/\(.*\)/, '').trim();
           databaseSupportField.columnTypes.forEach((i) => {
-            if (i.typeName === value) {
+            if (i.typeName === baseType) {
               setEditingConfig({
                 ...editingConfig!,
                 ...i,
@@ -426,6 +430,12 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
             });
           }
         }
+
+        if (name === 'autoIncrement') {
+          // Checkbox value is boolean, convert to true/null for backend
+          editingDataItem.autoIncrement = value === true ? true : null;
+        }
+
         return editingDataItem;
       }
       return item;

@@ -370,7 +370,8 @@ public class MysqlMetaData extends DefaultMetaService implements MetaData {
                 column.setColumnType(resultSet.getString("COLUMN_TYPE"));
                 column.setDataType(resultSet.getString("DATA_TYPE"));
                 column.setDefaultValue(resultSet.getString("COLUMN_DEFAULT"));
-                column.setAutoIncrement(resultSet.getString("EXTRA").contains("auto_increment"));
+                String extra = resultSet.getString("EXTRA");
+                column.setAutoIncrement(extra != null && extra.contains("auto_increment"));
                 column.setComment(resultSet.getString("COLUMN_COMMENT"));
                 column.setPrimaryKey("PRI".equalsIgnoreCase(resultSet.getString("COLUMN_KEY")));
                 column.setNullable("YES".equalsIgnoreCase(resultSet.getString("IS_NULLABLE")) ? 1 : 0);

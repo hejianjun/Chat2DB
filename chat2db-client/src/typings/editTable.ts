@@ -24,7 +24,7 @@ export interface IColumnItemNew {
   columnType: string | null; // 列的类型 比如 varchar(100) ,double(10,6)
   dataType: number | null; // 数据类型
   defaultValue: string | null; // 默认值
-  autoIncrement: string | null; // 是否自增
+  autoIncrement: boolean | null; // 是否自增
   comment: string | null; // 注释
   aiComment: string | null; // AI注释
   primaryKey: boolean | null; // 是否主键
