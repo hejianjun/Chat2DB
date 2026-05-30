@@ -97,6 +97,26 @@ const generatePreview = createRequest<GenerateRequest, PreviewVO>('/api/rdb/tabl
 
 const executeGeneration = createRequest<GenerateRequest, number>('/api/rdb/table/generate-data/execute', { method: 'post' });
 
+const legacyExpressionMap: Record<string, string> = {
+  '#{Number.uuid}': '#{Internet.uuid}',
+  '#{Vehicle.driveType}': '#{Vehicle.drive_type}',
+  '#{Vehicle.licensePlate}': '#{Vehicle.license_plate}',
+  '#{Date.future}': "#{Date.future '30','DAYS'}",
+};
+
+const normalizeExpression = (expression?: string): string | undefined => {
+  if (!expression) return expression;
+  return legacyExpressionMap[expression] || expression;
+};
+
+const findInvalidExpressionColumn = (columns: ColumnConfig[]): string | undefined => {
+  const invalidColumn = columns.find((col) => {
+    const expression = col.expression?.trim();
+    return expression && !/^#\{.+\}$/.test(expression);
+  });
+  return invalidColumn?.columnName;
+};
+
 const groupByCategory = (templates: GeneratorTemplate[]): Record<string, GeneratorTemplate[]> => {
   const groups: Record<string, GeneratorTemplate[]> = {};
   for (const t of templates) {
@@ -162,7 +182,7 @@ const DataGenerationModal: React.FC = () => {
     const newColumns = columns.map(col => {
       const matched = result.column_expressions.find(e => e.column_name === col.columnName);
       if (matched && matched.expression) {
-        return { ...col, expression: matched.expression };
+        return { ...col, expression: normalizeExpression(matched.expression) };
       }
       return col;
     });
@@ -242,7 +262,7 @@ const DataGenerationModal: React.FC = () => {
         }
         const merged = columnsRes.map(col => ({
           ...col,
-          expression: savedMap.get(col.columnName) || col.expression,
+          expression: normalizeExpression(savedMap.get(col.columnName) || col.expression),
         }));
         setColumns(merged);
       }
@@ -266,6 +286,11 @@ const DataGenerationModal: React.FC = () => {
 
   const handlePreview = async () => {
     if (!tableInfo) return;
+    const invalidColumnName = findInvalidExpressionColumn(columns);
+    if (invalidColumnName) {
+      message.warning(`字段 ${invalidColumnName} 的表达式格式应为 #{Provider.method}`);
+      return;
+    }
     setLoading(true);
     try {
       const count = form.getFieldValue('rowCount') || 10;
@@ -290,6 +315,11 @@ const DataGenerationModal: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!tableInfo) return;
+    const invalidColumnName = findInvalidExpressionColumn(columns);
+    if (invalidColumnName) {
+      message.warning(`字段 ${invalidColumnName} 的表达式格式应为 #{Provider.method}`);
+      return;
+    }
     const count = form.getFieldValue('rowCount') || 100;
     setRowCount(count);
     setGenerating(true);
@@ -386,7 +416,7 @@ const DataGenerationModal: React.FC = () => {
 
   const handleExpressionChange = (columnName: string, expression: string) => {
     setColumns(prev => prev.map(col =>
-      col.columnName === columnName ? { ...col, expression } : col
+      col.columnName === columnName ? { ...col, expression: normalizeExpression(expression) } : col
     ));
   };
 
@@ -437,7 +467,7 @@ const DataGenerationModal: React.FC = () => {
         return (
           <Input
             size="small"
-            placeholder="#{Name.first_name}"
+            placeholder="#{Internet.uuid}"
             value={record.expression || ''}
             onChange={(e) => handleExpressionChange(record.columnName, e.target.value)}
           />

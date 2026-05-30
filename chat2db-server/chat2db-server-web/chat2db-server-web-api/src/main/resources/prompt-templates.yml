@@ -223,25 +223,26 @@ prompts:
       **表字段信息**:
       {schema}
       
-      **可用的 datafaker 表达式示例**:
-      - 车辆: #{Vehicle.vin}, #{Vehicle.driveType}, #{Vehicle.licensePlate}
+      **可用的 datafaker 表达式示例（统一使用 #{Provider.snake_case_method} 格式）**:
+      - 车辆: #{Vehicle.vin}, #{Vehicle.drive_type}, #{Vehicle.license_plate}
       - 姓名: #{Name.first_name}, #{Name.last_name}, #{Name.full_name}
       - 邮箱: #{Internet.email_address}, #{Internet.url}
       - 电话: #{PhoneNumber.cell_phone}, #{PhoneNumber.phone_number}
       - 地址: #{Address.full_address}, #{Address.city}, #{Address.country}
-      - 日期: #{Date.past '30','DAYS'}, #{Date.future}, #{Date.birthday}
+      - 日期: #{Date.past '30','DAYS'}, #{Date.future '30','DAYS'}, #{Date.birthday}
       - 数值: #{Number.number_between '1','1000'}, #{Number.random_double '2','0','9999'}
       - 文本: #{Lorem.sentence}, #{Lorem.word}, #{Lorem.paragraph}
       - 公司: #{Company.name}, #{Company.industry}, #{Company.catch_phrase}
-      - ID: #{Code.isbn10}, #{Code.asin}, #{Number.uuid}
+      - ID: #{Internet.uuid}, #{Code.isbn10}, #{Code.asin}
       - 布尔: #{Bool.bool}
       
       **要求**:
       1. 根据字段名、数据类型、注释推荐合适的表达式
       2. 考虑数据类型和长度限制（如 VARCHAR 长度、DECIMAL 精度）
-      3. 表达式必须符合 datafaker 语法
+      3. 表达式必须符合 datafaker 语法，格式必须是 #{Provider.method} 或带参数的 #{Provider.method 'arg1','arg2'}
       4. 如果字段是主键或自增，可以跳过
       5. 如果字段允许 NULL 且没有合适表达式，可以留空
+      6. 优先从上面的示例中选择表达式；不要输出未在示例或官方 providers 中确认存在的方法
       
       **输出格式（严格 JSON，不要包含其他文字）**:
       ```json
@@ -258,7 +259,7 @@ prompts:
       
       **注意事项**:
       1. 只输出 JSON 内容，不要包含其他解释文字
-      2. expression 必须是有效的 datafaker 表达式，以 # 开头
+      2. expression 必须是有效的 datafaker 表达式，以 #{ 开头并以 } 结尾
       3. reason 简要说明为什么推荐这个表达式
       4. 确保所有 column_name 都在表字段信息中存在
 

@@ -30,8 +30,10 @@ public class GeneratorTemplate implements Serializable {
 
     public static List<GeneratorTemplate> getDefaultTemplates() {
         return List.of(
-                GeneratorTemplate.of("UUID", "基础", "#{IdNumber.valid}", "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "VARCHAR"),
-                GeneratorTemplate.of("布尔值", "基础", "#{Options.option 'true','false'}", "true", "BOOLEAN"),
+                GeneratorTemplate.of("UUID", "基础", "#{Internet.uuid}", "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "VARCHAR"),
+                GeneratorTemplate.of("布尔值", "基础", "#{Bool.bool}", "true", "BOOLEAN"),
+                GeneratorTemplate.of("随机选项", "基础", "#{Options.option '启用','禁用','待定'}", "启用", "VARCHAR"),
+                GeneratorTemplate.of("MD5", "基础", "#{Hashing.md5}", "5d41402abc4b2a76b9719d911017c592", "VARCHAR"),
 
                 GeneratorTemplate.of("姓", "姓名", "#{Name.last_name}", "Smith", "VARCHAR"),
                 GeneratorTemplate.of("名", "姓名", "#{Name.first_name}", "John", "VARCHAR"),
@@ -58,6 +60,10 @@ public class GeneratorTemplate implements Serializable {
                 GeneratorTemplate.of("邮编", "地址", "#{Address.zip_code}", "10001", "VARCHAR"),
                 GeneratorTemplate.of("完整地址", "地址", "#{Address.full_address}", "123 Main St, New York, NY 10001", "VARCHAR"),
 
+                GeneratorTemplate.of("车架号", "车辆", "#{Vehicle.vin}", "ED9APPB07SGK81911", "VARCHAR"),
+                GeneratorTemplate.of("驱动类型", "车辆", "#{Vehicle.drive_type}", "4x2/2-wheel drive", "VARCHAR"),
+                GeneratorTemplate.of("车牌号", "车辆", "#{Vehicle.license_plate}", "abc-1234", "VARCHAR"),
+
                 GeneratorTemplate.of("生日", "日期时间", "#{Date.birthday}", "1990-01-15", "DATE"),
                 GeneratorTemplate.of("过去时间", "日期时间", "#{Date.past '30','DAYS'}", "2024-01-10 14:30:00", "DATETIME"),
                 GeneratorTemplate.of("未来时间", "日期时间", "#{Date.future '30','DAYS'}", "2024-02-20 09:15:00", "DATETIME"),
@@ -68,7 +74,11 @@ public class GeneratorTemplate implements Serializable {
 
                 GeneratorTemplate.of("整数 0-100", "数值", "#{Number.number_between '0','100'}", "42", "INT"),
                 GeneratorTemplate.of("整数 0-1000", "数值", "#{Number.number_between '0','1000'}", "756", "INT"),
-                GeneratorTemplate.of("整数 0-10000", "数值", "#{Number.number_between '0','10000'}", "5432", "INT")
+                GeneratorTemplate.of("整数 0-10000", "数值", "#{Number.number_between '0','10000'}", "5432", "INT"),
+                GeneratorTemplate.of("小数 0-9999", "数值", "#{Number.random_double '2','0','9999'}", "499.99", "DECIMAL"),
+
+                GeneratorTemplate.of("颜色", "其他", "#{Color.name}", "black", "VARCHAR"),
+                GeneratorTemplate.of("EAN13", "其他", "#{Code.ean13}", "5385086204357", "VARCHAR")
         );
     }
 }
