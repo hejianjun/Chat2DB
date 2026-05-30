@@ -20,4 +20,12 @@ public class ColumnConfigParam {
     private Integer maxLength;
 
     private Integer scale;
+
+    private Boolean foreignKey;
+
+    private String foreignKeySourceType;
+
+    private String referencedTable;
+
+    private String referencedColumnName;
 }

@@ -36,6 +36,10 @@ public class DataGenerationConverter {
                 param.setAutoIncrement(voConfig.getAutoIncrement());
                 param.setMaxLength(voConfig.getMaxLength());
                 param.setScale(voConfig.getScale());
+                param.setForeignKey(voConfig.getForeignKey());
+                param.setForeignKeySourceType(voConfig.getForeignKeySourceType());
+                param.setReferencedTable(voConfig.getReferencedTable());
+                param.setReferencedColumnName(voConfig.getReferencedColumnName());
                 columnConfigs.add(param);
             }
             request.setColumnConfigs(columnConfigs);

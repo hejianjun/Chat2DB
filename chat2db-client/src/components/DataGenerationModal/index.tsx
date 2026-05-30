@@ -31,6 +31,10 @@ interface ColumnConfigVO {
   nullable: boolean;
   maxLength?: number;
   scale?: number;
+  foreignKey?: boolean;
+  foreignKeySourceType?: 'REAL' | 'VIRTUAL' | null;
+  referencedTable?: string;
+  referencedColumnName?: string;
 }
 
 interface GenerateRequest {
@@ -60,6 +64,10 @@ interface SavedConfig {
   autoIncrement: boolean;
   maxLength?: number;
   scale?: number;
+  foreignKey?: boolean;
+  foreignKeySourceType?: 'REAL' | 'VIRTUAL' | null;
+  referencedTable?: string;
+  referencedColumnName?: string;
 }
 
 interface ColumnConfig {
@@ -71,6 +79,10 @@ interface ColumnConfig {
   autoIncrement: boolean;
   maxLength?: number;
   scale?: number;
+  foreignKey?: boolean;
+  foreignKeySourceType?: 'REAL' | 'VIRTUAL' | null;
+  referencedTable?: string;
+  referencedColumnName?: string;
 }
 
 interface PreviewRow {
@@ -112,9 +124,17 @@ const normalizeExpression = (expression?: string): string | undefined => {
 const findInvalidExpressionColumn = (columns: ColumnConfig[]): string | undefined => {
   const invalidColumn = columns.find((col) => {
     const expression = col.expression?.trim();
-    return expression && !/^#\{.+\}$/.test(expression);
+    return !col.foreignKey && expression && !/^#\{.+\}$/.test(expression);
   });
   return invalidColumn?.columnName;
+};
+
+const getForeignKeyLabel = (record: ColumnConfig): string => {
+  const sourceType = record.foreignKeySourceType || 'REAL';
+  const referenced = record.referencedTable && record.referencedColumnName
+    ? `${record.referencedTable}.${record.referencedColumnName}`
+    : '引用表字段';
+  return `由 ${sourceType} 外键驱动: ${referenced}`;
 };
 
 const groupByCategory = (templates: GeneratorTemplate[]): Record<string, GeneratorTemplate[]> => {
@@ -180,6 +200,9 @@ const DataGenerationModal: React.FC = () => {
     }
 
     const newColumns = columns.map(col => {
+      if (col.foreignKey) {
+        return col;
+      }
       const matched = result.column_expressions.find(e => e.column_name === col.columnName);
       if (matched && matched.expression) {
         return { ...col, expression: normalizeExpression(matched.expression) };
@@ -281,6 +304,10 @@ const DataGenerationModal: React.FC = () => {
       nullable: col.nullable,
       maxLength: col.maxLength,
       scale: col.scale,
+      foreignKey: col.foreignKey,
+      foreignKeySourceType: col.foreignKeySourceType,
+      referencedTable: col.referencedTable,
+      referencedColumnName: col.referencedColumnName,
     }));
   };
 
@@ -436,6 +463,7 @@ const DataGenerationModal: React.FC = () => {
       width: 200,
       render: (_: any, record: ColumnConfig) => {
         if (record.autoIncrement) return <span style={{ color: '#999' }}>自增列(跳过)</span>;
+        if (record.foreignKey) return <span style={{ color: '#1677ff' }}>{getForeignKeyLabel(record)}</span>;
         return (
           <Select
             value={getMatchedTemplate(record.expression)}
@@ -464,6 +492,9 @@ const DataGenerationModal: React.FC = () => {
       width: 300,
       render: (_: any, record: ColumnConfig) => {
         if (record.autoIncrement) return <span style={{ color: '#999' }}>自增列(跳过)</span>;
+        if (record.foreignKey) {
+          return <Input size="small" value={getForeignKeyLabel(record)} disabled />;
+        }
         return (
           <Input
             size="small"
