@@ -2,6 +2,8 @@ package ai.chat2db.server.domain.core.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -154,8 +156,22 @@ public class ErDiagramServiceImpl implements ErDiagramService {
         );
         log.info("Cleaned {} invalid virtual foreign keys before inference", cleanedCount);
 
+        Set<String> tablesWithVirtualForeignKeys = foreignKeySyncService.queryAllVirtualForeignKeys(
+                        param.getDataSourceId(),
+                        param.getDatabaseName(),
+                        param.getSchemaName()
+                ).stream()
+                .map(VirtualForeignKey::getTableName)
+                .filter(Objects::nonNull)
+                .map(tableName -> tableName.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+
         List<VirtualForeignKey> addedList = new ArrayList<>();
         for (Table table : tables) {
+            if (table.getName() != null
+                    && tablesWithVirtualForeignKeys.contains(table.getName().toLowerCase(Locale.ROOT))) {
+                continue;
+            }
             List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(table, param);
             for (VirtualForeignKey vfk : inferredFKs) {
                 try {
