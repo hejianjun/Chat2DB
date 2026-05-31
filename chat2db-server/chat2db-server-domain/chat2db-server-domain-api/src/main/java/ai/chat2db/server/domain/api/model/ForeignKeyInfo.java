@@ -45,4 +45,8 @@ public class ForeignKeyInfo {
      * 注释
      */
     private String comment;
+    /**
+     * 所属数据库名
+     */
+    private String databaseName;
 }

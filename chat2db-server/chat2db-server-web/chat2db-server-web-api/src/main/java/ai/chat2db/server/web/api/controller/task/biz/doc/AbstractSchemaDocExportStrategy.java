@@ -153,16 +153,21 @@ public abstract class AbstractSchemaDocExportStrategy implements SchemaDocExport
         if (!isExportForeignKey) {
             return Collections.emptyList();
         }
+        String databaseName = context.getDatabaseName();
         List<ForeignKeyInfo> result = new ArrayList<>();
         for (Table table : context.getTables()) {
             if (table.getForeignKeyList() != null) {
                 for (ForeignKey fk : table.getForeignKeyList()) {
-                    result.add(foreignKeyToInfo(fk, "REAL"));
+                    ForeignKeyInfo info = foreignKeyToInfo(fk, "REAL");
+                    info.setDatabaseName(databaseName);
+                    result.add(info);
                 }
             }
             if (table.getVirtualForeignKeyList() != null) {
                 for (VirtualForeignKey fk : table.getVirtualForeignKeyList()) {
-                    result.add(foreignKeyToInfo(fk, "VIRTUAL"));
+                    ForeignKeyInfo info = foreignKeyToInfo(fk, "VIRTUAL");
+                    info.setDatabaseName(databaseName);
+                    result.add(info);
                 }
             }
         }
@@ -178,12 +183,8 @@ public abstract class AbstractSchemaDocExportStrategy implements SchemaDocExport
         info.setReferencedColumnName(fk.getReferencedColumn());
         info.setSourceType(sourceType);
         info.setComment(fk.getComment());
-        if (fk.getDeleteRule() != null) {
-            info.setDeleteRule(getRuleName(fk.getDeleteRule()));
-        }
-        if (fk.getUpdateRule() != null) {
-            info.setUpdateRule(getRuleName(fk.getUpdateRule()));
-        }
+        info.setDeleteRule(getRuleName(fk.getDeleteRule()));
+        info.setUpdateRule(getRuleName(fk.getUpdateRule()));
         return info;
     }
 

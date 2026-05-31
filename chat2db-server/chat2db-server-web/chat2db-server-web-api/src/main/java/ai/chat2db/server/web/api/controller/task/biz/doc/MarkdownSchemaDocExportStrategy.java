@@ -78,7 +78,7 @@ public class MarkdownSchemaDocExportStrategy extends AbstractSchemaDocExportStra
                 List<ForeignKeyInfo> foreignKeyList = context.getForeignKeyList();
                 if (foreignKeyList != null && !foreignKeyList.isEmpty()) {
                     List<ForeignKeyInfo> dbForeignKeys = foreignKeyList.stream()
-                            .filter(fk -> database.equals(fk.getTableName()) || database.equals(fk.getReferencedTable()))
+                            .filter(fk -> database.equals(fk.getDatabaseName()))
                             .collect(Collectors.toList());
                     if (!dbForeignKeys.isEmpty()) {
                         writer.write("## " + I18nUtils.getMessage("workspace.tableRelation.title"));
