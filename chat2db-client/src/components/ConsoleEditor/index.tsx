@@ -81,6 +81,12 @@ interface IStatementBoundary {
   end: number;
 }
 
+const isAiCompletionShortcut = (event: KeyboardEvent) =>
+  event.altKey &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  (event.key === '\\' || event.code === 'Backslash' || event.code === 'IntlBackslash');
+
 const getTrimmedBoundary = (sql: string, boundary: IStatementBoundary): IStatementBoundary => {
   let start = boundary.start;
   let end = boundary.end;
@@ -477,12 +483,16 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
       handelCreateConsole();
     });
 
-    const backslashKeyCode = monaco.KeyCode.Backslash || monaco.KeyCode.US_BACKSLASH;
-    if (backslashKeyCode) {
-      editor.addCommand(monaco.KeyMod.Alt | backslashKeyCode, () => {
+    const aiCompletionKeyCodes = [
+      monaco.KeyCode.Backslash,
+      monaco.KeyCode.IntlBackslash,
+      monaco.KeyCode.US_BACKSLASH,
+    ].filter(Boolean);
+    [...new Set(aiCompletionKeyCodes)].forEach((keyCode) => {
+      editor.addCommand(monaco.KeyMod.Alt | keyCode, () => {
         triggerAiCompletionRef.current?.(editor, monaco);
       });
-    }
+    });
 
     editor.addCommand(
       monaco.KeyCode.Tab,
@@ -495,6 +505,13 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
     editor.getDomNode()?.addEventListener(
       'keydown',
       (event) => {
+        if (isAiCompletionShortcut(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          triggerAiCompletionRef.current?.(editor, monaco);
+          return;
+        }
+
         if (event.key !== 'Tab') {
           return;
         }
