@@ -79,6 +79,7 @@ export default {
   'workspace.tableRelation.childTable': 'Child Table',
   'workspace.tableRelation.relationColumn': 'Relation Field',
   'workspace.tableRelation.operation': 'Operation',
+  'workspace.tableRelation.searchPlaceholder': 'Search table, field, source, or comment',
   'workspace.tableRelation.loadError': 'Failed to load table relations',
   'workspace.tableRelation.missingId': 'Missing foreign key ID, cannot delete',
   'workspace.tableRelation.deleteConfirmTitle': 'Delete Foreign Key',

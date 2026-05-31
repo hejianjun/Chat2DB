@@ -29,6 +29,7 @@ const TableRelationModal = memo((props: IProps) => {
   const [syncing, setSyncing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const [foreignKeys, setForeignKeys] = useState<IForeignKeyVO[]>([]);
   const [tables, setTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [fieldMap, setFieldMap] = useState<Record<string, Array<{ name: string }>>>({});
@@ -46,6 +47,23 @@ const TableRelationModal = memo((props: IProps) => {
       return a.referencedTable.localeCompare(b.referencedTable);
     });
   }, [foreignKeys]);
+
+  const filteredForeignKeys = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase();
+    if (!keyword) return sortedForeignKeys;
+
+    return sortedForeignKeys.filter((fk) =>
+      [
+        fk.referencedTable,
+        fk.referencedColumnName,
+        fk.tableName,
+        fk.columnName,
+        fk.sourceType,
+        fk.sourceType === 'VIRTUAL' ? i18n('editTable.tooltip.virtualFK') : i18n('editTable.tooltip.realFK'),
+        fk.comment,
+      ].some((value) => `${value || ''}`.toLowerCase().includes(keyword)),
+    );
+  }, [searchKeyword, sortedForeignKeys]);
 
   const tableOptions = useMemo(() => tables.map((item) => ({ label: item.name, value: item.name })), [tables]);
 
@@ -228,6 +246,13 @@ const TableRelationModal = memo((props: IProps) => {
   return (
     <div className={styles.tableRelationModal}>
       <div className={styles.toolbar}>
+        <Input.Search
+          allowClear
+          className={styles.search}
+          placeholder={i18n('workspace.tableRelation.searchPlaceholder')}
+          value={searchKeyword}
+          onChange={(event) => setSearchKeyword(event.target.value)}
+        />
         <Space>
           <Button onClick={handleSync} loading={syncing}>
             {i18n('editTable.button.syncForeignKeys')}
@@ -303,7 +328,7 @@ const TableRelationModal = memo((props: IProps) => {
         rowKey={(record) => `${record.sourceType}-${record.id || record.name}`}
         loading={loading}
         columns={columns as any}
-        dataSource={sortedForeignKeys}
+        dataSource={filteredForeignKeys}
         pagination={false}
         scroll={{ x: 900, y: 420 }}
       />

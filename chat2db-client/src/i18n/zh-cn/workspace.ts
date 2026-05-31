@@ -78,6 +78,7 @@ export default {
   'workspace.tableRelation.childTable': '子表',
   'workspace.tableRelation.relationColumn': '关联字段',
   'workspace.tableRelation.operation': '操作',
+  'workspace.tableRelation.searchPlaceholder': '搜索表名、字段、来源或备注',
   'workspace.tableRelation.loadError': '加载表关系失败',
   'workspace.tableRelation.missingId': '缺少外键ID，无法删除',
   'workspace.tableRelation.deleteConfirmTitle': '删除外键',
