@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 
 import ai.chat2db.server.domain.api.model.IndexInfo;
 import ai.chat2db.server.domain.api.model.TableParameter;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.doc.DatabaseExportService;
 import ai.chat2db.server.web.api.controller.rdb.doc.constant.CommonConstant;
@@ -12,6 +13,8 @@ import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableIndexColumn;
+import ai.chat2db.spi.model.ForeignKey;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileOutputStream;
@@ -27,9 +30,11 @@ public abstract class AbstractSchemaDocExportStrategy implements SchemaDocExport
         initConstants();
         Map<String, List<TableParameter>> tableParameterMap = buildTableParameterMap(context);
         Map<String, List<IndexInfo>> indexMap = buildIndexMap(context);
+        List<ForeignKeyInfo> foreignKeyList = buildForeignKeyList(context);
 
         context.setTableParameterMap(tableParameterMap);
         context.setIndexMap(indexMap);
+        context.setForeignKeyList(foreignKeyList);
 
         try (FileOutputStream fos = new FileOutputStream(context.getFile())) {
             doExport(fos, context);
@@ -141,6 +146,61 @@ public abstract class AbstractSchemaDocExportStrategy implements SchemaDocExport
             info.setComment(v.getComment());
             return info;
         }).collect(Collectors.toList());
+    }
+
+    private List<ForeignKeyInfo> buildForeignKeyList(SchemaDocExportContext context) {
+        boolean isExportForeignKey = Optional.ofNullable(context.getExportOptions().getIsExportForeignKey()).orElse(false);
+        if (!isExportForeignKey) {
+            return Collections.emptyList();
+        }
+        List<ForeignKeyInfo> result = new ArrayList<>();
+        for (Table table : context.getTables()) {
+            if (table.getForeignKeyList() != null) {
+                for (ForeignKey fk : table.getForeignKeyList()) {
+                    result.add(foreignKeyToInfo(fk, "REAL"));
+                }
+            }
+            if (table.getVirtualForeignKeyList() != null) {
+                for (VirtualForeignKey fk : table.getVirtualForeignKeyList()) {
+                    result.add(foreignKeyToInfo(fk, "VIRTUAL"));
+                }
+            }
+        }
+        return result;
+    }
+
+    private ForeignKeyInfo foreignKeyToInfo(ForeignKey fk, String sourceType) {
+        ForeignKeyInfo info = new ForeignKeyInfo();
+        info.setName(fk.getName());
+        info.setTableName(fk.getTableName());
+        info.setColumnName(fk.getColumn());
+        info.setReferencedTable(fk.getReferencedTable());
+        info.setReferencedColumnName(fk.getReferencedColumn());
+        info.setSourceType(sourceType);
+        info.setComment(fk.getComment());
+        if (fk.getDeleteRule() != null) {
+            info.setDeleteRule(getRuleName(fk.getDeleteRule()));
+        }
+        if (fk.getUpdateRule() != null) {
+            info.setUpdateRule(getRuleName(fk.getUpdateRule()));
+        }
+        return info;
+    }
+
+    private String getRuleName(Integer rule) {
+        if (rule == null) {
+            return "NO ACTION";
+        }
+        switch (rule) {
+            case 0:
+                return "CASCADE";
+            case 1:
+                return "RESTRICT";
+            case 2:
+                return "SET NULL";
+            default:
+                return "NO ACTION";
+        }
     }
 
     protected String dealWith(String source) {

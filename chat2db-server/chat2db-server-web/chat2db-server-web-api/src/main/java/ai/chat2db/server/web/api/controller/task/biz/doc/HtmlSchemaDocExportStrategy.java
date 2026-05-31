@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 import ai.chat2db.server.domain.api.enums.ExportTypeEnum;
 import ai.chat2db.server.domain.api.model.IndexInfo;
 import ai.chat2db.server.domain.api.model.TableParameter;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.tools.common.config.GlobalDict;
 import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.doc.constant.PatternConstant;
@@ -73,6 +74,33 @@ public class HtmlSchemaDocExportStrategy extends AbstractSchemaDocExportStrategy
                         htmlText.append(String.format(PatternConstant.HTML_TABLE_BODY, getColumnValues(tableParameter)));
                     }
                     htmlText.append("</table>\n");
+                }
+
+                // 导出表间关系
+                List<ForeignKeyInfo> foreignKeyList = context.getForeignKeyList();
+                if (foreignKeyList != null && !foreignKeyList.isEmpty()) {
+                    List<ForeignKeyInfo> dbForeignKeys = foreignKeyList.stream()
+                            .filter(fk -> database.equals(fk.getTableName()) || database.equals(fk.getReferencedTable()))
+                            .collect(Collectors.toList());
+                    if (!dbForeignKeys.isEmpty()) {
+                        htmlText.append("<h2>").append(I18nUtils.getMessage("workspace.tableRelation.title")).append("</h2>\n");
+                        htmlText.append("<table>\n<tr><th>")
+                                .append(I18nUtils.getMessage("workspace.tableRelation.masterTable")).append("</th><th>")
+                                .append(I18nUtils.getMessage("workspace.tableRelation.uniqueColumn")).append("</th><th>")
+                                .append(I18nUtils.getMessage("workspace.tableRelation.childTable")).append("</th><th>")
+                                .append(I18nUtils.getMessage("workspace.tableRelation.relationColumn")).append("</th><th>")
+                                .append(I18nUtils.getMessage("editTable.label.sourceType")).append("</th><th>")
+                                .append(I18nUtils.getMessage("editTable.label.comment")).append("</th></tr>\n");
+                        for (ForeignKeyInfo fk : dbForeignKeys) {
+                            htmlText.append("<tr><td>").append(dealWith(fk.getReferencedTable())).append("</td><td>")
+                                    .append(dealWith(fk.getReferencedColumnName())).append("</td><td>")
+                                    .append(dealWith(fk.getTableName())).append("</td><td>")
+                                    .append(dealWith(fk.getColumnName())).append("</td><td>")
+                                    .append(dealWith(fk.getSourceType())).append("</td><td>")
+                                    .append(dealWith(fk.getComment())).append("</td></tr>\n");
+                        }
+                        htmlText.append("</table>\n");
+                    }
                 }
                 htmlText.append("<p></p>");
                 catalogue.append("</ol>");

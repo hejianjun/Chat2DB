@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 import ai.chat2db.server.domain.api.enums.ExportTypeEnum;
 import ai.chat2db.server.domain.api.model.IndexInfo;
 import ai.chat2db.server.domain.api.model.TableParameter;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.doc.constant.PatternConstant;
 import ai.chat2db.server.web.api.util.StringUtils;
@@ -71,6 +72,38 @@ public class MarkdownSchemaDocExportStrategy extends AbstractSchemaDocExportStra
                         writeLineSeparator(writer, 1);
                     }
                     writeLineSeparator(writer, 2);
+                }
+
+                // 导出表间关系
+                List<ForeignKeyInfo> foreignKeyList = context.getForeignKeyList();
+                if (foreignKeyList != null && !foreignKeyList.isEmpty()) {
+                    List<ForeignKeyInfo> dbForeignKeys = foreignKeyList.stream()
+                            .filter(fk -> database.equals(fk.getTableName()) || database.equals(fk.getReferencedTable()))
+                            .collect(Collectors.toList());
+                    if (!dbForeignKeys.isEmpty()) {
+                        writer.write("## " + I18nUtils.getMessage("workspace.tableRelation.title"));
+                        writeLineSeparator(writer, 2);
+                        writer.write("| " + I18nUtils.getMessage("workspace.tableRelation.masterTable") +
+                                " | " + I18nUtils.getMessage("workspace.tableRelation.uniqueColumn") +
+                                " | " + I18nUtils.getMessage("workspace.tableRelation.childTable") +
+                                " | " + I18nUtils.getMessage("workspace.tableRelation.relationColumn") +
+                                " | " + I18nUtils.getMessage("editTable.label.sourceType") +
+                                " | " + I18nUtils.getMessage("editTable.label.comment") + " |");
+                        writeLineSeparator(writer, 1);
+                        writer.write("|---|---|---|---|---|---|");
+                        writeLineSeparator(writer, 1);
+                        for (ForeignKeyInfo fk : dbForeignKeys) {
+                            writer.write(String.format("| %s | %s | %s | %s | %s | %s |",
+                                    dealWith(fk.getReferencedTable()),
+                                    dealWith(fk.getReferencedColumnName()),
+                                    dealWith(fk.getTableName()),
+                                    dealWith(fk.getColumnName()),
+                                    dealWith(fk.getSourceType()),
+                                    dealWith(fk.getComment())));
+                            writeLineSeparator(writer, 1);
+                        }
+                        writeLineSeparator(writer, 2);
+                    }
                 }
             }
             writer.flush();

@@ -19,6 +19,11 @@ public class ExportOptions {
     private Boolean isExportIndex = Boolean.FALSE;
 
     /**
+     * 是否导出外键关系
+     */
+    private Boolean isExportForeignKey = Boolean.FALSE;
+
+    /**
      * 导出文件后缀
      **/
     private String fileSuffix;

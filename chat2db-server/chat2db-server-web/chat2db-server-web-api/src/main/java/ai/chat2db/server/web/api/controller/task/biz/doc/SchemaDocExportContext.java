@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 
 import ai.chat2db.server.domain.api.model.TableParameter;
 import ai.chat2db.server.domain.api.model.IndexInfo;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.web.api.controller.rdb.doc.conf.ExportOptions;
 import ai.chat2db.server.web.api.controller.rdb.vo.TableVO;
 import ai.chat2db.spi.model.Table;
@@ -27,4 +28,6 @@ public class SchemaDocExportContext {
     private Map<String, List<TableParameter>> tableParameterMap;
 
     private Map<String, List<IndexInfo>> indexMap;
+
+    private List<ForeignKeyInfo> foreignKeyList;
 }

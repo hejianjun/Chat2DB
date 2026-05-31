@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 import ai.chat2db.server.domain.api.enums.ExportTypeEnum;
 import ai.chat2db.server.domain.api.model.IndexInfo;
 import ai.chat2db.server.domain.api.model.TableParameter;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.doc.constant.CommonConstant;
 import com.itextpdf.text.Document;
@@ -85,6 +86,45 @@ public class PdfSchemaDocExportStrategy extends AbstractSchemaDocExportStrategy 
                 table.setSpacingAfter(20f);
                 table.setHorizontalAlignment(PdfPTable.ALIGN_LEFT);
                 document.add(table);
+            }
+
+            // 导出表间关系
+            List<ForeignKeyInfo> foreignKeyList = context.getForeignKeyList();
+            if (foreignKeyList != null && !foreignKeyList.isEmpty()) {
+                List<ForeignKeyInfo> dbForeignKeys = foreignKeyList.stream()
+                        .filter(fk -> database.equals(fk.getTableName()) || database.equals(fk.getReferencedTable()))
+                        .collect(Collectors.toList());
+                if (!dbForeignKeys.isEmpty()) {
+                    String relationTitle = I18nUtils.getMessage("workspace.tableRelation.title");
+                    Paragraph relationParagraph = new Paragraph(relationTitle, titleFont);
+                    document.add(relationParagraph);
+
+                    String[] fkHeaders = {
+                            I18nUtils.getMessage("workspace.tableRelation.masterTable"),
+                            I18nUtils.getMessage("workspace.tableRelation.uniqueColumn"),
+                            I18nUtils.getMessage("workspace.tableRelation.childTable"),
+                            I18nUtils.getMessage("workspace.tableRelation.relationColumn"),
+                            I18nUtils.getMessage("editTable.label.sourceType"),
+                            I18nUtils.getMessage("editTable.label.comment")
+                    };
+                    PdfPTable fkTable = new PdfPTable(fkHeaders.length);
+                    process(fkTable, fkHeaders, headFont);
+                    for (ForeignKeyInfo fk : dbForeignKeys) {
+                        Object[] fkValues = {
+                                fk.getReferencedTable(),
+                                fk.getReferencedColumnName(),
+                                fk.getTableName(),
+                                fk.getColumnName(),
+                                fk.getSourceType(),
+                                fk.getComment()
+                        };
+                        processWithObjects(fkTable, fkValues, font);
+                    }
+                    fkTable.setHorizontalAlignment(PdfPTable.ALIGN_LEFT);
+                    fkTable.setSpacingBefore(10f);
+                    fkTable.setSpacingAfter(20f);
+                    document.add(fkTable);
+                }
             }
         }
         document.close();

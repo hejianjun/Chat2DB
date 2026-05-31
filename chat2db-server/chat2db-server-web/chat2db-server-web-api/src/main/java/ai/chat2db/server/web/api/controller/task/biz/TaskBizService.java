@@ -105,10 +105,12 @@ public class TaskBizService {
             TableSelector tableSelector = new TableSelector();
             tableSelector.setColumnList(true);
             tableSelector.setIndexList(true);
+            tableSelector.setForeignKey(true);
             List<Table> tables = tableService.pageQuery(queryParam, tableSelector);
 
             ExportOptions exportOptions = new ExportOptions();
             exportOptions.setIsExportIndex(true);
+            exportOptions.setIsExportForeignKey(true);
 
             SchemaDocExportContext context = SchemaDocExportContext.builder()
                     .tables(tables)

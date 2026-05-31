@@ -3,6 +3,7 @@ package ai.chat2db.server.web.api.controller.task.biz.doc;
 import ai.chat2db.server.domain.api.enums.ExportTypeEnum;
 import ai.chat2db.server.domain.api.model.IndexInfo;
 import ai.chat2db.server.domain.api.model.TableParameter;
+import ai.chat2db.server.domain.api.model.ForeignKeyInfo;
 import ai.chat2db.server.tools.common.config.GlobalDict;
 import ai.chat2db.server.web.api.controller.rdb.doc.constant.CommonConstant;
 import com.deepoove.poi.XWPFTemplate;

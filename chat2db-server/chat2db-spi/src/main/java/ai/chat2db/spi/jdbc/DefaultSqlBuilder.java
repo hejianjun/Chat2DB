@@ -22,6 +22,7 @@ import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableIndexColumn;
+import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.util.SqlUtils;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -55,6 +56,9 @@ public class DefaultSqlBuilder implements SqlBuilder {
 
         // 添加外键约束
         appendForeignKeys(script, table.getForeignKeyList());
+
+        // 添加虚拟外键约束
+        appendVirtualForeignKeys(script, table.getVirtualForeignKeyList());
 
         // 移除最后的逗号
         if (script.length() > 2) {
@@ -136,6 +140,15 @@ public class DefaultSqlBuilder implements SqlBuilder {
             return;
         }
         for (ForeignKey fk : foreignKeyList) {
+            script.append("    ").append(buildForeignKeyClause(fk)).append(",\n");
+        }
+    }
+
+    protected void appendVirtualForeignKeys(StringBuilder script, List<VirtualForeignKey> virtualForeignKeyList) {
+        if (CollectionUtils.isEmpty(virtualForeignKeyList)) {
+            return;
+        }
+        for (VirtualForeignKey fk : virtualForeignKeyList) {
             script.append("    ").append(buildForeignKeyClause(fk)).append(",\n");
         }
     }
