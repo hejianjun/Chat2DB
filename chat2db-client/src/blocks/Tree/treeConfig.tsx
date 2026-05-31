@@ -160,7 +160,12 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           });
       });
     },
-    operationColumn: [OperationColumn.EditSource, OperationColumn.SchemaDiff, OperationColumn.Refresh, OperationColumn.ShiftOut],
+    operationColumn: [
+      OperationColumn.EditSource,
+      OperationColumn.SchemaDiff,
+      OperationColumn.Refresh,
+      OperationColumn.ShiftOut,
+    ],
     next: TreeNodeType.DATABASE,
   },
 
@@ -178,7 +183,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 uuid: uuid(),
                 key: t.name,
                 name: t.name,
-                treeNodeType: t.treeNodeType === 'tables'? TreeNodeType.TABLES : TreeNodeType.SCHEMAS,
+                treeNodeType: t.treeNodeType === 'tables' ? TreeNodeType.TABLES : TreeNodeType.SCHEMAS,
                 schemaName: t.name,
                 extraParams: {
                   ..._extraParams,
@@ -303,6 +308,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
       OperationColumn.CreateConsole,
       OperationColumn.ViewAllTable,
       OperationColumn.ViewERDiagram,
+      OperationColumn.ViewTableRelation,
       OperationColumn.CreateTable,
       OperationColumn.Refresh,
     ],
@@ -345,10 +351,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           });
       });
     },
-    operationColumn: [
-      OperationColumn.CreateConsole,
-      OperationColumn.Refresh,
-    ],
+    operationColumn: [OperationColumn.CreateConsole, OperationColumn.Refresh],
   },
 
   [TreeNodeType.DEPRECATED_TABLE]: {
@@ -737,10 +740,6 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   },
   [TreeNodeType.V_KEY]: {
     icon: '\ue775',
-    operationColumn: [
-      OperationColumn.CreateConsole, 
-      OperationColumn.CopyName,
-      OperationColumn.DeleteVirtualKey
-    ],
+    operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName, OperationColumn.DeleteVirtualKey],
   },
 };

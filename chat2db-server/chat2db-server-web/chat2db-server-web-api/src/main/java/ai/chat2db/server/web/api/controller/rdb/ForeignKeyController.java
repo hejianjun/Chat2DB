@@ -60,6 +60,7 @@ public class ForeignKeyController {
         );
         List<ForeignKeyVO> voList = fks.stream()
                 .map(fk -> ForeignKeyVO.builder()
+                        .id(fk.getId())
                         .name(fk.getName())
                         .tableName(fk.getTableName())
                         .columnName(fk.getColumn())

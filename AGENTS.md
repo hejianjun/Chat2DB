@@ -58,7 +58,6 @@ java -jar chat2db-server-start/target/chat2db-server-start.jar
 - **Java**: 17 or higher
   - **Environment Setup**: `$env:JAVA_HOME = "D:\tool\Java\jdk-17"` before compiling Java code
 - **Node.js**: 16 or higher  
-  - **Environment Setup**: `nvm use 20` before using yarn to compile frontend code
 - **Maven**: 3.6.1 or higher
 - **Yarn**: 4.x (required for frontend)
 

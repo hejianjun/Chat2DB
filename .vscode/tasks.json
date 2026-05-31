@@ -7,7 +7,7 @@
             "command": "powershell",
             "args": [
                 "-Command",
-                "nvm use 24; yarn start:web:hot"
+                "yarn start:web:hot"
             ],
             "group": {
                 "kind": "build",

@@ -25,6 +25,7 @@ import { openFunction, openProcedure, openTrigger, openView } from '../functions
 import { handelPinTable } from '../functions/pinTable';
 import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecatedTable';
 import { viewDDL } from '../functions/viewDDL';
+import { openTableRelationModal } from '../components/TableRelationModal';
 
 // ----- utils -----
 import { compatibleDataBaseName } from '@/utils/database';
@@ -102,12 +103,11 @@ export const useGetRightClickMenu = (props: IProps) => {
   });
 
   const handelOpenCreateDatabaseModal = (type: 'database' | 'schema') => {
-
     const relyOnParams = {
       databaseType: treeNodeData.extraParams!.databaseType,
       dataSourceId: treeNodeData.extraParams!.dataSourceId!,
       databaseName: treeNodeData.name,
-    }
+    };
 
     openCreateDatabaseModal?.({
       type,
@@ -196,8 +196,7 @@ export const useGetRightClickMenu = (props: IProps) => {
               databaseName: treeNodeData.extraParams?.databaseName,
               schemaName: treeNodeData.extraParams?.schemaName,
             },
-          })
-          
+          });
         },
       },
       // 添加查看 ER 图
@@ -251,11 +250,13 @@ export const useGetRightClickMenu = (props: IProps) => {
               databaseType: treeNodeData.extraParams!.databaseType!,
               databaseName: treeNodeData.extraParams?.databaseName,
               schemaName: treeNodeData.extraParams?.schemaName,
-              submitCallback: () => {loadData?.({refresh: true})},
+              submitCallback: () => {
+                loadData?.({ refresh: true });
+              },
             },
           });
         },
-        discard: (treeNodeData.treeNodeType === TreeNodeType.DATABASE && currentConnectionDetails?.supportSchema),
+        discard: treeNodeData.treeNodeType === TreeNodeType.DATABASE && currentConnectionDetails?.supportSchema,
       },
 
       // 删除表
@@ -263,7 +264,7 @@ export const useGetRightClickMenu = (props: IProps) => {
         text: i18n('workspace.menu.deleteTable'),
         icon: '\ue6a7',
         handle: () => {
-          deleteTable(treeNodeData,loadData);
+          deleteTable(treeNodeData, loadData);
         },
       },
       [OperationColumn.TruncateTable]: {
@@ -278,7 +279,7 @@ export const useGetRightClickMenu = (props: IProps) => {
         text: i18n('workspace.menu.ViewDDL'),
         icon: '\ue665',
         handle: () => {
-          viewDDL(treeNodeData)
+          viewDDL(treeNodeData);
         },
       },
 
@@ -290,8 +291,8 @@ export const useGetRightClickMenu = (props: IProps) => {
           handelPinTable({
             treeNodeData,
             loadData: () => {
-              loadData({treeNodeData:treeNodeData.parentNode})
-            }
+              loadData({ treeNodeData: treeNodeData.parentNode });
+            },
           });
         },
       },
@@ -312,11 +313,10 @@ export const useGetRightClickMenu = (props: IProps) => {
               schemaName: treeNodeData.extraParams?.schemaName,
               tableName: treeNodeData?.name,
               submitCallback: () => {
-              
                 loadData({
                   treeNodeData: treeNodeData.parentNode,
-                  refresh: true
-                })
+                  refresh: true,
+                });
               },
             },
           });
@@ -338,7 +338,11 @@ export const useGetRightClickMenu = (props: IProps) => {
         icon: '\ue618',
         doubleClickTrigger: true,
         handle: () => {
-          const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType,treeNodeData.extraParams?.schemaName);
+          const databaseName = compatibleDataBaseName(
+            treeNodeData.name!,
+            treeNodeData.extraParams!.databaseType,
+            treeNodeData.extraParams?.schemaName,
+          );
           addWorkspaceTab({
             id: `${OperationColumn.OpenTable}-${treeNodeData.uuid}`,
             title: treeNodeData.name,
@@ -422,6 +426,14 @@ export const useGetRightClickMenu = (props: IProps) => {
         icon: '\ue6a7',
         handle: () => {
           deleteDatabase(treeNodeData, loadData, refreshRootData);
+        },
+      },
+
+      [OperationColumn.ViewTableRelation]: {
+        text: i18n('workspace.menu.viewTableRelation'),
+        icon: '\ue611',
+        handle: () => {
+          openTableRelationModal(treeNodeData);
         },
       },
 
@@ -540,7 +552,7 @@ export const useGetRightClickMenu = (props: IProps) => {
             treeNodeData,
             loadData: () => {
               loadData({ treeNodeData: treeNodeData.parentNode });
-            }
+            },
           });
         },
       },
@@ -554,7 +566,7 @@ export const useGetRightClickMenu = (props: IProps) => {
             treeNodeData,
             loadData: () => {
               loadData({ treeNodeData: treeNodeData.parentNode });
-            }
+            },
           });
         },
       },
@@ -605,12 +617,11 @@ export const getRightClickMenu = (props: IProps) => {
   const currentConnectionDetails = useWorkspaceStore.getState().currentConnectionDetails;
 
   const handelOpenCreateDatabaseModal = (type: 'database' | 'schema') => {
-
     const relyOnParams = {
       databaseType: treeNodeData.extraParams!.databaseType,
       dataSourceId: treeNodeData.extraParams!.dataSourceId!,
       databaseName: treeNodeData.name,
-    }
+    };
 
     openCreateDatabaseModal?.({
       type,
@@ -698,8 +709,7 @@ export const getRightClickMenu = (props: IProps) => {
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
           },
-        })
-        
+        });
       },
     },
     // 添加查看 ER 图
@@ -736,11 +746,13 @@ export const getRightClickMenu = (props: IProps) => {
             databaseType: treeNodeData.extraParams!.databaseType!,
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
-            submitCallback: () => {treeNodeData.loadData?.({refresh: true})},
+            submitCallback: () => {
+              treeNodeData.loadData?.({ refresh: true });
+            },
           },
         });
       },
-      discard: (treeNodeData.treeNodeType === TreeNodeType.DATABASE && currentConnectionDetails?.supportSchema),
+      discard: treeNodeData.treeNodeType === TreeNodeType.DATABASE && currentConnectionDetails?.supportSchema,
     },
 
     // 删除表
@@ -748,7 +760,7 @@ export const getRightClickMenu = (props: IProps) => {
       text: i18n('workspace.menu.deleteTable'),
       icon: '\ue6a7',
       handle: () => {
-        deleteTable(treeNodeData,loadData);
+        deleteTable(treeNodeData, loadData);
       },
     },
 
@@ -757,7 +769,7 @@ export const getRightClickMenu = (props: IProps) => {
       text: i18n('workspace.menu.ViewDDL'),
       icon: '\ue665',
       handle: () => {
-        viewDDL(treeNodeData)
+        viewDDL(treeNodeData);
       },
     },
 
@@ -766,7 +778,7 @@ export const getRightClickMenu = (props: IProps) => {
       text: treeNodeData.pinned ? i18n('workspace.menu.unPin') : i18n('workspace.menu.pin'),
       icon: treeNodeData.pinned ? '\ue61d' : '\ue627',
       handle: () => {
-        handelPinTable({treeNodeData, loadData: treeNodeData.parentNode!.loadData!});
+        handelPinTable({ treeNodeData, loadData: treeNodeData.parentNode!.loadData! });
       },
     },
 
@@ -785,7 +797,9 @@ export const getRightClickMenu = (props: IProps) => {
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
             tableName: treeNodeData?.name,
-            submitCallback: () => {treeNodeData.parentNode?.loadData?.({refresh: true})},
+            submitCallback: () => {
+              treeNodeData.parentNode?.loadData?.({ refresh: true });
+            },
           },
         });
       },
@@ -806,7 +820,11 @@ export const getRightClickMenu = (props: IProps) => {
       icon: '\ue618',
       doubleClickTrigger: true,
       handle: () => {
-        const databaseName = compatibleDataBaseName(treeNodeData.name!, treeNodeData.extraParams!.databaseType,treeNodeData.extraParams?.schemaName);
+        const databaseName = compatibleDataBaseName(
+          treeNodeData.name!,
+          treeNodeData.extraParams!.databaseType,
+          treeNodeData.extraParams?.schemaName,
+        );
         addWorkspaceTab({
           id: `${OperationColumn.OpenTable}-${treeNodeData.uuid}`,
           title: treeNodeData.name,
@@ -938,6 +956,14 @@ export const getRightClickMenu = (props: IProps) => {
       },
     },
 
+    [OperationColumn.ViewTableRelation]: {
+      text: i18n('workspace.menu.viewTableRelation'),
+      icon: '\ue611',
+      handle: () => {
+        openTableRelationModal(treeNodeData);
+      },
+    },
+
     // 数据传输
     [OperationColumn.DataTransfer]: {
       text: '数据传输',
@@ -1004,7 +1030,7 @@ export const getRightClickMenu = (props: IProps) => {
             } else {
               loadData({ refresh: true });
             }
-          }
+          },
         });
       },
     },
@@ -1023,7 +1049,7 @@ export const getRightClickMenu = (props: IProps) => {
             } else {
               loadData({ refresh: true });
             }
-          }
+          },
         });
       },
     },
@@ -1046,9 +1072,9 @@ export const getRightClickMenu = (props: IProps) => {
 
   // 根据配置生成右键菜单
   const finalList: IRightClickMenu[] = [];
-  excludeSomeOperation().forEach((t,i) => {
+  excludeSomeOperation().forEach((t, i) => {
     const concrete = operationColumnConfig[t];
-    if (!!concrete && !(concrete.discard)) {
+    if (!!concrete && !concrete.discard) {
       finalList.push({
         key: i,
         onClick: concrete?.handle,
@@ -1082,9 +1108,9 @@ const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void
       tableName,
       keyName: treeNode.name,
     });
-    
+
     message.success('删除虚拟外键成功');
-    
+
     // 刷新父节点（KEYS节点）
     loadData({
       refresh: true,

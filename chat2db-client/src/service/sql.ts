@@ -1,20 +1,15 @@
 import { DatabaseTypeCode } from '@/constants';
 import {
-    IDatabaseSupportField,
-    IEditTableInfo,
-    IManageResultData,
-    IPageParams,
-    IPageResponse,
-    IRoutines,
-    ITable,
-    IUniversalTableParams,
+  IDatabaseSupportField,
+  IEditTableInfo,
+  IManageResultData,
+  IPageParams,
+  IPageResponse,
+  IRoutines,
+  ITable,
+  IUniversalTableParams,
 } from '@/typings';
-import {
-    ISchemaCompareParams,
-    ISchemaDiffResult,
-    ISchemaMigrateParams,
-    IMigrateResult,
-} from '@/typings/schemaDiff';
+import { ISchemaCompareParams, ISchemaDiffResult, ISchemaMigrateParams, IMigrateResult } from '@/typings/schemaDiff';
 import { ExportSizeEnum, ExportTypeEnum } from '@/typings/resultTable';
 import createRequest from './base';
 
@@ -131,11 +126,19 @@ export interface IErParams {
 /** 获取ER图数据接口 */
 const getErDiagram = createRequest<IErParams, IErDiagram>('/api/rdb/er/diagram', { method: 'get' });
 
-const getTableList = createRequest<IGetTableListParams, IPageResponse<ITable>>('/api/rdb/table/list', { method: 'get' });
+const getTableList = createRequest<IGetTableListParams, IPageResponse<ITable>>('/api/rdb/table/list', {
+  method: 'get',
+});
 
-const executeSql = createRequest<IExecuteSqlParams, IManageResultData[]>('/api/rdb/dml/execute', { method: 'post', delayTime: 10 });
+const executeSql = createRequest<IExecuteSqlParams, IManageResultData[]>('/api/rdb/dml/execute', {
+  method: 'post',
+  delayTime: 10,
+});
 
-const viewTable = createRequest<IExecuteSqlParams, IManageResultData[]>('/api/rdb/dml/execute_table', { method: 'post', delayTime: 10 });
+const viewTable = createRequest<IExecuteSqlParams, IManageResultData[]>('/api/rdb/dml/execute_table', {
+  method: 'post',
+  delayTime: 10,
+});
 
 const connectConsole = createRequest<IConnectConsoleParams, void>('/api/connection/console/connect', { method: 'get' });
 
@@ -218,7 +221,10 @@ export interface IMessage {
 }
 
 const deleteTable = createRequest<ITableParams, void>('/api/rdb/table/delete', { method: 'post' });
-const deleteDatabase = createRequest<{ dataSourceId: number; databaseName: string }, void>('/api/rdb/database/delete_database', { method: 'post' });
+const deleteDatabase = createRequest<{ dataSourceId: number; databaseName: string }, void>(
+  '/api/rdb/database/delete_database',
+  { method: 'post' },
+);
 const truncateTable = createRequest<ITableParams, void>('/api/rdb/table/truncate', { method: 'post' });
 const createTableExample = createRequest<{ dbType: DatabaseTypeCode }, string>('/api/rdb/table/create/example', {
   method: 'get',
@@ -254,9 +260,13 @@ const deleteTablePin = createRequest<IUniversalTableParams, void>('/api/pin/tabl
 
 const deprecatedTable = createRequest<IUniversalTableParams, void>('/api/rdb/table/deprecated', { method: 'post' });
 
-const restoreDeprecatedTable = createRequest<IUniversalTableParams, void>('/api/rdb/table/cancel_deprecated', { method: 'post' });
+const restoreDeprecatedTable = createRequest<IUniversalTableParams, void>('/api/rdb/table/cancel_deprecated', {
+  method: 'post',
+});
 
-const getDeprecatedTableList = createRequest<IGetTableListParams, ITable[]>('/api/rdb/table/deprecated_list', { method: 'get' });
+const getDeprecatedTableList = createRequest<IGetTableListParams, ITable[]>('/api/rdb/table/deprecated_list', {
+  method: 'get',
+});
 
 /** 获取当前执行SQL 所有行 */
 const getDMLCount = createRequest<IExecuteSqlParams, number>('/api/rdb/dml/count', { method: 'post' });
@@ -382,7 +392,6 @@ const getAllFieldByTable = createRequest<
   Array<{ name: string; tableName: string }>
 >('/api/rdb/table/column_list', { method: 'get' });
 
-
 const getAiGuess = createRequest<
   {
     dataSourceId: number;
@@ -390,11 +399,11 @@ const getAiGuess = createRequest<
     schemaName?: string | null | undefined;
     tableNames: string[];
     promptType: string;
-  }
-  , IMessage>('/api/ai/er/guess', {
-    method: 'get',
-  });
-
+  },
+  IMessage
+>('/api/ai/er/guess', {
+  method: 'get',
+});
 
 export interface IModifyTableSqlParams {
   dataSourceId: number;
@@ -420,9 +429,12 @@ const getModifyTableSql = createRequest<IModifyTableSqlParams, { sql: string }[]
   method: 'post',
 });
 /** 定义批量获取修改表的SQL语句的API接口 */
-const getBatchModifyTableSql = createRequest<IBatchModifyTableSqlParams, { sql: string }[]>('/api/rdb/table/batch/modify/sql', {
-  method: 'post',
-});
+const getBatchModifyTableSql = createRequest<IBatchModifyTableSqlParams, { sql: string }[]>(
+  '/api/rdb/table/batch/modify/sql',
+  {
+    method: 'post',
+  },
+);
 /** 执行编辑表的sql, 专为编辑表而生 */
 const executeDDL = createRequest<IExecuteSqlParams, { success: boolean; message: string; originalSql: string }>(
   '/api/rdb/dml/execute_ddl',
@@ -439,25 +451,34 @@ const executeUpdateDataSql = createRequest<IExecuteSqlParams, { success: boolean
 const getExecuteUpdateSql = createRequest<any, string>('/api/rdb/dml/get_update_sql', { method: 'post' });
 
 /** 创建数据库  */
-const getCreateDatabaseSql = createRequest<{
-  dataSourceId: number;
-  databaseName: string;
-}, { sql: string }>('/api/rdb/database/create_database_sql', { method: 'post' });
+const getCreateDatabaseSql = createRequest<
+  {
+    dataSourceId: number;
+    databaseName: string;
+  },
+  { sql: string }
+>('/api/rdb/database/create_database_sql', { method: 'post' });
 
 /** 创建schema  */
-const getCreateSchemaSql = createRequest<{
-  dataSourceId: number;
-  databaseName?: string;
-  schemaName?: string;
-}, { sql: string }>('/api/rdb/schema/create_schema_sql', { method: 'post' });
+const getCreateSchemaSql = createRequest<
+  {
+    dataSourceId: number;
+    databaseName?: string;
+    schemaName?: string;
+  },
+  { sql: string }
+>('/api/rdb/schema/create_schema_sql', { method: 'post' });
 
-const deleteVirtualForeignKey = createRequest<{
-  dataSourceId: number;
-  databaseName: string;
-  schemaName?: string;
-  tableName: string;
-  keyName: string;
-}, void>('/api/rdb/fk/delete_by_name', { method: 'post' });
+const deleteVirtualForeignKey = createRequest<
+  {
+    dataSourceId: number;
+    databaseName: string;
+    schemaName?: string;
+    tableName: string;
+    keyName: string;
+  },
+  void
+>('/api/rdb/fk/delete_by_name', { method: 'post' });
 
 /** 外键列表查询参数 */
 export interface IForeignKeyListParams {
@@ -556,28 +577,45 @@ export interface IInferVirtualFkResult {
 
 const syncForeignKeys = createRequest<IForeignKeySyncParams, ISyncResult>('/api/rdb/fk/sync', { method: 'post' });
 const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>('/api/rdb/fk/list', { method: 'get' });
-const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', { method: 'post' });
-const updateVirtualForeignKey = createRequest<IUpdateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/update', { method: 'post' });
+const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', {
+  method: 'post',
+});
+const updateVirtualForeignKey = createRequest<IUpdateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/update', {
+  method: 'post',
+});
 const deleteForeignKey = createRequest<IDeleteFKParams, IDeleteFKResult>('/api/rdb/fk/delete', { method: 'post' });
-const inferVirtualForeignKeys = createRequest<IInferVirtualFKParams, IInferVirtualFkResult>('/api/rdb/er/infer-virtual-fk', { method: 'post' });
+const inferVirtualForeignKeys = createRequest<IInferVirtualFKParams, IInferVirtualFkResult>(
+  '/api/rdb/er/infer-virtual-fk',
+  { method: 'post' },
+);
 
-const batchOptimizeTables = createRequest<{
-  dataSourceId: number;
-  databaseName?: string;
-  schemaName?: string;
-  tableNames: string[];
-}, any[]>('/api/rdb/table/batch/optimize', { method: 'post' });
+const batchOptimizeTables = createRequest<
+  {
+    dataSourceId: number;
+    databaseName?: string;
+    schemaName?: string;
+    tableNames: string[];
+  },
+  any[]
+>('/api/rdb/table/batch/optimize', { method: 'post' });
 
-const batchAnalyzeTables = createRequest<{
-  dataSourceId: number;
-  databaseName?: string;
-  schemaName?: string;
-  tableNames: string[];
-}, any[]>('/api/rdb/table/batch/analyze', { method: 'post' });
+const batchAnalyzeTables = createRequest<
+  {
+    dataSourceId: number;
+    databaseName?: string;
+    schemaName?: string;
+    tableNames: string[];
+  },
+  any[]
+>('/api/rdb/table/batch/analyze', { method: 'post' });
 
-const compareSchema = createRequest<ISchemaCompareParams, ISchemaDiffResult>('/api/rdb/schema/diff/compare', { method: 'post' });
+const compareSchema = createRequest<ISchemaCompareParams, ISchemaDiffResult>('/api/rdb/schema/diff/compare', {
+  method: 'post',
+});
 
-const migrateSchema = createRequest<ISchemaMigrateParams, IMigrateResult>('/api/rdb/schema/diff/migrate', { method: 'post' });
+const migrateSchema = createRequest<ISchemaMigrateParams, IMigrateResult>('/api/rdb/schema/diff/migrate', {
+  method: 'post',
+});
 
 export default {
   searchTree,
@@ -631,6 +669,8 @@ export default {
   truncateTable,
   inferVirtualForeignKeys,
   createVirtualForeignKey,
+  deleteForeignKey,
+  updateVirtualForeignKey,
   syncForeignKeys,
   batchOptimizeTables,
   batchAnalyzeTables,

@@ -19,8 +19,8 @@ export enum TreeNodeType {
   FUNCTION = 'function', // 函数
   PROCEDURES = 'procedures', // procedure组
   PROCEDURE = 'procedure', // procedure
-  TRIGGERS = 'triggers',  // trigger组
-  TRIGGER = 'trigger',  // trigger
+  TRIGGERS = 'triggers', // trigger组
+  TRIGGER = 'trigger', // trigger
   V_KEYS = 'vKeys',
   V_KEY = 'vKey',
   DEPRECATED_TABLES = 'deprecatedTables',
@@ -50,6 +50,7 @@ export enum OperationColumn {
   CreateDatabase = 'createDatabase', // 新建database
   ViewAllTable = 'viewAllTable', // 查看所有的表
   ViewERDiagram = 'viewERDiagram', // 查看 ER 图
+  ViewTableRelation = 'viewTableRelation', // 查看表关系
   DeleteVirtualKey = 'deleteVirtualKey', // 删除虚拟外键
   TruncateTable = 'truncateTable', // 截断表
   ImportData = 'importData', // 导入数据
