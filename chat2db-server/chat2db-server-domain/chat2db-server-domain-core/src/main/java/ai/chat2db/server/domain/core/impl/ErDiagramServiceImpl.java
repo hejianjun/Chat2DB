@@ -1,8 +1,11 @@
 package ai.chat2db.server.domain.core.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -14,22 +17,18 @@ import org.springframework.stereotype.Service;
 import ai.chat2db.server.domain.api.param.CreateVirtualFKParam;
 import ai.chat2db.server.domain.api.param.ErDiagramQueryParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
-import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.service.ErDiagramService;
 import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.vo.InferVirtualFkResultVO;
-import ai.chat2db.server.tools.base.wrapper.result.DataResult;
-import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.spi.model.ErDiagram;
 import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.Table;
-import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableIndexColumn;
+import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.VirtualForeignKey;
-import ai.chat2db.spi.model.SimpleTable;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -136,43 +135,72 @@ public class ErDiagramServiceImpl implements ErDiagramService {
 
     @Override
     public InferVirtualFkResultVO inferVirtualForeignKeys(ErDiagramQueryParam param) {
-        List<VirtualForeignKey> beforeInfer = foreignKeySyncService.queryAllVirtualForeignKeys(
+        List<VirtualForeignKey> existingVirtualForeignKeys = foreignKeySyncService.queryAllVirtualForeignKeys(
                 param.getDataSourceId(),
                 param.getDatabaseName(),
                 param.getSchemaName()
         );
 
-        List<Table> tables = queryTables(param);
-        
+        List<Table> tables = queryTablesForInference(param);
+
         List<String> existingTableNames = tables.stream()
                 .map(Table::getName)
                 .collect(Collectors.toList());
-        
-        int cleanedCount = foreignKeySyncService.cleanInvalidVirtualForeignKeys(
-                param.getDataSourceId(),
-                param.getDatabaseName(),
-                param.getSchemaName(),
-                existingTableNames
-        );
-        log.info("Cleaned {} invalid virtual foreign keys before inference", cleanedCount);
 
-        Set<String> tablesWithVirtualForeignKeys = foreignKeySyncService.queryAllVirtualForeignKeys(
+        Map<String, Table> tableMap = tables.stream()
+                .filter(table -> table.getName() != null)
+                .collect(Collectors.toMap(
+                        table -> normalizeName(table.getName()),
+                        table -> table,
+                        (first, second) -> first
+                ));
+        Map<String, Table> targetTableCache = new HashMap<>(tableMap);
+
+        boolean cleanInvalidVirtualForeignKeys = param.getTableNameFilter() == null
+                || param.getTableNameFilter().isBlank();
+        // 复用推断开始时的虚拟外键快照，避免后续按表重复查询 H2；有表过滤时不做清理，防止误删过滤范围外的外键。
+        List<VirtualForeignKey> invalidVirtualForeignKeys = cleanInvalidVirtualForeignKeys
+                ? existingVirtualForeignKeys.stream()
+                        .filter(vfk -> !tableMap.containsKey(normalizeName(vfk.getTableName()))
+                                || !tableMap.containsKey(normalizeName(vfk.getReferencedTable())))
+                        .collect(Collectors.toList())
+                : Collections.emptyList();
+
+        int cleanedCount = cleanInvalidVirtualForeignKeys
+                ? foreignKeySyncService.cleanInvalidVirtualForeignKeys(
                         param.getDataSourceId(),
                         param.getDatabaseName(),
-                        param.getSchemaName()
-                ).stream()
+                        param.getSchemaName(),
+                        existingTableNames
+                )
+                : 0;
+        log.info("Cleaned {} invalid virtual foreign keys before inference", cleanedCount);
+
+        List<VirtualForeignKey> validVirtualForeignKeys = existingVirtualForeignKeys.stream()
+                .filter(vfk -> !invalidVirtualForeignKeys.contains(vfk))
+                .collect(Collectors.toList());
+        Map<String, List<VirtualForeignKey>> virtualForeignKeysByTable = validVirtualForeignKeys.stream()
+                .filter(vfk -> vfk.getTableName() != null)
+                .collect(Collectors.groupingBy(vfk -> normalizeName(vfk.getTableName())));
+
+        Set<String> tablesWithVirtualForeignKeys = validVirtualForeignKeys.stream()
                 .map(VirtualForeignKey::getTableName)
                 .filter(Objects::nonNull)
-                .map(tableName -> tableName.toLowerCase(Locale.ROOT))
+                .map(this::normalizeName)
                 .collect(Collectors.toSet());
 
         List<VirtualForeignKey> addedList = new ArrayList<>();
         for (Table table : tables) {
             if (table.getName() != null
-                    && tablesWithVirtualForeignKeys.contains(table.getName().toLowerCase(Locale.ROOT))) {
+                    && tablesWithVirtualForeignKeys.contains(normalizeName(table.getName()))) {
                 continue;
             }
-            List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(table, param);
+            List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(
+                    table,
+                    targetTableCache,
+                    param,
+                    virtualForeignKeysByTable.getOrDefault(normalizeName(table.getName()), Collections.emptyList())
+            );
             for (VirtualForeignKey vfk : inferredFKs) {
                 try {
                     foreignKeySyncService.createVirtualFK(
@@ -197,21 +225,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
             }
         }
 
-        List<VirtualForeignKey> afterInfer = foreignKeySyncService.queryAllVirtualForeignKeys(
-                param.getDataSourceId(),
-                param.getDatabaseName(),
-                param.getSchemaName()
-        );
-
-        Set<String> beforeKeys = beforeInfer.stream()
-                .map(vfk -> vfk.getTableName() + "." + vfk.getColumn())
-                .collect(Collectors.toSet());
-        Set<String> afterKeys = afterInfer.stream()
-                .map(vfk -> vfk.getTableName() + "." + vfk.getColumn())
-                .collect(Collectors.toSet());
-
-        List<InferVirtualFkResultVO.VirtualFkItem> deletedItems = beforeInfer.stream()
-                .filter(vfk -> !afterKeys.contains(vfk.getTableName() + "." + vfk.getColumn()))
+        List<InferVirtualFkResultVO.VirtualFkItem> deletedItems = invalidVirtualForeignKeys.stream()
                 .map(vfk -> InferVirtualFkResultVO.VirtualFkItem.builder()
                         .tableName(vfk.getTableName())
                         .columnName(vfk.getColumn())
@@ -239,15 +253,50 @@ public class ErDiagramServiceImpl implements ErDiagramService {
         return result;
     }
 
+    private List<Table> queryTablesForInference(ErDiagramQueryParam param) {
+        TablePageQueryParam tablePageQueryParam = TablePageQueryParam.builder()
+                .dataSourceId(param.getDataSourceId())
+                .databaseName(param.getDatabaseName())
+                .schemaName(param.getSchemaName())
+                .searchKey(param.getTableNameFilter())
+                .build();
+        TableSelector selector = new TableSelector();
+        selector.setColumnList(true);
+        selector.setIndexList(true);
+
+        List<Table> tables = tableService.pageQuery(tablePageQueryParam, selector);
+        List<ForeignKey> realForeignKeys = foreignKeySyncService.queryRealForeignKeys(
+                param.getDataSourceId(),
+                param.getDatabaseName(),
+                param.getSchemaName(),
+                null
+        );
+        Map<String, List<ForeignKey>> realForeignKeysByTable = realForeignKeys.stream()
+                .filter(fk -> fk.getTableName() != null)
+                .collect(Collectors.groupingBy(fk -> normalizeName(fk.getTableName())));
+
+        // 真实外键一次批量加载后回填到表对象；虚拟外键由调用方的全量快照处理。
+        for (Table table : tables) {
+            table.setForeignKeyList(realForeignKeysByTable.getOrDefault(
+                    normalizeName(table.getName()),
+                    Collections.emptyList()
+            ));
+        }
+        return tables;
+    }
+
     /**
      * 发现可能的虚拟外键关系（根据命名规范推断）
      * 参考 TableServiceImpl.findVirtualForeignKeys 实现
      */
-    private List<VirtualForeignKey> findVirtualForeignKeys(Table table, ErDiagramQueryParam param) {
+    private List<VirtualForeignKey> findVirtualForeignKeys(Table table,
+                                                           Map<String, Table> targetTableCache,
+                                                           ErDiagramQueryParam param,
+                                                           List<VirtualForeignKey> storedVirtualFKs) {
         List<VirtualForeignKey> result = new ArrayList<>();
 
         // 预加载已明确声明的外键列名（用于排除已存在的外键）
-        Set<String> explicitForeignKeys = table.getForeignKeyList().stream()
+        Set<String> explicitForeignKeys = defaultList(table.getForeignKeyList()).stream()
                 .map(ForeignKey::getColumn)
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
 
@@ -261,13 +310,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                     .forEach(explicitForeignKeys::add);
         }
 
-        // 查询已存储的虚拟外键，避免重复推断
-        List<VirtualForeignKey> storedVirtualFKs = foreignKeySyncService.queryVirtualForeignKeys(
-                param.getDataSourceId(),
-                param.getDatabaseName(),
-                param.getSchemaName(),
-                table.getName()
-        );
+        // 调用方传入预加载的虚拟外键，避免每张表单独查询一次 H2。
         Set<String> existingVirtualFKColumns = storedVirtualFKs.stream()
                 .map(VirtualForeignKey::getColumn)
                 .collect(Collectors.toSet());
@@ -278,7 +321,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 if (isPotentialVirtualKeyCandidate(column)
                         && !explicitForeignKeys.contains(column.getName())
                         && !existingVirtualFKColumns.contains(column.getName())) {
-                    VirtualForeignKey vfk = analyzeColumnRelation(table, column, param);
+                    VirtualForeignKey vfk = analyzeColumnRelation(table, column, targetTableCache, param);
                     if (vfk != null) {
                         result.add(vfk);
                     }
@@ -302,7 +345,10 @@ public class ErDiagramServiceImpl implements ErDiagramService {
     /**
      * 分析列关联关系并构建虚拟外键
      */
-    private VirtualForeignKey analyzeColumnRelation(Table currentTable, TableColumn currentColumn, ErDiagramQueryParam param) {
+    private VirtualForeignKey analyzeColumnRelation(Table currentTable,
+                                                    TableColumn currentColumn,
+                                                    Map<String, Table> targetTableCache,
+                                                    ErDiagramQueryParam param) {
         String columnName = currentColumn.getName();
         String referencedTableName = columnName.substring(0, columnName.length() - 3);
         String currentTableName = currentTable.getName();
@@ -312,25 +358,8 @@ public class ErDiagramServiceImpl implements ErDiagramService {
             return null;
         }
 
-        // 查找匹配的表
-        TableSelector selector = new TableSelector();
-        selector.setColumnList(true);
-        List<Table> tables = tableService.pageQuery(
-                TablePageQueryParam.builder()
-                        .dataSourceId(param.getDataSourceId())
-                        .databaseName(currentColumn.getDatabaseName())
-                        .schemaName(currentColumn.getSchemaName())
-                        .searchKey(referencedTableName)
-                        .build(),
-                selector
-        );
-
-        // 排除自关联
-        Table targetTable = tables.stream()
-                .filter(t -> !currentTableName.equalsIgnoreCase(t.getName()))
-                .findFirst()
-                .orElse(null);
-
+        // 先从已加载表中匹配；若当前请求有过滤导致目标表缺失，则按引用表名缓存一次补查结果。
+        Table targetTable = resolveTargetTable(currentTable, currentColumn, referencedTableName, targetTableCache, param);
         if (targetTable == null) {
             return null;
         }
@@ -356,5 +385,42 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 .referencedColumn(referencedColumnName)
                 .virtualProperty("Inferred from column naming convention")
                 .build();
+    }
+
+    private Table resolveTargetTable(Table currentTable,
+                                     TableColumn currentColumn,
+                                     String referencedTableName,
+                                     Map<String, Table> targetTableCache,
+                                     ErDiagramQueryParam param) {
+        String cacheKey = normalizeName(referencedTableName);
+        if (targetTableCache.containsKey(cacheKey)) {
+            return targetTableCache.get(cacheKey);
+        }
+
+        TableSelector selector = new TableSelector();
+        selector.setColumnList(true);
+        List<Table> tables = tableService.pageQuery(
+                TablePageQueryParam.builder()
+                        .dataSourceId(param.getDataSourceId())
+                        .databaseName(currentColumn.getDatabaseName())
+                        .schemaName(currentColumn.getSchemaName())
+                        .searchKey(referencedTableName)
+                        .build(),
+                selector
+        );
+        Table targetTable = tables.stream()
+                .filter(t -> currentTable.getName() == null || !currentTable.getName().equalsIgnoreCase(t.getName()))
+                .findFirst()
+                .orElse(null);
+        targetTableCache.put(cacheKey, targetTable);
+        return targetTable;
+    }
+
+    private String normalizeName(String name) {
+        return name == null ? "" : name.toLowerCase(Locale.ROOT);
+    }
+
+    private <T> List<T> defaultList(List<T> list) {
+        return list == null ? Collections.emptyList() : list;
     }
 }
