@@ -1,9 +1,11 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -18,8 +20,9 @@ import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
-import ai.chat2db.server.web.api.controller.ai.statemachine.helper.SqlExplainHelper;
 import ai.chat2db.server.web.api.controller.ai.statemachine.helper.ExplainResult;
+import ai.chat2db.server.web.api.controller.ai.statemachine.helper.ExplainTableNameExtractor;
+import ai.chat2db.server.web.api.controller.ai.statemachine.helper.SqlExplainHelper;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
@@ -59,12 +62,20 @@ public class ExplainAction extends BaseChatAction {
 
         sendStateEvent(ctx.getSseEmitter(), ChatState.EXECUTING_EXPLAIN, "正在分析执行计划...");
 
+        boolean explainFirst = CollectionUtils.isEmpty(request.getTableNames())
+                && StringUtils.isBlank(ctx.getSchemaDdl());
         buildContext(ctx);
         try {
+            if (StringUtils.isNotBlank(ctx.getExplainResult())) {
+                log.info("[ExplainAction] EXPLAIN result already exists, skip duplicate execution");
+                triggerEvent(context, ChatEvent.EXPLAIN_EXECUTED);
+                return;
+            }
+
             String sql = extractSql(request.getMessage());
             if (sql == null) {
                 log.warn("[ExplainAction] No SQL found in message");
-                triggerEvent(context, ChatEvent.EXPLAIN_NOT_NEEDED);
+                triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_NOT_NEEDED);
                 return;
             }
 
@@ -78,14 +89,29 @@ public class ExplainAction extends BaseChatAction {
                 
                 sendExplainToClient(ctx.getSseEmitter(), result);
                 log.info("[ExplainAction] EXPLAIN executed successfully");
-                triggerEvent(context, ChatEvent.EXPLAIN_EXECUTED);
+
+                if (explainFirst) {
+                    List<String> tableNames = ExplainTableNameExtractor.extractTableNames(sql, result);
+                    if (CollectionUtils.isNotEmpty(tableNames)) {
+                        ctx.getRequest().setTableNames(tableNames);
+                        ctx.setSelectedTables(tableNames);
+                        sendTablesSelected(ctx.getSseEmitter(), tableNames);
+                        log.info("[ExplainAction] Extracted tables from EXPLAIN: {}", tableNames);
+                        triggerEvent(context, ChatEvent.EXPLAIN_TABLES_SELECTED);
+                    } else {
+                        log.info("[ExplainAction] No tables extracted from EXPLAIN, fallback to SelectTablesAction");
+                        triggerEvent(context, ChatEvent.EXPLAIN_TABLES_NOT_SELECTED);
+                    }
+                } else {
+                    triggerEvent(context, ChatEvent.EXPLAIN_EXECUTED);
+                }
             } else {
                 log.warn("[ExplainAction] EXPLAIN execution failed: {}", result.getErrorMessage());
-                triggerEvent(context, ChatEvent.EXPLAIN_FAILED);
+                triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_FAILED);
             }
         } catch (Exception e) {
             log.warn("[ExplainAction] EXPLAIN failed, will skip silently", e);
-            triggerEvent(context, ChatEvent.EXPLAIN_FAILED);
+            triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_FAILED);
         } finally {
             removeContext();
         }

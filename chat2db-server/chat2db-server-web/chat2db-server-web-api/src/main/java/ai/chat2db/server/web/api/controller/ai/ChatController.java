@@ -158,6 +158,10 @@ public class ChatController {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
 
+        if (!hasTables && PromptType.SQL_OPTIMIZER.getCode().equals(promptType)) {
+            return ChatEvent.EXPLAIN_TABLES_NOT_SELECTED;
+        }
+
         return hasTables ? ChatEvent.TABLES_PROVIDED : ChatEvent.TABLES_NOT_PROVIDED;
     }
 

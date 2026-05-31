@@ -125,6 +125,11 @@
             <groupId>io.micrometer</groupId>
             <artifactId>context-propagation</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- DataFaker for data generation (modern replacement for JavaFaker) -->
         <!-- Temporarily commented out to isolate Spring Boot startup issue -->
 

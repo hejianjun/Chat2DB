@@ -17,6 +17,10 @@ public enum ChatEvent {
     SCHEMA_FETCHED,
     /** EXPLAIN执行完成 */
     EXPLAIN_EXECUTED,
+    /** EXPLAIN已提取出表名 */
+    EXPLAIN_TABLES_SELECTED,
+    /** EXPLAIN未提取出表名 */
+    EXPLAIN_TABLES_NOT_SELECTED,
     /** EXPLAIN执行失败 */
     EXPLAIN_FAILED,
     /** 不需要EXPLAIN */
