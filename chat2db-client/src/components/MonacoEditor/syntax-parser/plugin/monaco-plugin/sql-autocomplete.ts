@@ -35,6 +35,7 @@ const mapDatabaseTypeToParser = (databaseType: string): ISqlAutocompleteOptions[
     PRESTO: 'mysql',
     TRINO: 'mysql',
     CLICKHOUSE: 'mysql',
+    DLC: 'mysql',
     DB2: 'mysql',
     SYBASE: 'mysql',
     INFLUXDB: 'mysql',

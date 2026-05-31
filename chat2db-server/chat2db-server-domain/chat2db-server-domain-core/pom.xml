@@ -62,6 +62,11 @@
 
         <dependency>
             <groupId>ai.chat2db</groupId>
+            <artifactId>chat2db-dlc</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>ai.chat2db</groupId>
             <artifactId>chat2db-dm</artifactId>
             <version>${revision}</version>
         </dependency>

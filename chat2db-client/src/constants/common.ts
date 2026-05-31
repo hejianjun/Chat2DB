@@ -10,12 +10,13 @@ export enum DatabaseTypeCode {
   SQLITE = 'SQLITE',
   MARIADB = 'MARIADB',
   CLICKHOUSE = 'CLICKHOUSE',
-  DM = "DM",
-  OCEANBASE = "OCEANBASE",
-  PRESTO = "PRESTO",
-  HIVE = "HIVE",
-  KINGBASE = "KINGBASE",
-  PHOENIX = "PHOENIX", // 添加 Phoenix
+  DLC = 'DLC',
+  DM = 'DM',
+  OCEANBASE = 'OCEANBASE',
+  PRESTO = 'PRESTO',
+  HIVE = 'HIVE',
+  KINGBASE = 'KINGBASE',
+  PHOENIX = 'PHOENIX', // 添加 Phoenix
 }
 
 export enum ConsoleStatus {
@@ -31,7 +32,7 @@ export enum OSType {
 
 export enum ConnectionKind {
   Private = 'PRIVATE',
-  Shared = 'SHARED'
+  Shared = 'SHARED',
 }
 
 // 通用的增删改查枚举

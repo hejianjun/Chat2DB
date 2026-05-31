@@ -4,7 +4,7 @@ import h2Logo from '@/assets/img/databaseImg/h2.png';
 import moreDBLogo from '@/assets/img/databaseImg/other.png';
 import phoenixLogo from '@/assets/img/databaseImg/phoenixLogo.png';
 import { IDatabase } from '@/typings';
-import { DatabaseTypeCode } from '@/constants'
+import { DatabaseTypeCode } from '@/constants';
 
 export enum ConnectionEnvType {
   DAILY = 'DAILY',
@@ -70,6 +70,12 @@ export const databaseMap: {
     // port: 8123,
     icon: '\ue8f4',
   },
+  [DatabaseTypeCode.DLC]: {
+    name: 'Tencent DLC',
+    img: moreDBLogo,
+    code: DatabaseTypeCode.DLC,
+    icon: '\ue60b',
+  },
   [DatabaseTypeCode.DM]: {
     name: 'DM',
     img: moreDBLogo,
@@ -95,7 +101,7 @@ export const databaseMap: {
     name: 'OceanBase',
     img: moreDBLogo,
     code: DatabaseTypeCode.OCEANBASE,
-    // port: 2883, 
+    // port: 2883,
     icon: '\ue982',
   },
   [DatabaseTypeCode.HIVE]: {
@@ -126,7 +132,8 @@ export const databaseMap: {
     // port: 6379,
     icon: '\ue6a2',
   },
-  [DatabaseTypeCode.PHOENIX]: { // 添加 Phoenix
+  [DatabaseTypeCode.PHOENIX]: {
+    // 添加 Phoenix
     name: 'Phoenix',
     img: phoenixLogo, // 确保你有 phoenixLogo 的定义
     code: DatabaseTypeCode.PHOENIX,
