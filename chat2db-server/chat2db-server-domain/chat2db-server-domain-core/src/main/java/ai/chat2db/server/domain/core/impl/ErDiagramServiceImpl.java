@@ -133,20 +133,31 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 .build();
     }
 
+    /**
+     * 推断虚拟外键关系
+     * 基于列命名约定自动发现表之间的潜在外键关联，并同步到虚拟外键存储中
+     *
+     * @param param ER图查询参数，包含数据源、数据库/模式、表过滤等
+     * @return 推断结果，包含新增和删除的虚拟外键信息及数量
+     */
     @Override
     public InferVirtualFkResultVO inferVirtualForeignKeys(ErDiagramQueryParam param) {
+        // 1. 获取当前数据源/库/模式下已存在的所有虚拟外键
         List<VirtualForeignKey> existingVirtualForeignKeys = foreignKeySyncService.queryAllVirtualForeignKeys(
                 param.getDataSourceId(),
                 param.getDatabaseName(),
                 param.getSchemaName()
         );
 
+        // 2. 查询需要参与推断的表列表（包含列和索引信息）
         List<Table> tables = queryTablesForInference(param);
 
+        // 3. 提取有效表名列表，用于后续清理无效虚拟外键
         List<String> existingTableNames = tables.stream()
                 .map(Table::getName)
                 .collect(Collectors.toList());
 
+        // 4. 构建规范化后的表名->表对象映射，用于快速查找
         Map<String, Table> tableMap = tables.stream()
                 .filter(table -> table.getName() != null)
                 .collect(Collectors.toMap(
@@ -156,8 +167,10 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 ));
         Map<String, Table> targetTableCache = new HashMap<>(tableMap);
 
+        // 5. 判断是否需要清理无效虚拟外键：当没有表名过滤条件时才执行清理
         boolean cleanInvalidVirtualForeignKeys = param.getTableNameFilter() == null
                 || param.getTableNameFilter().isBlank();
+        // 6. 筛选出指向不存在表的无效虚拟外键（关联的表或引用表已不在当前表集合中）
         // 复用推断开始时的虚拟外键快照，避免后续按表重复查询 H2；有表过滤时不做清理，防止误删过滤范围外的外键。
         List<VirtualForeignKey> invalidVirtualForeignKeys = cleanInvalidVirtualForeignKeys
                 ? existingVirtualForeignKeys.stream()
@@ -166,6 +179,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                         .collect(Collectors.toList())
                 : Collections.emptyList();
 
+        // 7. 执行清理操作，删除指向已不存在表的虚拟外键记录
         int cleanedCount = cleanInvalidVirtualForeignKeys
                 ? foreignKeySyncService.cleanInvalidVirtualForeignKeys(
                         param.getDataSourceId(),
@@ -176,31 +190,38 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 : 0;
         log.info("Cleaned {} invalid virtual foreign keys before inference", cleanedCount);
 
+        // 8. 过滤出仍然有效的虚拟外键（排除已被标记为无效的）
         List<VirtualForeignKey> validVirtualForeignKeys = existingVirtualForeignKeys.stream()
                 .filter(vfk -> !invalidVirtualForeignKeys.contains(vfk))
                 .collect(Collectors.toList());
+        // 9. 按表名分组有效虚拟外键，用于后续跳过已有虚拟外键的表
         Map<String, List<VirtualForeignKey>> virtualForeignKeysByTable = validVirtualForeignKeys.stream()
                 .filter(vfk -> vfk.getTableName() != null)
                 .collect(Collectors.groupingBy(vfk -> normalizeName(vfk.getTableName())));
 
+        // 10. 收集已有虚拟外键的表名集合，避免重复推断
         Set<String> tablesWithVirtualForeignKeys = validVirtualForeignKeys.stream()
                 .map(VirtualForeignKey::getTableName)
                 .filter(Objects::nonNull)
                 .map(this::normalizeName)
                 .collect(Collectors.toSet());
 
+        // 11. 遍历所有表，对尚未有虚拟外键的表进行推断并创建
         List<VirtualForeignKey> addedList = new ArrayList<>();
         for (Table table : tables) {
+            // 跳过已有虚拟外键的表
             if (table.getName() != null
                     && tablesWithVirtualForeignKeys.contains(normalizeName(table.getName()))) {
                 continue;
             }
+            // 基于列命名约定推断该表的潜在外键关系
             List<VirtualForeignKey> inferredFKs = findVirtualForeignKeys(
                     table,
                     targetTableCache,
                     param,
                     virtualForeignKeysByTable.getOrDefault(normalizeName(table.getName()), Collections.emptyList())
             );
+            // 将推断出的虚拟外键持久化到存储中
             for (VirtualForeignKey vfk : inferredFKs) {
                 try {
                     foreignKeySyncService.createVirtualFK(
@@ -225,6 +246,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
             }
         }
 
+        // 12. 构建删除项结果列表（被清理的无效虚拟外键）
         List<InferVirtualFkResultVO.VirtualFkItem> deletedItems = invalidVirtualForeignKeys.stream()
                 .map(vfk -> InferVirtualFkResultVO.VirtualFkItem.builder()
                         .tableName(vfk.getTableName())
@@ -234,6 +256,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                         .build())
                 .collect(Collectors.toList());
 
+        // 13. 构建新增项结果列表（本次推断成功创建的虚拟外键）
         List<InferVirtualFkResultVO.VirtualFkItem> addedItems = addedList.stream()
                 .map(vfk -> InferVirtualFkResultVO.VirtualFkItem.builder()
                         .tableName(vfk.getTableName())
@@ -243,6 +266,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                         .build())
                 .collect(Collectors.toList());
 
+        // 14. 组装并返回推断结果
         InferVirtualFkResultVO result = InferVirtualFkResultVO.builder()
                 .addedCount(addedItems.size())
                 .deletedCount(deletedItems.size())
@@ -253,28 +277,42 @@ public class ErDiagramServiceImpl implements ErDiagramService {
         return result;
     }
 
+    /**
+     * 查询用于推断的表列表
+     * 获取指定数据源/数据库/模式下的表信息（包含列和索引），
+     * 并加载真实外键列表回填到表对象中
+     *
+     * @param param ER图查询参数
+     * @return 包含列和真实外键信息的表列表
+     */
     private List<Table> queryTablesForInference(ErDiagramQueryParam param) {
+        // 1. 构建表分页查询参数
         TablePageQueryParam tablePageQueryParam = TablePageQueryParam.builder()
                 .dataSourceId(param.getDataSourceId())
                 .databaseName(param.getDatabaseName())
                 .schemaName(param.getSchemaName())
                 .searchKey(param.getTableNameFilter())
                 .build();
+        // 2. 设置选择器，需要获取列列表和索引列表
         TableSelector selector = new TableSelector();
         selector.setColumnList(true);
         selector.setIndexList(true);
 
+        // 3. 执行分页查询获取表列表
         List<Table> tables = tableService.pageQuery(tablePageQueryParam, selector);
+        // 4. 查询该数据源/库/模式下的所有真实物理外键
         List<ForeignKey> realForeignKeys = foreignKeySyncService.queryRealForeignKeys(
                 param.getDataSourceId(),
                 param.getDatabaseName(),
                 param.getSchemaName(),
                 null
         );
+        // 5. 按表名分组真实外键，便于后续快速查找
         Map<String, List<ForeignKey>> realForeignKeysByTable = realForeignKeys.stream()
                 .filter(fk -> fk.getTableName() != null)
                 .collect(Collectors.groupingBy(fk -> normalizeName(fk.getTableName())));
 
+        // 6. 将真实外键批量回填到对应的表对象中
         // 真实外键一次批量加载后回填到表对象；虚拟外键由调用方的全量快照处理。
         for (Table table : tables) {
             table.setForeignKeyList(realForeignKeysByTable.getOrDefault(
