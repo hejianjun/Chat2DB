@@ -164,10 +164,10 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
             });
         }
 
-        const currentTableName = joinInfo.currentTable.tableName?.value;
+        const currentTableName = cleanIdentifier(joinInfo.currentTable.tableName?.value);
         const currentTableAlias =
-          joinInfo.currentTableAlias ||
-          joinInfo.currentTable.tableName?.value
+          cleanIdentifier(joinInfo.currentTableAlias) ||
+          currentTableName
             .split(/[_\s]+/)
             .map((word) => word.charAt(0).toLowerCase())
             .join('');
@@ -190,7 +190,9 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
         console.log('[SQL 补全 - JOIN] 外键数量:', foreignKeys.length);
 
         // 过滤掉已经在 JOIN 中使用的表
-        const joinedTableNames = new Set((joinInfo.joinedTables || []).map((t) => t.tableName?.value).filter(Boolean));
+        const joinedTableNames = new Set(
+          (joinInfo.joinedTables || []).map((t) => cleanIdentifier(t.tableName?.value)).filter(Boolean),
+        );
 
         // 获取所有表用于填充未找到外键时的默认列表
         const allTables = await sqlService.getAllTableList({
@@ -229,7 +231,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
           // 收集所有关联的表（通过外键引用的表）
           for (const fk of foreignKeys as IForeignKeyVO[]) {
-            const refTable = fk.referencedTable;
+            const refTable = cleanIdentifier(fk.referencedTable);
             if (!refTable || joinedTableNames.has(refTable) || processedTables.has(refTable)) {
               continue;
             }

@@ -1,5 +1,6 @@
 package ai.chat2db.server.domain.core.service;
 
+import ai.chat2db.server.domain.core.util.MetaNameUtils;
 import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.model.VirtualForeignKeySuggestion;
 import net.sf.jsqlparser.schema.Column;
@@ -40,7 +41,8 @@ public class VirtualFkSuggestionService {
     }
 
     private String buildFKKey(String table, String column, String refTable, String refColumn) {
-        return table.toLowerCase() + "." + column.toLowerCase() + "->" + refTable.toLowerCase() + "." + refColumn.toLowerCase();
+        return cleanIdentifier(table).toLowerCase() + "." + cleanIdentifier(column).toLowerCase() + "->"
+                + cleanIdentifier(refTable).toLowerCase() + "." + cleanIdentifier(refColumn).toLowerCase();
     }
 
     private Map<String, String> buildAliasMap(PlainSelect plainSelect) {
@@ -56,10 +58,10 @@ public class VirtualFkSuggestionService {
 
     private void addFromItem(FromItem item, Map<String, String> map) {
         if (item instanceof Table table) {
-            String name = table.getName();
+            String name = cleanIdentifier(table.getName());
             map.put(name, name);
             if (table.getAlias() != null) {
-                map.put(table.getAlias().getName(), name);
+                map.put(cleanIdentifier(table.getAlias().getName()), name);
             }
         }
     }
@@ -92,10 +94,10 @@ public class VirtualFkSuggestionService {
         if (left instanceof Column cLeft && right instanceof Column cRight) {
             if (cLeft.getTable() == null || cRight.getTable() == null) return;
 
-            String lTableAlias = cLeft.getTable().getName();
-            String lCol = cLeft.getColumnName();
-            String rTableAlias = cRight.getTable().getName();
-            String rCol = cRight.getColumnName();
+            String lTableAlias = cleanIdentifier(cLeft.getTable().getName());
+            String lCol = cleanIdentifier(cLeft.getColumnName());
+            String rTableAlias = cleanIdentifier(cRight.getTable().getName());
+            String rCol = cleanIdentifier(cRight.getColumnName());
 
             String lRealTable = aliasMap.get(lTableAlias);
             String rRealTable = aliasMap.get(rTableAlias);
@@ -114,6 +116,10 @@ public class VirtualFkSuggestionService {
     }
 
     private void addSuggestion(String srcTable, String srcCol, String tgtTable, String tgtCol, List<VirtualForeignKeySuggestion> suggestions, Set<String> existingFKKeys) {
+        srcTable = cleanIdentifier(srcTable);
+        srcCol = cleanIdentifier(srcCol);
+        tgtTable = cleanIdentifier(tgtTable);
+        tgtCol = cleanIdentifier(tgtCol);
         String fkKey = buildFKKey(srcTable, srcCol, tgtTable, tgtCol);
         if (existingFKKeys.contains(fkKey)) {
             return;
@@ -133,5 +139,10 @@ public class VirtualFkSuggestionService {
                 .targetColumn(tgtCol)
                 .reason("JOIN condition")
                 .build());
+    }
+
+    private String cleanIdentifier(String name) {
+        String cleanedName = MetaNameUtils.getMetaName(name);
+        return cleanedName == null ? "" : cleanedName;
     }
 }
