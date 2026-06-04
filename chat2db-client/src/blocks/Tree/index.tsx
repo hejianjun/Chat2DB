@@ -56,18 +56,18 @@ const smoothTree = (treeData: ITreeNode[], result: ITreeNode[] = [], parentNode?
 };
 
 // 平级转树
-function tranListToTreeData(list:ITreeNode[], rootValue) {
-  const arr:ITreeNode[] = []
-  list.forEach((item:ITreeNode) => {
+function tranListToTreeData(list: ITreeNode[], rootValue) {
+  const arr: ITreeNode[] = [];
+  list.forEach((item: ITreeNode) => {
     if (item.parentNode?.uuid === rootValue) {
-      arr.push(item)
-      const children = tranListToTreeData(list, item.uuid)
+      arr.push(item);
+      const children = tranListToTreeData(list, item.uuid);
       if (children.length) {
-        item.children = children
+        item.children = children;
       }
     }
-  })
-  return arr
+  });
+  return arr;
 }
 
 // 判断是否匹配
@@ -120,6 +120,8 @@ const Tree = (props: IProps) => {
   const [backendSmoothTreeData, setBackendSmoothTreeData] = useState<ITreeNode[] | null>(null); // 后端搜索结果平级
   const [backendSearchLoading, setBackendSearchLoading] = useState(false);
   const searchValueRef = useRef<string>('');
+  const searchAbortControllerRef = useRef<AbortController | null>(null);
+  const searchRequestIdRef = useRef(0);
 
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
 
@@ -137,7 +139,7 @@ const Tree = (props: IProps) => {
   useEffect(() => {
     return () => {
       clearTreeStore();
-    }
+    };
   }, [searchValue]);
 
   useEffect(() => {
@@ -167,8 +169,10 @@ const Tree = (props: IProps) => {
   }, [searchTreeData]);
 
   const treeNodes = useMemo(() => {
-    const realNodeList = (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData)
-      .slice(startIdx, startIdx + 50);
+    const realNodeList = (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData).slice(
+      startIdx,
+      startIdx + 50,
+    );
     return realNodeList.map((item) => {
       return <TreeNode key={item.uuid} level={item.level || 0} data={item} refreshRootData={refreshRootData} />;
     });
@@ -178,11 +182,11 @@ const Tree = (props: IProps) => {
     if (searchValue && treeData) {
       searchValueRef.current = searchValue;
       const _searchTreeData = searchTree(cloneDeep(treeData), searchValue);
-      
+
       const flatResult: ITreeNode[] = [];
       smoothTree(_searchTreeData, flatResult);
-      const matchCount = flatResult.filter(item => isMatch(item.name, searchValue)).length;
-      
+      const matchCount = flatResult.filter((item) => isMatch(item.name, searchValue)).length;
+
       if (matchCount > 0) {
         setSearchTreeData(_searchTreeData);
         setBackendSmoothTreeData(null);
@@ -190,15 +194,24 @@ const Tree = (props: IProps) => {
       } else if (currentConnectionDetails?.id) {
         setSearchTreeData(null);
         setBackendSearchLoading(true);
-        sqlService.searchTree({
-          dataSourceId: currentConnectionDetails.id,
-          dataSourceName: currentConnectionDetails.alias,
-          databaseType: currentConnectionDetails.type,
-          searchKey: searchValue,
-        })
+        searchAbortControllerRef.current?.abort();
+        searchAbortControllerRef.current = new AbortController();
+        const searchRequestId = searchRequestIdRef.current + 1;
+        searchRequestIdRef.current = searchRequestId;
+        const signal = searchAbortControllerRef.current.signal;
+        sqlService
+          .searchTree(
+            {
+              dataSourceId: currentConnectionDetails.id,
+              dataSourceName: currentConnectionDetails.alias,
+              databaseType: currentConnectionDetails.type,
+              searchKey: searchValue,
+            },
+            { signal },
+          )
           .then((res) => {
-            if (searchValueRef.current === searchValue) {
-              const enrichedNodes = res.map(node => ({
+            if (!signal.aborted && searchRequestIdRef.current === searchRequestId) {
+              const enrichedNodes = (res || []).map((node) => ({
                 ...node,
                 treeNodeType: node.treeNodeType?.toLowerCase() || node.treeNodeType,
                 pretendNodeType: node.pretendNodeType?.toLowerCase() || node.pretendNodeType,
@@ -217,12 +230,12 @@ const Tree = (props: IProps) => {
             }
           })
           .catch(() => {
-            if (searchValueRef.current === searchValue) {
+            if (!signal.aborted && searchRequestIdRef.current === searchRequestId) {
               setBackendSmoothTreeData([]);
             }
           })
           .finally(() => {
-            if (searchValueRef.current === searchValue) {
+            if (!signal.aborted && searchRequestIdRef.current === searchRequestId) {
               setBackendSearchLoading(false);
             }
           });
@@ -233,39 +246,49 @@ const Tree = (props: IProps) => {
       }
     } else {
       searchValueRef.current = '';
+      searchAbortControllerRef.current?.abort();
+      searchRequestIdRef.current += 1;
       setSearchTreeData(null);
       setBackendSmoothTreeData(null);
+      setBackendSearchLoading(false);
     }
   }, [searchValue, treeData, currentConnectionDetails]);
 
+  useEffect(() => {
+    return () => {
+      searchAbortControllerRef.current?.abort();
+      searchRequestIdRef.current += 1;
+    };
+  }, []);
+
   function buildTreeFromFlatData(flatNodes: ITreeNode[]): ITreeNode[] {
     if (!flatNodes || flatNodes.length === 0) return [];
-    
+
     const firstNode = flatNodes[0];
     const baseExtraParams = firstNode.extraParams || {};
-    
+
     const map = new Map<string, ITreeNode>();
     const pathMap = new Map<string, ITreeNode>();
     const roots: ITreeNode[] = [];
 
-    flatNodes.forEach(item => {
+    flatNodes.forEach((item) => {
       map.set(item.uuid, { ...item, children: [] });
     });
 
-    flatNodes.forEach(node => {
+    flatNodes.forEach((node) => {
       if (node.parentPath && node.parentPath.length > 0) {
         let currentPath = '';
         node.parentPath.forEach((pathItem, index) => {
           const prevPath = currentPath;
           currentPath = prevPath ? `${prevPath}/${pathItem}` : pathItem;
-          
+
           if (!pathMap.has(currentPath)) {
             const pathNode: ITreeNode = {
               uuid: `path-${currentPath}`,
               key: `path-${currentPath}`,
               name: pathItem,
-              treeNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMA,
-              pretendNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMA,
+              treeNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMAS,
+              pretendNodeType: index === 0 ? TreeNodeType.DATABASE : TreeNodeType.SCHEMAS,
               isLeaf: false,
               children: [],
               extraParams: {
@@ -294,7 +317,7 @@ const Tree = (props: IProps) => {
       }
     });
 
-    flatNodes.forEach(node => {
+    flatNodes.forEach((node) => {
       const mappedNode = map.get(node.uuid);
       if (mappedNode) {
         if (node.parentPath && node.parentPath.length > 0) {
@@ -319,8 +342,8 @@ const Tree = (props: IProps) => {
         value={{
           treeData: treeData!,
           setTreeData: setTreeData!,
-          searchTreeData, 
-          setSearchTreeData
+          searchTreeData,
+          setSearchTreeData,
         }}
       >
         <div
@@ -331,7 +354,9 @@ const Tree = (props: IProps) => {
         >
           <div
             className={styles.treeListHolder}
-            style={{ '--tree-node-count': (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData)?.length } as any}
+            style={
+              { '--tree-node-count': (backendSmoothTreeData || searchSmoothTreeData || smoothTreeData)?.length } as any
+            }
           >
             <div style={{ height: top }} />
             {treeNodes}
@@ -374,24 +399,27 @@ const TreeNode = memo((props: TreeNodeIProps) => {
 
     setIsLoading(true);
     if (_props?.pageNo === 1 || !_props?.pageNo) {
-      insertData(treeData!, _treeNodeData.uuid!, null,[treeData, setTreeData]);
-      if(searchTreeData){
-        insertData(searchTreeData!, _treeNodeData.uuid!, null,[searchTreeData, setSearchTreeData]);
+      insertData(treeData!, _treeNodeData.uuid!, null, [treeData, setTreeData]);
+      if (searchTreeData) {
+        insertData(searchTreeData!, _treeNodeData.uuid!, null, [searchTreeData, setSearchTreeData]);
       }
     }
 
     Promise.resolve()
       .then(
         () =>
-          treeNodeConfig.getChildren?.({
-            ..._treeNodeData.extraParams,
-            extraParams: {
+          treeNodeConfig.getChildren?.(
+            {
               ..._treeNodeData.extraParams,
+              extraParams: {
+                ..._treeNodeData.extraParams,
+              },
+              refresh: _props?.refresh || false,
+              pageNo: _props?.pageNo || 1,
+              lastDocId: _props?.lastDocId,
             },
-            refresh: _props?.refresh || false,
-            pageNo: _props?.pageNo || 1,
-            lastDocId: _props?.lastDocId,
-          }, { signal }) || [],
+            { signal },
+          ) || [],
       )
       .then((res: any) => {
         if (signal?.aborted) return;
@@ -399,8 +427,8 @@ const TreeNode = memo((props: TreeNodeIProps) => {
         if (filteredRes?.length || filteredRes?.data) {
           if (filteredRes.data) {
             insertData(treeData!, _treeNodeData.uuid!, filteredRes.data, [treeData, setTreeData]);
-            if(searchTreeData){
-              insertData(searchTreeData!, _treeNodeData.uuid!, filteredRes.data,[searchTreeData, setSearchTreeData]);
+            if (searchTreeData) {
+              insertData(searchTreeData!, _treeNodeData.uuid!, filteredRes.data, [searchTreeData, setSearchTreeData]);
             }
             if (filteredRes.hasNextPage) {
               loadData({
@@ -412,9 +440,9 @@ const TreeNode = memo((props: TreeNodeIProps) => {
               return;
             }
           } else {
-            insertData(treeData!, _treeNodeData.uuid!, filteredRes,[treeData, setTreeData]);
-            if(searchTreeData){
-              insertData(searchTreeData!, _treeNodeData.uuid!, filteredRes,[searchTreeData, setSearchTreeData]);
+            insertData(treeData!, _treeNodeData.uuid!, filteredRes, [treeData, setTreeData]);
+            if (searchTreeData) {
+              insertData(searchTreeData!, _treeNodeData.uuid!, filteredRes, [searchTreeData, setSearchTreeData]);
             }
           }
         } else {
@@ -424,9 +452,9 @@ const TreeNode = memo((props: TreeNodeIProps) => {
             loadData();
             return;
           } else {
-            insertData(treeData!, _treeNodeData.uuid!, [],[treeData, setTreeData]);
-            if(searchTreeData){
-              insertData(searchTreeData!, _treeNodeData.uuid!, [],[searchTreeData, setSearchTreeData]);
+            insertData(treeData!, _treeNodeData.uuid!, [], [treeData, setTreeData]);
+            if (searchTreeData) {
+              insertData(searchTreeData!, _treeNodeData.uuid!, [], [searchTreeData, setSearchTreeData]);
             }
           }
         }
@@ -467,8 +495,8 @@ const TreeNode = memo((props: TreeNodeIProps) => {
   const isFocus = useTreeStore((state) => state.focusId) === treeNodeData.uuid;
 
   //  在treeData中找到对应的节点，插入数据
-  const insertData = (_treeData: ITreeNode[], uuid: string, data: any, originalDataList:any): ITreeNode | null => {
-    const [originalData,setOriginalData] = originalDataList
+  const insertData = (_treeData: ITreeNode[], uuid: string, data: any, originalDataList: any): ITreeNode | null => {
+    const [originalData, setOriginalData] = originalDataList;
     let result: ITreeNode | null = null;
     for (let i = 0; i < _treeData?.length; i++) {
       if (_treeData[i].uuid === uuid) {
@@ -498,9 +526,9 @@ const TreeNode = memo((props: TreeNodeIProps) => {
   //展开-收起
   const handleClick = () => {
     if (treeNodeData?.children) {
-      insertData(treeData!, treeNodeData.uuid!, null,[treeData, setTreeData]);
-      if(searchTreeData){
-        insertData(searchTreeData!, treeNodeData.uuid!, null,[searchTreeData, setSearchTreeData]);
+      insertData(treeData!, treeNodeData.uuid!, null, [treeData, setTreeData]);
+      if (searchTreeData) {
+        insertData(searchTreeData!, treeNodeData.uuid!, null, [searchTreeData, setSearchTreeData]);
       }
     } else {
       loadData();
@@ -523,7 +551,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
     useCommonStore.setState({
       focusedContent: (treeNodeData.name || '') as any,
     });
-    if(treeNodeData.treeNodeType === TreeNodeType.TABLE){
+    if (treeNodeData.treeNodeType === TreeNodeType.TABLE) {
       setCurrentWorkspaceGlobalExtend({
         code: 'viewDDL',
         uniqueData: {
@@ -533,7 +561,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
           databaseType: treeNodeData.extraParams?.databaseType,
           schemaName: treeNodeData.extraParams?.schemaName,
           tableName: treeNodeData.name,
-        }
+        },
       });
     }
     setFocusId(treeNodeData.uuid || '');

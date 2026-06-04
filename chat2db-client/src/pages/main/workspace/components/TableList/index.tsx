@@ -25,12 +25,16 @@ export default memo<IProps>((props) => {
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   const getTreeData = (refresh = false) => {
     if (!currentConnectionDetails?.id) {
       setTreeData([]);
       return;
     }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -39,24 +43,27 @@ export default memo<IProps>((props) => {
     const signal = abortControllerRef.current.signal;
 
     const treeNodeType = currentConnectionDetails.supportDatabase ? TreeNodeType.DATA_SOURCE : TreeNodeType.DATABASE;
-    setTreeData(null);
+    setTreeData((prevTreeData) => (refresh && prevTreeData ? prevTreeData : null));
     treeConfig[treeNodeType]
-      .getChildren?.({
-        dataSourceId: currentConnectionDetails.id,
-        dataSourceName: currentConnectionDetails.alias,
-        refresh: refresh,
-        extraParams: {
+      .getChildren?.(
+        {
           dataSourceId: currentConnectionDetails.id,
           dataSourceName: currentConnectionDetails.alias,
-          databaseType: currentConnectionDetails.type,
+          refresh: refresh,
+          extraParams: {
+            dataSourceId: currentConnectionDetails.id,
+            dataSourceName: currentConnectionDetails.alias,
+            databaseType: currentConnectionDetails.type,
+          },
         },
-      }, { signal })
+        { signal },
+      )
       .then((res) => {
-        if (signal.aborted) return;
+        if (signal.aborted || requestIdRef.current !== requestId) return;
         setTreeData(res);
       })
       .catch(() => {
-        if (signal.aborted) return;
+        if (signal.aborted || requestIdRef.current !== requestId) return;
         setTreeData([]);
       });
   };
@@ -67,6 +74,7 @@ export default memo<IProps>((props) => {
 
   useEffect(() => {
     return () => {
+      requestIdRef.current += 1;
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
