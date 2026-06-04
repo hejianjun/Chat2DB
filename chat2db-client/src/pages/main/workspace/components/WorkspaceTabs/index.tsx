@@ -190,10 +190,10 @@ const WorkspaceTabs = memo(() => {
   };
 
   // 编辑名称
-  const editableNameOnBlur = (t: ITabItem) => {
+  const editableNameOnBlur = (t: ITabItem, value: string) => {
     const _params: any = {
       id: t.key,
-      name: t.label,
+      name: value,
     };
     historyService.updateSavedConsole(_params);
 
@@ -202,7 +202,7 @@ const WorkspaceTabs = memo(() => {
         if (item.id === t.key) {
           return {
             ...item,
-            title: t.label,
+            title: value,
           };
         }
         return item;
@@ -510,6 +510,7 @@ const WorkspaceTabs = memo(() => {
             <span className={styles.tabTitle} style={getEnvLabelStyle(environment, isActive)}>{isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title}</span>
           </div>
         ),
+        name: isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title,
         key: item.id,
         editableName: item.type === WorkspaceTabType.CONSOLE,
         canGenerateTitle: canGenerateTitleType(item.type),

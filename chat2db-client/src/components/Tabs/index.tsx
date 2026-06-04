@@ -10,6 +10,8 @@ import styles from './index.less';
 export interface ITabItem {
   prefixIcon?: string | React.ReactNode;
   label: React.ReactNode;
+  // 编辑标题时的初始纯文本值；当 label 为 React 节点时必须提供
+  name?: string;
   key: number | string;
   popover?: string | React.ReactNode;
   children?: React.ReactNode;
@@ -27,6 +29,12 @@ export interface IOnchangeProps {
 
 const MAX_TABS = 20;
 
+function getInitialEditValue(t: ITabItem): string {
+  if (typeof t.name === 'string') return t.name;
+  if (typeof t.label === 'string') return t.label;
+  return '';
+}
+
 interface IProps {
   className?: string;
   items?: ITabItem[];
@@ -34,7 +42,7 @@ interface IProps {
   onChange?: (key: string | number | null) => void;
   onEdit?: (action: 'add' | 'remove', data?: ITabItem[], list?: ITabItem[]) => void;
   hideAdd?: boolean;
-  editableNameOnBlur?: (option: ITabItem) => void;
+  editableNameOnBlur?: (option: ITabItem, value: string) => void;
   concealTabHeader?: boolean;
   // 最后一个tab不能关闭
   lastTabCannotClosed?: boolean;
@@ -63,6 +71,7 @@ export default memo<IProps>((props) => {
   const [internalTabs, setInternalTabs] = useState<ITabItem[]>([]);
   const [internalActiveTab, setInternalActiveTab] = useState<number | string | null>(null);
   const [editingTab, setEditingTab] = useState<ITabItem['key'] | undefined>();
+  const [editingValue, setEditingValue] = useState<string>('');
   const tabListBoxRef = useRef<HTMLDivElement>(null);
   const tabsNavRef = useRef<HTMLDivElement>(null);
   const isNumberKey = useRef<boolean>(false);
@@ -163,19 +172,16 @@ export default memo<IProps>((props) => {
 
   const onDoubleClick = (t: ITabItem) => {
     if (t.editableName) {
+      setEditingValue(getInitialEditValue(t));
       setEditingTab(t.key);
     }
   };
 
   const renderTabItem = (t: ITabItem, index: number) => {
-    function inputOnChange(value: string) {
-      internalTabs[index].label = value;
-      setInternalTabs([...internalTabs]);
-    }
-
     function onBlur() {
-      editableNameOnBlur?.(t);
+      editableNameOnBlur?.(t, editingValue);
       setEditingTab(undefined);
+      setEditingValue('');
     }
 
     function showClosed() {
@@ -239,9 +245,9 @@ export default memo<IProps>((props) => {
           >
             {t.key === editingTab ? (
               <input
-                value={t.label as string}
+                value={editingValue}
                 onChange={(e) => {
-                  inputOnChange(e.target.value);
+                  setEditingValue(e.target.value);
                 }}
                 className={styles.input}
                 autoFocus
