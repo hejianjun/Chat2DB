@@ -151,14 +151,12 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
      */
     @Override
     public VirtualForeignKey createVirtualFK(CreateVirtualFKParam param) {
-        LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(VirtualForeignKeyDO::getDataSourceId, param.getDataSourceId())
-                .eq(VirtualForeignKeyDO::getDatabaseName, param.getDatabaseName())
-                .eq(VirtualForeignKeyDO::getTableName, param.getTableName())
-                .eq(VirtualForeignKeyDO::getColumnName, param.getColumnName())
-                .eq(VirtualForeignKeyDO::getReferencedTable, param.getReferencedTable());
-
-        if (getVFKMapper().selectCount(wrapper) > 0) {
+        if (existsVirtualForeignKey(null,
+                param.getDataSourceId(),
+                param.getDatabaseName(),
+                param.getSchemaName(),
+                param.getTableName(),
+                param.getColumnName())) {
             throw new BusinessException("VIRTUAL_FK_EXISTS", new Object[]{});
         }
 
@@ -206,8 +204,24 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
         VirtualForeignKeyDO updateDO = new VirtualForeignKeyDO();
         updateDO.setId(param.getId());
-        if (StringUtils.isNotBlank(param.getComment())) {
-            updateDO.setComment(param.getComment());
+        String tableName = StringUtils.defaultIfBlank(param.getTableName(), existing.getTableName());
+        String columnName = StringUtils.defaultIfBlank(param.getColumnName(), existing.getColumnName());
+
+        if (existsVirtualForeignKey(param.getId(),
+                existing.getDataSourceId(),
+                existing.getDatabaseName(),
+                existing.getSchemaName(),
+                tableName,
+                columnName)) {
+            throw new BusinessException("VIRTUAL_FK_EXISTS", new Object[]{});
+        }
+
+        updateDO.setComment(param.getComment());
+        if (StringUtils.isNotBlank(param.getTableName())) {
+            updateDO.setTableName(param.getTableName());
+        }
+        if (StringUtils.isNotBlank(param.getColumnName())) {
+            updateDO.setColumnName(param.getColumnName());
         }
         if (StringUtils.isNotBlank(param.getReferencedTable())) {
             updateDO.setReferencedTable(param.getReferencedTable());
@@ -445,6 +459,30 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .eq(StringUtils.isNotBlank(databaseName), VirtualForeignKeyDO::getDatabaseName, databaseName)
                 .eq(StringUtils.isNotBlank(schemaName), VirtualForeignKeyDO::getSchemaName, schemaName);
         return getVFKMapper().selectList(wrapper);
+    }
+
+    private boolean existsVirtualForeignKey(Long excludeId,
+                                            Long dataSourceId,
+                                            String databaseName,
+                                            String schemaName,
+                                            String tableName,
+                                            String columnName) {
+        LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(VirtualForeignKeyDO::getDataSourceId, dataSourceId)
+                .eq(StringUtils.isNotBlank(databaseName), VirtualForeignKeyDO::getDatabaseName, databaseName)
+                .and(StringUtils.isBlank(databaseName), item -> item
+                        .isNull(VirtualForeignKeyDO::getDatabaseName)
+                        .or()
+                        .eq(VirtualForeignKeyDO::getDatabaseName, ""))
+                .eq(StringUtils.isNotBlank(schemaName), VirtualForeignKeyDO::getSchemaName, schemaName)
+                .and(StringUtils.isBlank(schemaName), item -> item
+                        .isNull(VirtualForeignKeyDO::getSchemaName)
+                        .or()
+                        .eq(VirtualForeignKeyDO::getSchemaName, ""))
+                .eq(VirtualForeignKeyDO::getTableName, tableName)
+                .eq(VirtualForeignKeyDO::getColumnName, columnName)
+                .ne(excludeId != null, VirtualForeignKeyDO::getId, excludeId);
+        return getVFKMapper().selectCount(wrapper) > 0;
     }
 
     /**

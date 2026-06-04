@@ -96,6 +96,8 @@ public class ForeignKeyController {
         UpdateVirtualFKParam param = UpdateVirtualFKParam.builder()
                 .id(request.getId())
                 .comment(request.getComment())
+                .tableName(request.getTableName())
+                .columnName(request.getColumnName())
                 .referencedTable(request.getReferencedTable())
                 .referencedColumnName(request.getReferencedColumnName())
                 .vkName(request.getVkName())

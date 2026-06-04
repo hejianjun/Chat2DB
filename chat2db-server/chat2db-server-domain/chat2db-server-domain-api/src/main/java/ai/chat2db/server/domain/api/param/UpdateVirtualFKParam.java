@@ -18,6 +18,10 @@ public class UpdateVirtualFKParam {
 
     private String comment;
 
+    private String tableName;
+
+    private String columnName;
+
     private String referencedTable;
 
     private String referencedColumnName;

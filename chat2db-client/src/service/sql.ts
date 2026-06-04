@@ -536,6 +536,8 @@ export interface ICreateVirtualFKParams {
 export interface IUpdateVirtualFKParams {
   id: number;
   vkName?: string;
+  tableName?: string;
+  columnName?: string;
   referencedTable?: string;
   referencedColumnName?: string;
   comment?: string;

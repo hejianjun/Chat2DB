@@ -3,7 +3,8 @@ import { TreeNodeType } from '@/constants';
 import i18n from '@/i18n';
 import sqlService, { IForeignKeyVO } from '@/service/sql';
 import { ITreeNode } from '@/typings';
-import { Button, Form, Input, message, Modal, Select, Space, Table, Tag } from 'antd';
+import { DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
+import { Button, Form, Input, message, Modal, Select, Space, Table, Tag, Upload } from 'antd';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import styles from './index.less';
 
@@ -19,6 +20,17 @@ interface IAddRelationForm {
   comment?: string;
 }
 
+interface IVirtualFkImportItem {
+  tableName?: string;
+  columnName?: string;
+  referencedTable?: string;
+  referencedColumnName?: string;
+  comment?: string;
+}
+
+const buildVirtualFkKey = (item: IVirtualFkImportItem) =>
+  [item.tableName, item.columnName].map((value) => `${value || ''}`.trim()).join('\u0001');
+
 const TableRelationModal = memo((props: IProps) => {
   const { treeNodeData } = props;
   const { dataSourceId, databaseName, schemaName } = treeNodeData.extraParams || {};
@@ -32,7 +44,10 @@ const TableRelationModal = memo((props: IProps) => {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [deletingAllVirtual, setDeletingAllVirtual] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<IForeignKeyVO | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [foreignKeys, setForeignKeys] = useState<IForeignKeyVO[]>([]);
   const [tables, setTables] = useState<Array<{ name: string; comment?: string }>>([]);
@@ -70,6 +85,8 @@ const TableRelationModal = memo((props: IProps) => {
   }, [searchKeyword, sortedForeignKeys]);
 
   const tableOptions = useMemo(() => tables.map((item) => ({ label: item.name, value: item.name })), [tables]);
+
+  const virtualForeignKeys = useMemo(() => foreignKeys.filter((item) => item.sourceType === 'VIRTUAL'), [foreignKeys]);
 
   const getFields = useCallback(
     async (selectedTableName?: string) => {
@@ -177,25 +194,204 @@ const TableRelationModal = memo((props: IProps) => {
     });
   };
 
-  const handleCreate = async () => {
+  const handleDeleteAllVirtual = () => {
+    if (!virtualForeignKeys.length) {
+      message.warning(i18n('workspace.tableRelation.noVirtualFk'));
+      return;
+    }
+
+    Modal.confirm({
+      title: i18n('workspace.tableRelation.deleteAllVirtualConfirmTitle'),
+      content: i18n('workspace.tableRelation.deleteAllVirtualConfirmContent', virtualForeignKeys.length),
+      okText: i18n('common.button.confirm'),
+      okButtonProps: { danger: true },
+      cancelText: i18n('common.button.cancel'),
+      onOk: async () => {
+        setDeletingAllVirtual(true);
+        try {
+          await Promise.all(
+            virtualForeignKeys
+              .filter((item) => item.id)
+              .map((item) => sqlService.deleteForeignKey({ id: item.id!, sourceType: 'VIRTUAL' })),
+          );
+          message.success(i18n('workspace.tableRelation.deleteAllVirtualSuccess'));
+          fetchForeignKeys();
+        } catch {
+          message.error(i18n('workspace.tableRelation.deleteAllVirtualError'));
+        } finally {
+          setDeletingAllVirtual(false);
+        }
+      },
+    });
+  };
+
+  const openCreateForm = () => {
+    setEditingRecord(null);
+    form.resetFields();
+    form.setFieldsValue(tableName ? { tableName } : {});
+    if (tableName) {
+      getFields(tableName);
+    }
+    setShowForm(true);
+  };
+
+  const openEditForm = (record: IForeignKeyVO) => {
+    setEditingRecord(record);
+    form.setFieldsValue({
+      tableName: record.tableName,
+      columnName: record.columnName,
+      referencedTable: record.referencedTable,
+      referencedColumnName: record.referencedColumnName,
+      comment: record.comment,
+    });
+    getFields(record.tableName);
+    getFields(record.referencedTable);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingRecord(null);
+    form.resetFields();
+  };
+
+  const handleSubmit = async () => {
     const values = await form.validateFields();
     setSubmitting(true);
     try {
-      await sqlService.createVirtualForeignKey({
-        dataSourceId: dataSourceId!,
-        databaseName,
-        schemaName,
-        ...values,
-      });
-      message.success(i18n('workspace.tableRelation.createSuccess'));
-      form.resetFields();
-      setShowForm(false);
+      if (editingRecord?.id) {
+        await sqlService.updateVirtualForeignKey({
+          id: editingRecord.id,
+          ...values,
+        });
+        message.success(i18n('workspace.tableRelation.updateSuccess'));
+      } else {
+        await sqlService.createVirtualForeignKey({
+          dataSourceId: dataSourceId!,
+          databaseName,
+          schemaName,
+          ...values,
+        });
+        message.success(i18n('workspace.tableRelation.createSuccess'));
+      }
+      closeForm();
       fetchForeignKeys();
     } catch {
-      message.error(i18n('workspace.tableRelation.createError'));
+      message.error(
+        editingRecord ? i18n('workspace.tableRelation.updateError') : i18n('workspace.tableRelation.createError'),
+      );
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const normalizeImportData = (data: unknown): IVirtualFkImportItem[] => {
+    const rawList = Array.isArray(data)
+      ? data
+      : Array.isArray((data as { virtualForeignKeys?: unknown[] })?.virtualForeignKeys)
+      ? (data as { virtualForeignKeys: unknown[] }).virtualForeignKeys
+      : [];
+
+    const itemMap = new Map<string, IVirtualFkImportItem>();
+    rawList
+      .map((item) => item as IVirtualFkImportItem)
+      .filter((item) => item.tableName && item.columnName && item.referencedTable && item.referencedColumnName)
+      .forEach((item) => {
+        itemMap.set(buildVirtualFkKey(item), item);
+      });
+    return Array.from(itemMap.values());
+  };
+
+  const handleImport = async (file: File) => {
+    if (!dataSourceId || !databaseName) return false;
+    setImporting(true);
+    try {
+      const data = JSON.parse(await file.text());
+      const importList = normalizeImportData(data);
+      if (!importList.length) {
+        message.error(i18n('workspace.tableRelation.importEmpty'));
+        return false;
+      }
+
+      const currentVirtualFKs = await sqlService.getForeignKeyList({
+        dataSourceId: dataSourceId!,
+        databaseName,
+        schemaName,
+      });
+      const currentMap = new Map(
+        (currentVirtualFKs || [])
+          .filter((item) => item.sourceType === 'VIRTUAL' && item.id)
+          .map((item) => [buildVirtualFkKey(item), item]),
+      );
+
+      let created = 0;
+      let updated = 0;
+      for (const item of importList) {
+        const existing = currentMap.get(buildVirtualFkKey(item));
+        if (existing?.id) {
+          await sqlService.updateVirtualForeignKey({
+            id: existing.id,
+            tableName: item.tableName,
+            columnName: item.columnName,
+            referencedTable: item.referencedTable,
+            referencedColumnName: item.referencedColumnName,
+            comment: item.comment,
+          });
+          updated++;
+        } else {
+          await sqlService.createVirtualForeignKey({
+            dataSourceId: dataSourceId!,
+            databaseName,
+            schemaName,
+            tableName: item.tableName!,
+            columnName: item.columnName!,
+            referencedTable: item.referencedTable!,
+            referencedColumnName: item.referencedColumnName!,
+            comment: item.comment,
+          });
+          created++;
+        }
+      }
+
+      message.success(i18n('workspace.tableRelation.importSuccess', created, updated));
+      fetchForeignKeys();
+    } catch {
+      message.error(i18n('workspace.tableRelation.importError'));
+    } finally {
+      setImporting(false);
+    }
+    return false;
+  };
+
+  const handleExport = () => {
+    if (!virtualForeignKeys.length) {
+      message.warning(i18n('workspace.tableRelation.exportEmpty'));
+      return;
+    }
+
+    const content = JSON.stringify(
+      {
+        version: 1,
+        databaseName,
+        schemaName,
+        virtualForeignKeys: virtualForeignKeys.map((item) => ({
+          tableName: item.tableName,
+          columnName: item.columnName,
+          referencedTable: item.referencedTable,
+          referencedColumnName: item.referencedColumnName,
+          comment: item.comment,
+        })),
+      },
+      null,
+      2,
+    );
+    const blobUrl = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `virtual-foreign-keys-${databaseName || 'database'}.json`;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
+    message.success(i18n('workspace.tableRelation.exportSuccess'));
   };
 
   const columns = [
@@ -236,9 +432,14 @@ const TableRelationModal = memo((props: IProps) => {
     },
     {
       title: i18n('workspace.tableRelation.operation'),
-      width: 80,
+      width: 100,
       render: (_: unknown, record: IForeignKeyVO) => (
-        <Button type="text" danger icon={<Iconfont code="&#xe64e;" />} onClick={() => handleDelete(record)} />
+        <Space>
+          {record.sourceType === 'VIRTUAL' ? (
+            <Button type="text" icon={<EditOutlined />} onClick={() => openEditForm(record)} />
+          ) : null}
+          <Button type="text" danger icon={<Iconfont code="&#xe64e;" />} onClick={() => handleDelete(record)} />
+        </Space>
       ),
     },
   ];
@@ -257,10 +458,26 @@ const TableRelationModal = memo((props: IProps) => {
           onChange={(event) => setSearchKeyword(event.target.value)}
         />
         <Space>
+          <Upload accept=".json" showUploadList={false} beforeUpload={handleImport}>
+            <Button icon={<UploadOutlined />} loading={importing}>
+              {i18n('workspace.tableRelation.importVirtualFk')}
+            </Button>
+          </Upload>
+          <Button icon={<DownloadOutlined />} onClick={handleExport}>
+            {i18n('workspace.tableRelation.exportVirtualFk')}
+          </Button>
+          <Button
+            danger
+            loading={deletingAllVirtual}
+            disabled={!virtualForeignKeys.length}
+            onClick={handleDeleteAllVirtual}
+          >
+            {i18n('workspace.tableRelation.deleteAllVirtualFk')}
+          </Button>
           <Button onClick={handleSync} loading={syncing}>
             {i18n('editTable.button.syncForeignKeys')}
           </Button>
-          <Button type="primary" onClick={() => setShowForm((prev) => !prev)}>
+          <Button type="primary" onClick={showForm && !editingRecord ? closeForm : openCreateForm}>
             {i18n('editTable.button.addForeignKey')}
           </Button>
         </Space>
@@ -320,10 +537,10 @@ const TableRelationModal = memo((props: IProps) => {
             <Input />
           </Form.Item>
           <Space>
-            <Button type="primary" loading={submitting} onClick={handleCreate}>
+            <Button type="primary" loading={submitting} onClick={handleSubmit}>
               {i18n('common.button.confirm')}
             </Button>
-            <Button onClick={() => setShowForm(false)}>{i18n('common.button.cancel')}</Button>
+            <Button onClick={closeForm}>{i18n('common.button.cancel')}</Button>
           </Space>
         </Form>
       ) : null}
