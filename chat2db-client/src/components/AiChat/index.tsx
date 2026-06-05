@@ -199,6 +199,8 @@ const getLastAssistantSql = (messages: IChatMessage[]): string | null => {
   return null;
 };
 
+const normalizeNullableText = (value?: string | null): string => value || '';
+
 const SqlActionButtons = memo<{ sql: string; onExecute?: (sql: string) => void; onSendToEditor?: (sql: string) => void }>(({ sql, onExecute, onSendToEditor }) => {
   return (
     <div className={styles.sqlActionButtons}>
@@ -375,10 +377,14 @@ export default memo<IProps>((props) => {
       const existingSession = existingSessionId ? storeState.sessions[existingSessionId] : null;
       const previousRequest = storeState.lastRequest;
       const isSameConnection =
-        !previousRequest ||
-        (previousRequest.dataSourceId === info.dataSourceId &&
-          previousRequest.databaseName === info.databaseName &&
-          previousRequest.schemaName === info.schemaName);
+        existingSession
+          ? existingSession.dataSourceId === info.dataSourceId &&
+            normalizeNullableText(existingSession.databaseName) === normalizeNullableText(info.databaseName) &&
+            normalizeNullableText(existingSession.schemaName) === normalizeNullableText(info.schemaName)
+          : !previousRequest ||
+            (previousRequest.dataSourceId === info.dataSourceId &&
+              normalizeNullableText(previousRequest.databaseName) === normalizeNullableText(info.databaseName) &&
+              normalizeNullableText(previousRequest.schemaName) === normalizeNullableText(info.schemaName));
       const canReuseNl2SqlConversation =
         promptType === 'NL_2_SQL' &&
         isSameConnection &&
@@ -394,18 +400,20 @@ export default memo<IProps>((props) => {
         existingSession.messages.length === 0 &&
         !isActiveState(existingSession.state);
       const previousSql = canReuseNl2SqlConversation ? getLastAssistantSql(existingSession.messages) : null;
-      const shouldContinueConversation = canReuseNl2SqlConversation && !!previousSql;
-      const isRevision = shouldContinueConversation;
+      const shouldReuseConversation = canReuseNl2SqlConversation || canUseEmptyConversation;
+      const isRevision = canReuseNl2SqlConversation && !!previousSql;
       const requestTableNames =
-        isRevision && (!info.tableNames || info.tableNames.length === 0) && existingSession.selectedTables?.length
+        shouldReuseConversation &&
+        (!info.tableNames || info.tableNames.length === 0) &&
+        existingSession?.selectedTables?.length
           ? existingSession.selectedTables
           : info.tableNames;
 
-      const sessionId = shouldContinueConversation || canUseEmptyConversation ? existingSessionId! : uuidv4();
-      console.log('[AiChat] Using sessionId:', sessionId, 'continue:', shouldContinueConversation);
+      const sessionId = shouldReuseConversation ? existingSessionId! : uuidv4();
+      console.log('[AiChat] Using sessionId:', sessionId, 'reuse:', shouldReuseConversation, 'revision:', isRevision);
       sessionIdRef.current = sessionId;
       const sessionTitle = existingSession?.title || generateTitle(messageText);
-      if (!shouldContinueConversation && !canUseEmptyConversation) {
+      if (!shouldReuseConversation) {
         createSession(sessionId, {
           dataSourceId: info.dataSourceId,
           databaseName: info.databaseName,
@@ -413,8 +421,6 @@ export default memo<IProps>((props) => {
           selectedTables: requestTableNames || undefined,
           title: sessionTitle,
         });
-      }
-      if (!shouldContinueConversation) {
         try {
           await aiConversationService.createAiConversation({
             conversationId: sessionId,
@@ -732,10 +738,18 @@ export default memo<IProps>((props) => {
     });
   };
 
+  const handleNewConversation = useCallback(() => {
+    setBoundInfo((prev) => ({
+      ...prev,
+      tableNames: null,
+    }));
+    setSelectedTableDraft([]);
+  }, []);
+
   const stateInfo = currentSession ? STATE_LABELS[currentSession.state] : null;
   const isProcessing = isActiveState(currentSession?.state);
   const isInputDisabled = isProcessing || !boundInfo.dataSourceId;
-  const selectedTablesForDisplay = currentSession?.selectedTables || boundInfo.tableNames || [];
+  const selectedTablesForDisplay = currentSession ? currentSession.selectedTables || [] : boundInfo.tableNames || [];
   const tableOptions = databaseTables.map((table) => ({
     label: table.comment ? `${table.name} - ${table.comment}` : table.name,
     value: table.name,
@@ -750,6 +764,7 @@ export default memo<IProps>((props) => {
             databaseName: boundInfo.databaseName,
             schemaName: boundInfo.schemaName,
           }}
+          onNewConversation={handleNewConversation}
         />
       </div>
       <div className={styles.mainPanel}>
