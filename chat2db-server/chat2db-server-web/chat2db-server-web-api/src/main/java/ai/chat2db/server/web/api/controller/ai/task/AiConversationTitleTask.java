@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.ai.task;
 
 import ai.chat2db.server.domain.api.service.AiConversationService;
+import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.web.api.config.AiChatConfig;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +35,9 @@ public class AiConversationTitleTask {
         if (StringUtils.isBlank(conversationId) || StringUtils.isBlank(firstUserMessage)) {
             return;
         }
+        String title;
         try {
-            String title = aiChatConfig.createChatClient(PromptType.TITLE_GENERATION)
+            title = aiChatConfig.createChatClient(PromptType.TITLE_GENERATION)
                 .prompt()
                 .user(firstUserMessage)
                 .call()
@@ -44,12 +46,20 @@ public class AiConversationTitleTask {
             if (StringUtils.isBlank(title)) {
                 title = fallbackTitle(firstUserMessage);
             }
-            aiConversationService.updateTitle(conversationId, title);
             log.info("[AiConversationTitleTask] Generated title for {}: {}", conversationId, title);
         } catch (Exception e) {
             log.warn("[AiConversationTitleTask] Failed to generate AI title for {}: {}",
                 conversationId, e.getMessage());
-            aiConversationService.updateTitle(conversationId, fallbackTitle(firstUserMessage));
+            title = fallbackTitle(firstUserMessage);
+        }
+
+        Dbutils.setSession();
+        try {
+            aiConversationService.updateTitle(conversationId, title);
+        } catch (Exception e) {
+            log.error("[AiConversationTitleTask] Failed to persist title for {}", conversationId, e);
+        } finally {
+            Dbutils.removeSession();
         }
     }
 

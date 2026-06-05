@@ -147,9 +147,9 @@ public class ChatController {
 
         if (firstTurn && promptType == PromptType.NL_2_SQL) {
             try {
-                aiConversationTitleTask.generateTitleAsync(uid, queryRequest.getMessage());
+                aiConversationTitleTask.generateTitleAsync(queryRequest.getConversationId(), queryRequest.getMessage());
             } catch (Exception e) {
-                log.warn("[ChatController] Failed to dispatch title task for {}: {}", uid, e.getMessage());
+                log.warn("[ChatController] Failed to dispatch title task for {}: {}", queryRequest.getConversationId(), e.getMessage());
             }
         }
 

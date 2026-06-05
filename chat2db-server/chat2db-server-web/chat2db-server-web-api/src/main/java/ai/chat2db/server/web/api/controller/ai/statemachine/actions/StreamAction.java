@@ -217,12 +217,14 @@ public class StreamAction extends BaseChatAction {
                 || assistantContent == null || assistantContent.isEmpty()) {
             return;
         }
-        Long userId = ctx.getLoginUser() != null ? ctx.getLoginUser().getId() : null;
+        LoginUser loginUser = ctx.getLoginUser();
+        Long userId = loginUser != null ? loginUser.getId() : null;
         String promptType = request.getPromptType();
         String sqlExtracted = extractSql(assistantContent);
         String userMessageId = ctx.getUserMessageId() != null ? ctx.getUserMessageId() : UUID.randomUUID().toString();
         String assistantMessageId = UUID.randomUUID().toString();
 
+        buildContext(ctx);
         try {
             aiConversationService.appendMessageTurn(
                     conversationId,
@@ -237,6 +239,8 @@ public class StreamAction extends BaseChatAction {
             );
         } catch (Exception e) {
             log.error("[StreamAction] Failed to persist AI conversation turn for uid: {}", ctx.getUid(), e);
+        } finally {
+            removeContext();
         }
     }
 
