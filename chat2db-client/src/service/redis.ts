@@ -11,10 +11,26 @@ export interface IRedisKeyListParams {
 
 export interface IRedisKeyItem {
   name: string;
-  value?: string;
+  value?: any;
   type?: string;
   ttl?: number;
   size?: number;
+}
+
+export interface IRedisKeyQueryParams {
+  dataSourceId: number;
+  databaseName?: string;
+  keyName: string;
+}
+
+export interface IRedisKeyUpdateParams {
+  dataSourceId: number;
+  databaseName?: string;
+  originalKey: string;
+  updateKey: string;
+  keyType: string;
+  value: any;
+  updateTtl?: number;
 }
 
 export interface IRedisKeyStreamOptions extends IRedisKeyListParams {
@@ -28,6 +44,14 @@ export interface IRedisKeyStreamOptions extends IRedisKeyListParams {
 const getKeyList = createRequest<IRedisKeyListParams, IRedisKeyItem[]>('/api/redis/key/list', {
   method: 'get',
   delayTime: 200,
+});
+
+const queryKey = createRequest<IRedisKeyQueryParams, IRedisKeyItem>('/api/redis/key/query', {
+  method: 'get',
+});
+
+const updateKey = createRequest<IRedisKeyUpdateParams, void>('/api/redis/key/update', {
+  method: 'post',
 });
 
 const streamKeyList = (options: IRedisKeyStreamOptions) => {
@@ -79,5 +103,7 @@ const streamKeyList = (options: IRedisKeyStreamOptions) => {
 
 export default {
   getKeyList,
+  queryKey,
   streamKeyList,
+  updateKey,
 };

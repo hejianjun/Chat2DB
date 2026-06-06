@@ -3,7 +3,6 @@ package ai.chat2db.server.web.api.controller.redis.request;
 import jakarta.validation.constraints.NotNull;
 
 import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequest;
-import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequest;
 
 import lombok.Data;
 
@@ -25,6 +24,17 @@ public class KeyUpdateRequest extends DataSourceBaseRequest {
      * 更新后key名称
      */
     private String updateKey;
+
+    /**
+     * key类型
+     */
+    @NotNull
+    private String keyType;
+
+    /**
+     * 更新后key值
+     */
+    private Object value;
 
     /**
      * 原始ttl值

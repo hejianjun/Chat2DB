@@ -122,7 +122,11 @@ public class RedisKeyManageController {
      */
     @RequestMapping(value = "/update",method = {RequestMethod.POST, RequestMethod.PUT})
     public ActionResult update(@RequestBody KeyUpdateRequest request) {
-        return null;
+        Object updateTtl = request.getUpdateTtl();
+        Long ttl = updateTtl == null ? null : Long.valueOf(String.valueOf(updateTtl));
+        getRedisKeyBrowser().updateKey(request.getDatabaseName(), request.getOriginalKey(), request.getUpdateKey(),
+                request.getKeyType(), request.getValue(), ttl);
+        return ActionResult.isSuccess();
     }
 
 

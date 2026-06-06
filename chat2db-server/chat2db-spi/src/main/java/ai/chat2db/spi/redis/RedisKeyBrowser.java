@@ -9,4 +9,6 @@ public interface RedisKeyBrowser {
                     Consumer<List<RedisKeyInfo>> batchConsumer);
 
     RedisKeyInfo queryKey(String databaseName, String keyName);
+
+    void updateKey(String databaseName, String originalKey, String updateKey, String keyType, Object value, Long ttl);
 }

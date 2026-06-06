@@ -21,6 +21,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +93,24 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
                      RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
             RedisCommands<String, String> commands = context.connection().sync();
             selectDatabase(commands, databaseName);
-            return buildKeyInfo(commands, keyName);
+            return buildFullKeyInfo(commands, keyName);
+        }
+    }
+
+    @Override
+    public void updateKey(String databaseName, String originalKey, String updateKey, String keyType, Object value,
+                          Long ttl) {
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisCommands<String, String> commands = context.connection().sync();
+            selectDatabase(commands, databaseName);
+            String targetKey = StringUtils.defaultIfBlank(updateKey, originalKey);
+            if (!StringUtils.equals(originalKey, targetKey)) {
+                commands.rename(originalKey, targetKey);
+            }
+            commands.del(targetKey);
+            writeValue(commands, targetKey, keyType, value);
+            applyTtl(commands, targetKey, ttl);
         }
     }
 
@@ -134,6 +153,17 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
                 .name(key)
                 .type(type)
                 .value(previewValue(commands, key, type))
+                .ttl(getTtl(commands, key))
+                .size(getSize(commands, key))
+                .build();
+    }
+
+    private RedisKeyInfo buildFullKeyInfo(RedisCommands<String, String> commands, String key) {
+        String type = getType(commands, key);
+        return RedisKeyInfo.builder()
+                .name(key)
+                .type(type)
+                .value(readValue(commands, key, type))
                 .ttl(getTtl(commands, key))
                 .size(getSize(commands, key))
                 .build();
@@ -201,6 +231,86 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             log.warn("Redis key value preview failed, key={}", key, e);
             return "";
         }
+    }
+
+    private Object readValue(RedisCommands<String, String> commands, String key, String type) {
+        try {
+            return switch (StringUtils.defaultString(type).toLowerCase()) {
+                case "string" -> commands.get(key);
+                case "hash" -> commands.hgetall(key);
+                case "list" -> commands.lrange(key, 0, -1);
+                case "set" -> commands.smembers(key);
+                case "zset" -> commands.zrange(key, 0, -1);
+                default -> "";
+            };
+        } catch (Exception e) {
+            log.warn("Redis key value read failed, key={}", key, e);
+            return "";
+        }
+    }
+
+    private void writeValue(RedisCommands<String, String> commands, String key, String keyType, Object value) {
+        switch (StringUtils.defaultString(keyType).toLowerCase()) {
+            case "string" -> commands.set(key, value == null ? "" : String.valueOf(value));
+            case "hash" -> {
+                Map<String, String> map = toStringMap(value);
+                if (!map.isEmpty()) {
+                    commands.hset(key, map);
+                }
+            }
+            case "list" -> {
+                List<String> values = toStringList(value);
+                if (!values.isEmpty()) {
+                    commands.rpush(key, values.toArray(new String[0]));
+                }
+            }
+            case "set" -> {
+                List<String> values = toStringList(value);
+                if (!values.isEmpty()) {
+                    commands.sadd(key, values.toArray(new String[0]));
+                }
+            }
+            case "zset" -> {
+                List<String> values = toStringList(value);
+                for (int i = 0; i < values.size(); i++) {
+                    commands.zadd(key, i, values.get(i));
+                }
+            }
+            default -> throw new IllegalArgumentException("暂不支持编辑 Redis 类型: " + keyType);
+        }
+    }
+
+    private void applyTtl(RedisCommands<String, String> commands, String key, Long ttl) {
+        if (ttl == null || ttl < 0) {
+            commands.persist(key);
+            return;
+        }
+        if (ttl > 0) {
+            commands.expire(key, ttl);
+        }
+    }
+
+    private Map<String, String> toStringMap(Object value) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (!(value instanceof Map<?, ?> map)) {
+            return result;
+        }
+        map.forEach((field, fieldValue) -> {
+            if (field != null) {
+                result.put(String.valueOf(field), fieldValue == null ? "" : String.valueOf(fieldValue));
+            }
+        });
+        return result;
+    }
+
+    private List<String> toStringList(Object value) {
+        if (value instanceof Collection<?> collection) {
+            return collection.stream().map(item -> item == null ? "" : String.valueOf(item)).toList();
+        }
+        if (value == null) {
+            return List.of();
+        }
+        return List.of(String.valueOf(value));
     }
 
     private Long getTtl(RedisCommands<String, String> commands, String key) {

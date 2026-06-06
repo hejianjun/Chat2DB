@@ -1,6 +1,13 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Input, Table, Tag, Tooltip, message } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Button, Empty, Input, InputNumber, Table, Tag, Tooltip, message } from 'antd';
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { v4 as uuid } from 'uuid';
 
@@ -25,15 +32,56 @@ interface IRedisKeyRow extends IRedisKeyItem {
 
 const DEFAULT_LIMIT = 5000;
 const STREAM_BATCH_SIZE = 200;
+const NO_TTL = -1;
+
+interface IHashFieldRow {
+  id: string;
+  field: string;
+  value: string;
+}
 
 const RedisDataView = memo((props: IProps) => {
   const { uniqueData } = props;
   const [searchKey, setSearchKey] = useState('');
   const [data, setData] = useState<IRedisKeyItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [selectedKey, setSelectedKey] = useState('');
+  const [detail, setDetail] = useState<IRedisKeyItem | null>(null);
+  const [editorKey, setEditorKey] = useState('');
+  const [editorTtl, setEditorTtl] = useState<number | null>(NO_TTL);
+  const [textValue, setTextValue] = useState('');
+  const [hashFields, setHashFields] = useState<IHashFieldRow[]>([]);
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
   const closeStreamRef = useRef<(() => void) | null>(null);
   const streamIdRef = useRef('');
+  const detailRequestRef = useRef('');
+
+  const hydrateEditor = (keyDetail: IRedisKeyItem) => {
+    const type = normalizeType(keyDetail.type);
+    const value = keyDetail.value;
+    const ttl = keyDetail.ttl === undefined || keyDetail.ttl === null ? NO_TTL : keyDetail.ttl;
+    setEditorKey(keyDetail.name);
+    setEditorTtl(ttl);
+    if (type === 'hash' && value && typeof value === 'object' && !Array.isArray(value)) {
+      setHashFields(
+        Object.entries(value).map(([field, fieldValue]) => ({
+          id: uuid(),
+          field,
+          value: String(fieldValue ?? ''),
+        })),
+      );
+      setTextValue('');
+      return;
+    }
+    setHashFields([]);
+    if (Array.isArray(value)) {
+      setTextValue(value.map((item) => String(item ?? '')).join('\n'));
+      return;
+    }
+    setTextValue(value === undefined || value === null ? '' : String(value));
+  };
 
   const loadData = (keyword = searchKey) => {
     if (!uniqueData?.dataSourceId) {
@@ -76,6 +124,83 @@ const RedisDataView = memo((props: IProps) => {
     });
   };
 
+  const loadKeyDetail = (keyName: string) => {
+    if (!uniqueData?.dataSourceId || !keyName) {
+      return;
+    }
+    const requestId = uuid();
+    detailRequestRef.current = requestId;
+    setSelectedKey(keyName);
+    setDetail(null);
+    setDetailLoading(true);
+    redisService
+      .queryKey({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        keyName,
+      })
+      .then((keyDetail) => {
+        if (detailRequestRef.current !== requestId) {
+          return;
+        }
+        setDetail(keyDetail);
+        hydrateEditor(keyDetail);
+      })
+      .catch((error) => {
+        message.error(String(error || 'Redis key 详情加载失败'));
+      })
+      .finally(() => {
+        if (detailRequestRef.current === requestId) {
+          setDetailLoading(false);
+        }
+      });
+  };
+
+  const saveKey = () => {
+    if (!detail || !uniqueData?.dataSourceId) {
+      return;
+    }
+    const nextKey = editorKey.trim();
+    if (!nextKey) {
+      message.warning('键名不能为空');
+      return;
+    }
+    const type = normalizeType(detail.type);
+    setSaving(true);
+    redisService
+      .updateKey({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        originalKey: detail.name,
+        updateKey: nextKey,
+        keyType: type,
+        value: buildEditorValue(type, textValue, hashFields),
+        updateTtl: editorTtl ?? NO_TTL,
+      })
+      .then(() => {
+        message.success('Redis key 已保存');
+        setSelectedKey(nextKey);
+        loadKeyDetail(nextKey);
+        loadData();
+      })
+      .catch((error) => {
+        message.error(String(error || 'Redis key 保存失败'));
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const addHashField = () => {
+    setHashFields((current) => current.concat({ id: uuid(), field: '', value: '' }));
+  };
+
+  const updateHashField = (id: string, patch: Partial<IHashFieldRow>) => {
+    setHashFields((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  const removeHashField = (id: string) => {
+    setHashFields((current) => current.filter((item) => item.id !== id));
+  };
+
   useEffect(() => {
     loadData('');
     return () => {
@@ -87,6 +212,32 @@ const RedisDataView = memo((props: IProps) => {
   const tableData = useMemo(() => {
     return buildRows(data);
   }, [data]);
+
+  const hashColumns: ColumnsType<IHashFieldRow> = [
+    {
+      title: '字段',
+      dataIndex: 'field',
+      width: 220,
+      render: (value, record) => (
+        <Input value={value} onChange={(event) => updateHashField(record.id, { field: event.target.value })} />
+      ),
+    },
+    {
+      title: '值',
+      dataIndex: 'value',
+      render: (value, record) => (
+        <Input value={value} onChange={(event) => updateHashField(record.id, { value: event.target.value })} />
+      ),
+    },
+    {
+      title: '',
+      dataIndex: 'action',
+      width: 44,
+      render: (_, record) => (
+        <Button icon={<DeleteOutlined />} size="small" type="text" onClick={() => removeHashField(record.id)} />
+      ),
+    },
+  ];
 
   const columns: ColumnsType<IRedisKeyRow> = [
     {
@@ -171,13 +322,112 @@ const RedisDataView = memo((props: IProps) => {
           dataSource={tableData}
           loading={loading}
           pagination={false}
+          rowClassName={(record) => (record.name === selectedKey && !record.isGroup ? styles.selectedRow : '')}
           rowKey="rowKey"
           size="small"
-          scroll={{ y: 'calc(100vh - 170px)' }}
+          scroll={{ y: detail || detailLoading ? 'calc(100vh - 500px)' : 'calc(100vh - 170px)' }}
+          onRow={(record) => ({
+            onClick: () => {
+              if (!record.isGroup) {
+                loadKeyDetail(record.name);
+              }
+            },
+          })}
         />
+      </div>
+      <div className={styles.editorPane}>
+        {detail || detailLoading ? (
+          <>
+            <div className={styles.editorHeader}>
+              <span>编辑器</span>
+              <div className={styles.editorActions}>
+                <Button
+                  icon={<CloseOutlined />}
+                  size="small"
+                  onClick={() => {
+                    setDetail(null);
+                    setSelectedKey('');
+                  }}
+                />
+                <Button
+                  icon={<SaveOutlined />}
+                  loading={saving}
+                  size="small"
+                  type="primary"
+                  onClick={saveKey}
+                  disabled={!detail || !isEditableType(detail.type)}
+                >
+                  应用
+                </Button>
+              </div>
+            </div>
+            <div className={styles.editorBody}>
+              <div className={styles.formRow}>
+                <span className={styles.label}>键名:</span>
+                <Input value={editorKey} onChange={(event) => setEditorKey(event.target.value)} />
+              </div>
+              <div className={styles.formRow}>
+                <span className={styles.label}>键类型:</span>
+                <Tag color={getTypeColor(detail?.type || '')}>{detail?.type || '-'}</Tag>
+              </div>
+              <div className={styles.formRow}>
+                <span className={styles.label}>值:</span>
+                <div className={styles.valueEditor}>{renderValueEditor()}</div>
+              </div>
+              <div className={styles.formRow}>
+                <span className={styles.label}>TTL:</span>
+                <InputNumber
+                  className={styles.ttlInput}
+                  min={-1}
+                  placeholder="无 TTL"
+                  value={editorTtl}
+                  onChange={(value) => setEditorTtl(value === null ? NO_TTL : Number(value))}
+                />
+                <span className={styles.ttlHint}>秒，-1 表示无 TTL</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <Empty
+            className={styles.emptyEditor}
+            description="选择一个 Redis key 后编辑"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        )}
       </div>
     </div>
   );
+
+  function renderValueEditor() {
+    const type = normalizeType(detail?.type);
+    if (detailLoading) {
+      return <div className={styles.editorLoading}>加载中...</div>;
+    }
+    if (!isEditableType(type)) {
+      return <div className={styles.readonlyTip}>暂不支持编辑 {type || 'unknown'} 类型</div>;
+    }
+    if (type === 'hash') {
+      return (
+        <>
+          <Table columns={hashColumns} dataSource={hashFields} pagination={false} rowKey="id" size="small" />
+          <div className={styles.fieldToolbar}>
+            <Button icon={<PlusOutlined />} size="small" onClick={addHashField}>
+              字段
+            </Button>
+            <span>{hashFields.length} 个字段</span>
+          </div>
+        </>
+      );
+    }
+    return (
+      <Input.TextArea
+        value={textValue}
+        onChange={(event) => setTextValue(event.target.value)}
+        rows={type === 'string' ? 5 : 7}
+        placeholder={type === 'string' ? '字符串值' : '每行一个元素'}
+      />
+    );
+  }
 });
 
 function buildRows(keys: IRedisKeyItem[]) {
@@ -235,6 +485,30 @@ function getTypeColor(type: string) {
     stream: 'geekblue',
   };
   return colors[type] || 'default';
+}
+
+function normalizeType(type?: string) {
+  return (type || '').toLowerCase();
+}
+
+function isEditableType(type?: string) {
+  return ['string', 'hash', 'list', 'set', 'zset'].includes(normalizeType(type));
+}
+
+function buildEditorValue(type: string, textValue: string, hashFields: IHashFieldRow[]) {
+  if (type === 'hash') {
+    return hashFields.reduce<Record<string, string>>((result, item) => {
+      const field = item.field.trim();
+      if (field) {
+        result[field] = item.value;
+      }
+      return result;
+    }, {});
+  }
+  if (type === 'list' || type === 'set' || type === 'zset') {
+    return textValue.split('\n').filter((item) => item.length > 0);
+  }
+  return textValue;
 }
 
 function formatTtl(ttl?: number) {

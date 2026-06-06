@@ -29,6 +29,14 @@
   min-height: 0;
 }
 
+.selectedRow {
+  :global {
+    td {
+      background: var(--color-primary-bg) !important;
+    }
+  }
+}
+
 .keyName {
   min-width: 0;
   overflow: hidden;
@@ -46,4 +54,82 @@
 
 .groupName {
   font-weight: 500;
+}
+
+.editorPane {
+  flex: 0 0 320px;
+  min-height: 260px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-base);
+}
+
+.editorHeader {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 500;
+}
+
+.editorActions {
+  display: flex;
+  gap: 8px;
+}
+
+.editorBody {
+  height: calc(100% - 40px);
+  overflow: auto;
+  padding: 12px;
+}
+
+.formRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.label {
+  flex: 0 0 64px;
+  line-height: 32px;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.valueEditor {
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--color-text-45);
+  font-size: 12px;
+}
+
+.ttlInput {
+  width: 160px;
+}
+
+.ttlHint {
+  line-height: 32px;
+  color: var(--color-text-45);
+  font-size: 12px;
+}
+
+.readonlyTip,
+.editorLoading {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-45);
+}
+
+.emptyEditor {
+  margin-top: 80px;
 }
