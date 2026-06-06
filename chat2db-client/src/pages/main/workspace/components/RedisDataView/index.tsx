@@ -1,7 +1,8 @@
-import React, { memo, useEffect, useMemo, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Table, Tag, Tooltip, message } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { v4 as uuid } from 'uuid';
 
 import redisService, { IRedisKeyItem } from '@/service/redis';
 
@@ -23,6 +24,7 @@ interface IRedisKeyRow extends IRedisKeyItem {
 }
 
 const DEFAULT_LIMIT = 5000;
+const STREAM_BATCH_SIZE = 200;
 
 const RedisDataView = memo((props: IProps) => {
   const { uniqueData } = props;
@@ -30,30 +32,56 @@ const RedisDataView = memo((props: IProps) => {
   const [data, setData] = useState<IRedisKeyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
+  const closeStreamRef = useRef<(() => void) | null>(null);
+  const streamIdRef = useRef('');
 
-  const loadData = async (keyword = searchKey) => {
+  const loadData = (keyword = searchKey) => {
     if (!uniqueData?.dataSourceId) {
       return;
     }
+    closeStreamRef.current?.();
+    const streamId = uuid();
+    streamIdRef.current = streamId;
+    setData([]);
     setLoading(true);
-    try {
-      const list = await redisService.getKeyList({
-        dataSourceId: uniqueData.dataSourceId,
-        databaseName: uniqueData.databaseName,
-        searchKey: keyword,
-        count: DEFAULT_LIMIT,
-      });
-      setData(list || []);
-      setLastRefreshTime(new Date().toLocaleTimeString());
-    } catch (error) {
-      message.error('Redis key 加载失败');
-    } finally {
-      setLoading(false);
-    }
+    closeStreamRef.current = redisService.streamKeyList({
+      uid: streamId,
+      dataSourceId: uniqueData.dataSourceId,
+      databaseName: uniqueData.databaseName,
+      searchKey: keyword,
+      count: DEFAULT_LIMIT,
+      batchSize: STREAM_BATCH_SIZE,
+      onBatch: (items) => {
+        if (streamIdRef.current !== streamId) {
+          return;
+        }
+        setData((current) => current.concat(items || []));
+      },
+      onDone: () => {
+        if (streamIdRef.current !== streamId) {
+          return;
+        }
+        setLoading(false);
+        setLastRefreshTime(new Date().toLocaleTimeString());
+        closeStreamRef.current = null;
+      },
+      onError: (errorMessage) => {
+        if (streamIdRef.current !== streamId) {
+          return;
+        }
+        message.error(errorMessage || 'Redis key 加载失败');
+        setLoading(false);
+        closeStreamRef.current = null;
+      },
+    });
   };
 
   useEffect(() => {
     loadData('');
+    return () => {
+      closeStreamRef.current?.();
+      closeStreamRef.current = null;
+    };
   }, [uniqueData?.dataSourceId, uniqueData?.databaseName]);
 
   const tableData = useMemo(() => {

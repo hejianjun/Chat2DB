@@ -13,6 +13,7 @@ import com.google.common.collect.Lists;
 import io.lettuce.core.KeyScanCursor;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
+import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.lettuce.core.api.sync.RedisCommands;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 @Slf4j
 public class RedisMetaData extends DefaultMetaService implements MetaData, RedisKeyBrowser {
@@ -54,57 +57,13 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     @Override
     @SneakyThrows
     public List<Schema> schemas(Connection connection, String databaseName) {
-        try (RedisConnectionProvider.RedisConnectionContext context =
-                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
-            RedisCommands<String, String> commands = context.connection().sync();
-            selectDatabase(commands, databaseName);
-            List<Schema> schemas = new ArrayList<>();
-            Set<String> uniqueNames = new HashSet<>();
-            for (String fullName : scanKeys(commands, null)) {
-                if (StringUtils.contains(fullName, ":")) {
-                    String schemaName = getSchemaName(fullName);
-                    if (uniqueNames.add(schemaName)) {
-                        Schema schema = new Schema();
-                        schema.setName(schemaName);
-                        schema.setDatabaseName(StringUtils.defaultIfBlank(databaseName, "0"));
-                        schema.setTreeNodeType("tables");
-                        schema.setKeyType(getType(commands, fullName));
-                        schemas.add(schema);
-                    }
-                }
-            }
-            return schemas;
-        }
+        return List.of();
     }
 
     @Override
     @SneakyThrows
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
-        try (RedisConnectionProvider.RedisConnectionContext context =
-                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
-            RedisCommands<String, String> commands = context.connection().sync();
-            selectDatabase(commands, databaseName);
-            String dbName = StringUtils.defaultIfBlank(databaseName, "0");
-            if (StringUtils.isNotBlank(tableName)) {
-                return Lists.newArrayList(Table.builder()
-                        .name(tableName)
-                        .databaseName(dbName)
-                        .schemaName(getSchemaName(tableName))
-                        .type(getType(commands, tableName))
-                        .build());
-            }
-            String pattern = StringUtils.isBlank(schemaName) ? null : schemaName + "*";
-            List<Table> tables = new ArrayList<>();
-            for (String name : scanKeys(commands, pattern)) {
-                tables.add(Table.builder()
-                        .name(name)
-                        .databaseName(dbName)
-                        .schemaName(getSchemaName(name))
-                        .type(getType(commands, name))
-                        .build());
-            }
-            return tables;
-        }
+        return List.of();
     }
 
     @Override
@@ -112,19 +71,17 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
         return COMMAND_EXECUTOR;
     }
 
+
     @Override
-    public List<RedisKeyInfo> listKeys(String databaseName, String searchKey, int count) {
+    public void streamKeys(String databaseName, String searchKey, int count, int batchSize,
+                           Consumer<List<RedisKeyInfo>> batchConsumer) {
         try (RedisConnectionProvider.RedisConnectionContext context =
                      RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
-            RedisCommands<String, String> commands = context.connection().sync();
-            selectDatabase(commands, databaseName);
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
             String pattern = StringUtils.isBlank(searchKey) ? null : "*" + searchKey + "*";
-            List<String> keys = scanKeys(commands, pattern, count <= 0 ? SCAN_COUNT : count);
-            List<RedisKeyInfo> list = new ArrayList<>();
-            for (String key : keys) {
-                list.add(buildKeyInfo(commands, key));
-            }
-            return list;
+            scanKeyInfo(commands, pattern, count <= 0 ? SCAN_COUNT : count,
+                    batchSize <= 0 ? 200 : batchSize, batchConsumer);
         }
     }
 
@@ -138,29 +95,37 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
         }
     }
 
-    private List<String> scanKeys(RedisCommands<String, String> commands, String pattern) {
-        return scanKeys(commands, pattern, (int)SCAN_COUNT);
-    }
-
-    private List<String> scanKeys(RedisCommands<String, String> commands, String pattern, long count) {
-        List<String> keys = new ArrayList<>();
+    private void scanKeyInfo(RedisAsyncCommands<String, String> commands, String pattern, long count, int batchSize,
+                             Consumer<List<RedisKeyInfo>> batchConsumer) {
+        List<CompletableFuture<RedisKeyInfo>> batch = new ArrayList<>(batchSize);
+        long emitted = 0;
         ScanArgs scanArgs = new ScanArgs().limit(SCAN_COUNT);
         if (StringUtils.isNotBlank(pattern)) {
             scanArgs.match(pattern);
         }
         ScanCursor cursor = ScanCursor.INITIAL;
         do {
-            KeyScanCursor<String> result = commands.scan(cursor, scanArgs);
+            KeyScanCursor<String> result = commands.scan(cursor, scanArgs).toCompletableFuture().join();
             for (String key : result.getKeys()) {
-                keys.add(key);
-                if (keys.size() >= count) {
-                    return keys;
+                batch.add(buildKeyInfo(commands, key));
+                emitted++;
+                if (batch.size() >= batchSize) {
+                    batchConsumer.accept(resolveBatch(batch));
+                    batch.clear();
+                }
+                if (emitted >= count) {
+                    if (!batch.isEmpty()) {
+                        batchConsumer.accept(resolveBatch(batch));
+                    }
+                    return;
                 }
             }
             cursor = ScanCursor.of(result.getCursor());
             cursor.setFinished(result.isFinished());
         } while (!cursor.isFinished());
-        return keys;
+        if (!batch.isEmpty()) {
+            batchConsumer.accept(resolveBatch(batch));
+        }
     }
 
     private RedisKeyInfo buildKeyInfo(RedisCommands<String, String> commands, String key) {
@@ -172,6 +137,54 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
                 .ttl(getTtl(commands, key))
                 .size(getSize(commands, key))
                 .build();
+    }
+
+    private CompletableFuture<RedisKeyInfo> buildKeyInfo(RedisAsyncCommands<String, String> commands, String key) {
+        return commands.type(key).toCompletableFuture()
+                .thenCompose(type -> {
+                    CompletableFuture<Object> value = previewValue(commands, key, type);
+                    CompletableFuture<Long> ttl = commands.ttl(key).toCompletableFuture()
+                            .exceptionally(e -> null);
+                    CompletableFuture<Long> size = commands.memoryUsage(key).toCompletableFuture()
+                            .exceptionally(e -> null);
+                    return CompletableFuture.allOf(value, ttl, size)
+                            .thenApply(ignored -> RedisKeyInfo.builder()
+                                    .name(key)
+                                    .type(type)
+                                    .value(value.join())
+                                    .ttl(ttl.join())
+                                    .size(size.join())
+                                    .build());
+                })
+                .exceptionally(e -> RedisKeyInfo.builder()
+                        .name(key)
+                        .type("unknown")
+                        .value("")
+                        .build());
+    }
+
+    private CompletableFuture<Object> previewValue(RedisAsyncCommands<String, String> commands, String key,
+                                                   String type) {
+        try {
+            return switch (StringUtils.defaultString(type).toLowerCase()) {
+                case "string" -> commands.get(key).toCompletableFuture().thenApply(this::abbreviate);
+                case "hash" -> commands.hgetall(key).toCompletableFuture().thenApply(this::previewMap);
+                case "list" -> commands.lrange(key, 0, VALUE_PREVIEW_LIMIT - 1).toCompletableFuture()
+                        .thenApply(this::previewList);
+                case "set" -> commands.srandmember(key, VALUE_PREVIEW_LIMIT).toCompletableFuture()
+                        .thenApply(this::previewList);
+                case "zset" -> commands.zrange(key, 0, VALUE_PREVIEW_LIMIT - 1).toCompletableFuture()
+                        .thenApply(this::previewList);
+                default -> CompletableFuture.completedFuture("");
+            };
+        } catch (Exception e) {
+            return CompletableFuture.completedFuture("");
+        }
+    }
+
+    private List<RedisKeyInfo> resolveBatch(List<CompletableFuture<RedisKeyInfo>> batch) {
+        CompletableFuture.allOf(batch.toArray(new CompletableFuture[0])).join();
+        return batch.stream().map(CompletableFuture::join).toList();
     }
 
     private Object previewValue(RedisCommands<String, String> commands, String key, String type) {
@@ -241,6 +254,13 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
         }
     }
 
+    private CompletableFuture<Void> selectDatabase(RedisAsyncCommands<String, String> commands, String databaseName) {
+        if (StringUtils.isBlank(databaseName)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return commands.select(Integer.parseInt(databaseName)).toCompletableFuture().thenApply(ignored -> null);
+    }
+
     private String getType(RedisCommands<String, String> commands, String tableName) {
         try {
             String type = commands.type(tableName);
@@ -251,12 +271,5 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             log.error("type获取失败", e);
         }
         return "string";
-    }
-
-    private String getSchemaName(String fullName) {
-        if (!StringUtils.contains(fullName, ":")) {
-            return "";
-        }
-        return StringUtils.substringBeforeLast(fullName, ":");
     }
 }

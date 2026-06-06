@@ -14,8 +14,10 @@ import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +25,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * redis key运维类
@@ -37,20 +46,49 @@ import org.springframework.web.bind.annotation.RestController;
 public class RedisKeyManageController {
 
     private static final int DEFAULT_KEY_COUNT = 1000;
+    private static final int DEFAULT_BATCH_SIZE = 200;
+    private static final long STREAM_TIMEOUT = 30 * 60 * 1000L;
 
     /**
-     * 查询当前DB下的key列表
+     * 流式查询当前DB下的key列表
      *
      * @param request
      * @return
+     * @throws IOException
      */
-    @GetMapping("/list")
-    public ListResult<KeyVO> list(KeyQueryRequest request) {
-        RedisKeyBrowser browser = getRedisKeyBrowser();
-        int count = request.getCount() == null ? DEFAULT_KEY_COUNT : request.getCount();
-        return ListResult.of(browser.listKeys(request.getDatabaseName(), request.getSearchKey(), count).stream()
-                .map(this::toVO)
-                .toList());
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(KeyQueryRequest request) throws IOException {
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT);
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+        emitter.send(SseEmitter.event()
+                .name("connect")
+                .data(LocalDateTime.now().toString())
+                .reconnectTime(3000));
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                Chat2DBContext.putContext(connectInfo);
+                RedisKeyBrowser browser = getRedisKeyBrowser();
+                int count = request.getCount() == null ? DEFAULT_KEY_COUNT : request.getCount();
+                int batchSize = request.getBatchSize() == null ? DEFAULT_BATCH_SIZE : request.getBatchSize();
+                int[] total = {0};
+                browser.streamKeys(request.getDatabaseName(), request.getSearchKey(), count, batchSize, batch -> {
+                    total[0] += batch.size();
+                    sendEvent(emitter, "keys", Map.of(
+                            "items", batch.stream().map(this::toVO).toList(),
+                            "total", total[0]
+                    ));
+                });
+                sendEvent(emitter, "done", Map.of("total", total[0]));
+                emitter.complete();
+            } catch (Exception e) {
+                sendEvent(emitter, "redis_error", Map.of("message", e.getMessage()));
+                emitter.completeWithError(e);
+            } finally {
+                Chat2DBContext.removeContext();
+            }
+        });
+        return emitter;
     }
 
     /**
@@ -111,5 +149,13 @@ public class RedisKeyManageController {
         KeyVO vo = new KeyVO();
         BeanUtils.copyProperties(keyInfo, vo);
         return vo;
+    }
+
+    private void sendEvent(SseEmitter emitter, String eventName, Object data) {
+        try {
+            emitter.send(SseEmitter.event().name(eventName).data(data));
+        } catch (IOException e) {
+            throw new BusinessException("Redis key stream send failed", null, e);
+        }
     }
 }
