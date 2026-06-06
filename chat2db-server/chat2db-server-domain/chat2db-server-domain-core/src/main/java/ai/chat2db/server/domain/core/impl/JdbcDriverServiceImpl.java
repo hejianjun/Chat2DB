@@ -17,6 +17,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -60,6 +61,9 @@ public class JdbcDriverServiceImpl implements JdbcDriverService {
         }
 
         for (DriverConfig driverConfig : driverConfigs) {
+            if (driverConfig == null || StringUtils.isBlank(driverConfig.getJdbcDriver())) {
+                continue;
+            }
             boolean flag = driverExists(driverConfig);
             if (flag && driverConfigMap.get(driverConfig.getJdbcDriver()) == null) {
                 driverConfigMap.put(driverConfig.getJdbcDriver(), driverConfig);

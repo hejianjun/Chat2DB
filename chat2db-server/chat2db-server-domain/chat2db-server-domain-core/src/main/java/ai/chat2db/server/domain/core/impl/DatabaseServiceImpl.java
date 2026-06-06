@@ -21,6 +21,7 @@ import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
 import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.domain.repository.entity.DataSourceDO;
 import ai.chat2db.server.domain.repository.mapper.DataSourceMapper;
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -62,10 +63,20 @@ public class DatabaseServiceImpl implements DatabaseService {
     public List<Database> queryAll(DatabaseQueryAllParam param) {
         List<Database> databases = CacheManage.getList(getDataBasesKey(param.getDataSourceId()), Database.class,
                 (key) -> param.isRefresh(),
-                (key) -> getDatabases(param.getDbType(), param.getConnection() == null ? Chat2DBContext.getConnection()
-                        : param.getConnection())
+                (key) -> getDatabases(param.getDbType(), getConnection(param.getDbType(), param.getConnection()))
         );
         return databases;
+    }
+
+    private Connection getConnection(String dbType, Connection connection) {
+        if (connection != null) {
+            return connection;
+        }
+        if (DataSourceTypeEnum.REDIS.getCode().equals(dbType)
+                || DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType())) {
+            return null;
+        }
+        return Chat2DBContext.getConnection();
     }
 
     private List<Database> getDatabases(String dbType, Connection connection) {
@@ -77,8 +88,8 @@ public class DatabaseServiceImpl implements DatabaseService {
         List<Schema> schemas = CacheManage.getList(getSchemasKey(param.getDataSourceId(), param.getDataBaseName()),
                 Schema.class,
                 (key) -> param.isRefresh(), (key) -> {
-                    Connection connection = param.getConnection() == null ? Chat2DBContext.getConnection()
-                            : param.getConnection();
+                    Connection connection = getConnection(Chat2DBContext.getConnectInfo().getDbType(),
+                            param.getConnection());
                     return getSchemaList(param.getDataBaseName(), connection);
                 });
         return schemas;
@@ -94,6 +105,9 @@ public class DatabaseServiceImpl implements DatabaseService {
 
     private void sortSchema(List<Schema> schemas, Connection connection) {
         if (CollectionUtils.isEmpty(schemas)) {
+            return;
+        }
+        if (connection == null) {
             return;
         }
         String ulr = null;
@@ -122,7 +136,7 @@ public class DatabaseServiceImpl implements DatabaseService {
         MetaData metaData = Chat2DBContext.getMetaData();
         MetaSchema ms = CacheManage.get(getDataSourceKey(param.getDataSourceId()), MetaSchema.class,
                 (key) -> param.isRefresh(), (key) -> {
-                    Connection connection = Chat2DBContext.getConnection();
+                    Connection connection = getConnection(Chat2DBContext.getConnectInfo().getDbType(), null);
                     List<Database> databases = metaData.databases(connection);
                     if (!CollectionUtils.isEmpty(databases)) {
                         CountDownLatch countDownLatch = ThreadUtil.newCountDownLatch(databases.size());

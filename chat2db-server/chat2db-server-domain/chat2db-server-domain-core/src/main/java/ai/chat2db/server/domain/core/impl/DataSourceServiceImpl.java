@@ -31,6 +31,8 @@ import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
+import ai.chat2db.plugin.redis.RedisConnectionProvider;
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.server.tools.common.exception.DataNotFoundException;
 import ai.chat2db.server.tools.base.excption.BusinessException;
@@ -47,6 +49,7 @@ import ai.chat2db.spi.model.DataSourceConnect;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.KeyValue;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
 import ai.chat2db.spi.sql.IDriverManager;
 import ai.chat2db.spi.sql.SQLExecutor;
 import ai.chat2db.spi.util.JdbcUtils;
@@ -121,6 +124,9 @@ public class DataSourceServiceImpl implements DataSourceService {
     private void preWarmingData(Long dataSourceId) {
         DataSource dataSource = queryById(dataSourceId);
         if (dataSource != null) {
+            if (DataSourceTypeEnum.REDIS.getCode().equals(dataSource.getType())) {
+                return;
+            }
             DriverConfig driverConfig = dataSource.getDriverConfig();
             if (driverConfig == null || StringUtils.isBlank(driverConfig.getJdbcDriver())) {
                 return;
@@ -271,6 +277,18 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Override
     public void preConnect(DataSourcePreConnectParam param) {
+        if (DataSourceTypeEnum.REDIS.getCode().equals(param.getType())) {
+            try {
+                RedisConnectionProvider.testConnect(toRedisConnectInfo(param));
+            } catch (Exception e) {
+                Throwable t = e;
+                while (t.getCause() != null) {
+                    t = t.getCause();
+                }
+                throw new BusinessException("CONNECT_ERROR", new Object[]{t.getMessage()});
+            }
+            return;
+        }
         DataSourceTestParam testParam
                 = dataSourceConverter.param2param(param);
         DriverConfig driverConfig = testParam.getDriverConfig();
@@ -287,11 +305,33 @@ public class DataSourceServiceImpl implements DataSourceService {
         
     }
 
+    private ConnectInfo toRedisConnectInfo(DataSourcePreConnectParam param) {
+        ConnectInfo connectInfo = new ConnectInfo();
+        connectInfo.setUrl(param.getUrl());
+        connectInfo.setHost(param.getHost());
+        if (StringUtils.isNotBlank(param.getPort())) {
+            connectInfo.setPort(Integer.valueOf(param.getPort()));
+        }
+        connectInfo.setUser(param.getUser());
+        connectInfo.setPassword(param.getPassword());
+        connectInfo.setDbType(param.getType());
+        connectInfo.setSsh(param.getSsh());
+        connectInfo.setSsl(param.getSsl());
+        connectInfo.setExtendInfo(param.getExtendInfo());
+        connectInfo.setDriverConfig(param.getDriverConfig());
+        return connectInfo;
+    }
+
     @Override
     public List<Database> connect(Long id) {
         DatabaseQueryAllParam queryAllParam = new DatabaseQueryAllParam();
         queryAllParam.setDataSourceId(id);
-        List<Database> databases = Chat2DBContext.getMetaData().databases(Chat2DBContext.getConnection());
+        List<Database> databases;
+        if (DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType())) {
+            databases = Chat2DBContext.getMetaData().databases(null);
+        } else {
+            databases = Chat2DBContext.getMetaData().databases(Chat2DBContext.getConnection());
+        }
         return databases;
     }
 

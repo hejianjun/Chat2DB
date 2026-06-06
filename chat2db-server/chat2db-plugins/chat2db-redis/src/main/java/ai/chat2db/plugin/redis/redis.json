@@ -4,14 +4,9 @@
   "supportSchema": false,
   "driverConfigList": [
     {
-      "url": "jdbc:redis://127.0.0.1:6379/0",
+      "url": "redis://127.0.0.1:6379/0",
       "custom": false,
-      "defaultDriver": true,
-      "downloadJdbcDriverUrls": [
-        "https://github.com/DataGrip/redis-jdbc-driver/releases/download/v1.5/redis-jdbc-driver-1.5.jar"
-      ],
-      "jdbcDriver": "redis-jdbc-driver-1.5.jar",
-      "jdbcDriverClass": "jdbc.RedisDriver"
+      "defaultDriver": true
     }
   ],
   "name": "Redis"

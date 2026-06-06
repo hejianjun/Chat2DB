@@ -30,6 +30,7 @@ import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
 import ai.chat2db.server.domain.core.converter.PinTableConverter;
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.spi.DBManage;
@@ -103,18 +104,23 @@ public class TableServiceImpl implements TableService {
     @Override
     public Table query(TableQueryParam param, TableSelector selector) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        List<Table> tables = metaSchema.tables(Chat2DBContext.getConnection(), param.getDatabaseName(),
+        boolean redis = DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType());
+        Connection connection = redis ? null : Chat2DBContext.getConnection();
+        List<Table> tables = metaSchema.tables(connection, param.getDatabaseName(),
                 param.getSchemaName(), param.getTableName());
         if (!CollectionUtils.isEmpty(tables)) {
             Table table = tables.get(0);
+            if (redis) {
+                return table;
+            }
             table.setIndexList(
-                    metaSchema.indexes(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                    metaSchema.indexes(connection, param.getDatabaseName(), param.getSchemaName(),
                             param.getTableName()));
             table.setColumnList(
-                    metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+                    metaSchema.columns(connection, param.getDatabaseName(), param.getSchemaName(),
                             param.getTableName()));
             table.setForeignKeyList(
-                    metaSchema.foreignKeys(Chat2DBContext.getConnection(), param.getDatabaseName(),
+                    metaSchema.foreignKeys(connection, param.getDatabaseName(),
                             param.getSchemaName(), param.getTableName()));
             setPrimaryKey(table);
             return table;
@@ -422,7 +428,8 @@ public class TableServiceImpl implements TableService {
     private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, String databaseName, String schemaName, Long version) {
         mgr.getLock().writeLock().lock();
         try {
-            Connection conn = Chat2DBContext.getConnection();
+            boolean redis = DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType());
+            Connection conn = redis ? null : Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
             List<Table> tables = meta.tables(conn, databaseName, schemaName, null);
             if (CollectionUtils.isEmpty(tables)) {
