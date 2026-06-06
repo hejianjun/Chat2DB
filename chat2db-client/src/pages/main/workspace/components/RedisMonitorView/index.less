@@ -1,0 +1,76 @@
+.redisMonitorView {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-base);
+}
+
+.toolbar {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.searchInput {
+  width: 280px;
+}
+
+.status {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  color: var(--color-text-45);
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 0 16px;
+  font-family: Menlo, Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 24px;
+  white-space: pre-wrap;
+}
+
+.noWrap {
+  white-space: pre;
+}
+
+.line {
+  display: flex;
+  align-items: flex-start;
+  min-height: 24px;
+}
+
+.lineNo {
+  flex: 0 0 58px;
+  padding-right: 12px;
+  color: var(--color-text-45);
+  text-align: right;
+  user-select: none;
+}
+
+.lineText {
+  flex: 1;
+  min-width: 0;
+  padding-right: 16px;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.noWrap .lineText {
+  min-width: max-content;
+  word-break: normal;
+}

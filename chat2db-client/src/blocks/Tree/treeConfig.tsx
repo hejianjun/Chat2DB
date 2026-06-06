@@ -97,6 +97,9 @@ export const switchIcon: Partial<{ [key in TreeNodeType]: { icon: string; unfold
   [TreeNodeType.REDIS_QUERY]: {
     icon: '\ue619',
   },
+  [TreeNodeType.REDIS_MONITOR]: {
+    icon: '\ue78a',
+  },
   [TreeNodeType.REDIS_BACKUP]: {
     icon: '\ue73c',
   },
@@ -203,6 +206,17 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             key: `${preCode}-redis-query`,
             name: '查询',
             treeNodeType: TreeNodeType.REDIS_QUERY,
+            isLeaf: true,
+            extraParams: {
+              ..._extraParams,
+              databaseName,
+            },
+          },
+          {
+            uuid: uuid(),
+            key: `${preCode}-redis-monitor`,
+            name: '监控',
+            treeNodeType: TreeNodeType.REDIS_MONITOR,
             isLeaf: true,
             extraParams: {
               ..._extraParams,
@@ -809,6 +823,10 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   [TreeNodeType.REDIS_QUERY]: {
     icon: '\ue619',
     operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
+  },
+  [TreeNodeType.REDIS_MONITOR]: {
+    icon: '\ue78a',
+    operationColumn: [OperationColumn.OpenRedisMonitor, OperationColumn.CopyName],
   },
   [TreeNodeType.REDIS_BACKUP]: {
     icon: '\ue73c',

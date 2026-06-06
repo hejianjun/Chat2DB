@@ -6,9 +6,14 @@ import ai.chat2db.spi.jdbc.DefaultMetaService;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.Table;
+import ai.chat2db.spi.redis.RedisCommandMonitor;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
+import ai.chat2db.spi.ssh.SSHManager;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.sql.ConnectInfo;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
 import com.google.common.collect.Lists;
 import io.lettuce.core.KeyScanCursor;
 import io.lettuce.core.ScanArgs;
@@ -19,6 +24,13 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,10 +41,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 @Slf4j
-public class RedisMetaData extends DefaultMetaService implements MetaData, RedisKeyBrowser {
+public class RedisMetaData extends DefaultMetaService implements MetaData, RedisKeyBrowser, RedisCommandMonitor {
 
     private static final long SCAN_COUNT = 1000L;
     private static final int VALUE_PREVIEW_LIMIT = 5;
@@ -111,6 +124,50 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             commands.del(targetKey);
             writeValue(commands, targetKey, keyType, value);
             applyTtl(commands, targetKey, ttl);
+        }
+    }
+
+    @Override
+    public void monitor(String databaseName, Consumer<String> lineConsumer, BooleanSupplier running) {
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
+        RedisConnectionProvider.RedisConnectionInfo connectionInfo = RedisConnectionProvider.parse(connectInfo);
+        Session session = null;
+        String host = connectionInfo.host();
+        int port = connectionInfo.port();
+        if (connectInfo.getSsh() != null && connectInfo.getSsh().isUse()) {
+            connectInfo.getSsh().setRHost(host);
+            connectInfo.getSsh().setRPort(Integer.toString(port));
+            session = SSHManager.getSSHSession(connectInfo.getSsh());
+            host = "127.0.0.1";
+            port = Integer.parseInt(connectInfo.getSsh().getLocalPort());
+        }
+        try (Socket socket = new Socket(host, port);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(),
+                     StandardCharsets.UTF_8));
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(),
+                     StandardCharsets.UTF_8))) {
+            socket.setSoTimeout(1000);
+            authenticate(connectInfo, writer, reader);
+            selectMonitorDatabase(databaseName, writer, reader);
+            writeCommand(writer, "MONITOR");
+            expectStatus(reader, "OK");
+            while (running.getAsBoolean() && !socket.isClosed()) {
+                try {
+                    String line = reader.readLine();
+                    if (line == null) {
+                        return;
+                    }
+                    lineConsumer.accept(redactMonitorLine(stripRespSimpleString(line)));
+                } catch (java.net.SocketTimeoutException ignored) {
+                    // allow cancellation check
+                }
+            }
+        } catch (Exception e) {
+            if (running.getAsBoolean()) {
+                throw new IllegalStateException("Redis monitor failed: " + e.getMessage(), e);
+            }
+        } finally {
+            closeSshSession(session);
         }
     }
 
@@ -311,6 +368,80 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             return List.of();
         }
         return List.of(String.valueOf(value));
+    }
+
+    private void authenticate(ConnectInfo connectInfo, BufferedWriter writer, BufferedReader reader)
+            throws IOException {
+        if (StringUtils.isBlank(connectInfo.getPassword())) {
+            return;
+        }
+        if (StringUtils.isNotBlank(connectInfo.getUser())) {
+            writeCommand(writer, "AUTH", connectInfo.getUser(), connectInfo.getPassword());
+        } else {
+            writeCommand(writer, "AUTH", connectInfo.getPassword());
+        }
+        expectStatus(reader, "OK");
+    }
+
+    private void selectMonitorDatabase(String databaseName, BufferedWriter writer, BufferedReader reader)
+            throws IOException {
+        if (StringUtils.isBlank(databaseName)) {
+            return;
+        }
+        writeCommand(writer, "SELECT", databaseName);
+        expectStatus(reader, "OK");
+    }
+
+    private void writeCommand(BufferedWriter writer, String... args) throws IOException {
+        writer.write("*" + args.length + "\r\n");
+        for (String arg : args) {
+            String value = StringUtils.defaultString(arg);
+            byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+            writer.write("$" + bytes.length + "\r\n");
+            writer.write(value);
+            writer.write("\r\n");
+        }
+        writer.flush();
+    }
+
+    private void expectStatus(BufferedReader reader, String expected) throws IOException {
+        String line = reader.readLine();
+        if (line == null) {
+            throw new IOException("Redis connection closed");
+        }
+        if (line.startsWith("-")) {
+            throw new IOException(line.substring(1));
+        }
+        String value = stripRespSimpleString(line);
+        if (!expected.equalsIgnoreCase(value)) {
+            throw new IOException("Unexpected Redis response: " + value);
+        }
+    }
+
+    private String stripRespSimpleString(String line) {
+        if (StringUtils.isBlank(line)) {
+            return "";
+        }
+        if (line.charAt(0) == '+' || line.charAt(0) == '$') {
+            return line.substring(1);
+        }
+        return line;
+    }
+
+    private String redactMonitorLine(String line) {
+        return line.replaceAll("(?i)(\"AUTH\"\\s+(\"[^\"]*\"\\s+)?\")([^\"]*)(\")", "$1(redacted)$4");
+    }
+
+    private void closeSshSession(Session session) {
+        if (session == null) {
+            return;
+        }
+        try {
+            session.delPortForwardingL(Integer.parseInt(session.getPortForwardingL()[0].split(":")[0]));
+        } catch (JSchException | RuntimeException e) {
+            // ignore
+        }
+        session.disconnect();
     }
 
     private Long getTtl(RedisCommands<String, String> commands, String key) {

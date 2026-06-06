@@ -33,6 +33,15 @@ export interface IRedisKeyUpdateParams {
   updateTtl?: number;
 }
 
+export interface IRedisMonitorStreamOptions {
+  dataSourceId: number;
+  databaseName?: string;
+  uid: string;
+  onCommand: (line: string) => void;
+  onDone: () => void;
+  onError: (message: string) => void;
+}
+
 export interface IRedisKeyStreamOptions extends IRedisKeyListParams {
   batchSize?: number;
   uid: string;
@@ -53,6 +62,47 @@ const queryKey = createRequest<IRedisKeyQueryParams, IRedisKeyItem>('/api/redis/
 const updateKey = createRequest<IRedisKeyUpdateParams, void>('/api/redis/key/update', {
   method: 'post',
 });
+
+const streamMonitor = (options: IRedisMonitorStreamOptions) => {
+  const { uid, onCommand, onDone, onError, ...params } = options;
+  const url = `/api/redis/monitor/stream?${formatParams(params)}`;
+  const eventSource = createSSEConnection({ url, uid });
+
+  eventSource.addEventListener('command', (event: any) => {
+    try {
+      const data = event.data ? JSON.parse(event.data) : {};
+      onCommand(data.line || '');
+    } catch {
+      onError('Redis monitor 数据解析失败');
+      eventSource.close();
+    }
+  });
+
+  eventSource.addEventListener('done', () => {
+    onDone();
+    eventSource.close();
+  });
+
+  eventSource.addEventListener('redis_error', (event: any) => {
+    try {
+      const data = event.data ? JSON.parse(event.data) : {};
+      onError(data.message || 'Redis monitor 连接失败');
+    } catch {
+      onError('Redis monitor 连接失败');
+    } finally {
+      eventSource.close();
+    }
+  });
+
+  eventSource.addEventListener('error', () => {
+    onError('Redis monitor 连接已断开');
+    eventSource.close();
+  });
+
+  return () => {
+    eventSource.close();
+  };
+};
 
 const streamKeyList = (options: IRedisKeyStreamOptions) => {
   const { uid, onBatch, onDone, onError, ...params } = options;
@@ -105,5 +155,6 @@ export default {
   getKeyList,
   queryKey,
   streamKeyList,
+  streamMonitor,
   updateKey,
 };

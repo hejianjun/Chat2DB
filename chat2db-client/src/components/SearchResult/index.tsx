@@ -196,7 +196,7 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
 
   const renderResult = (queryResultData) => {
     function renderSuccessResult() {
-      const needTable = queryResultData?.headerList?.length > 1;
+      const needTable = queryResultData?.headerList?.length > 0;
       return (
         <div className={styles.successResult}>
           <div className={styles.successResultContent}>

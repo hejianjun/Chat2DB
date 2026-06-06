@@ -127,9 +127,20 @@ public class RedisCommandExecutor implements CommandExecutor {
     }
 
     private void scan(RedisCommands<String, String> commands, List<String> args, ExecuteResult result) {
-        String cursor = args.size() > 1 ? args.get(1) : ScanCursor.INITIAL.getCursor();
+        String cursor = ScanCursor.INITIAL.getCursor();
         ScanArgs scanArgs = new ScanArgs().limit(DEFAULT_SCAN_COUNT);
-        for (int i = 2; i < args.size(); i++) {
+        int optionStart = 1;
+        if (args.size() > 1) {
+            String firstArg = args.get(1);
+            if (StringUtils.isNumeric(firstArg)) {
+                cursor = firstArg;
+                optionStart = 2;
+            } else if (!isScanOption(firstArg)) {
+                scanArgs.match("*" + firstArg + "*");
+                optionStart = 2;
+            }
+        }
+        for (int i = optionStart; i < args.size(); i++) {
             String token = args.get(i);
             if ("MATCH".equalsIgnoreCase(token)) {
                 scanArgs.match(required(args, ++i, "pattern"));
@@ -150,6 +161,10 @@ public class RedisCommandExecutor implements CommandExecutor {
         result.setPageSize(rows.size());
         result.setHasNextPage(!scan.isFinished());
         result.setFuzzyTotal(scan.isFinished() ? Integer.toString(rows.size()) : rows.size() + "+");
+    }
+
+    private boolean isScanOption(String token) {
+        return "MATCH".equalsIgnoreCase(token) || "COUNT".equalsIgnoreCase(token);
     }
 
     private void status(ExecuteResult result, String value) {

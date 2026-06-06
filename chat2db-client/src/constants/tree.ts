@@ -27,6 +27,7 @@ export enum TreeNodeType {
   DEPRECATED_TABLE = 'deprecatedTable',
   REDIS_DATA = 'redisData',
   REDIS_QUERY = 'redisQuery',
+  REDIS_MONITOR = 'redisMonitor',
   REDIS_BACKUP = 'redisBackup',
 }
 
@@ -67,4 +68,5 @@ export enum OperationColumn {
   SchemaDiff = 'schemaDiff', // 结构对比
   DeleteDatabase = 'deleteDatabase', // 删除数据库
   OpenRedisData = 'openRedisData', // 打开 Redis 数据视图
+  OpenRedisMonitor = 'openRedisMonitor', // 打开 Redis 命令监控
 }
