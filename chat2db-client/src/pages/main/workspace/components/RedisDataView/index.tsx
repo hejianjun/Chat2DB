@@ -56,6 +56,7 @@ const RedisDataView = memo((props: IProps) => {
   const [editorTtl, setEditorTtl] = useState<number | null>(NO_TTL);
   const [textValue, setTextValue] = useState('');
   const [hashFields, setHashFields] = useState<IHashFieldRow[]>([]);
+  const [hashFieldFilter, setHashFieldFilter] = useState('');
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
   const [keyLimit, setKeyLimit] = useState(DEFAULT_LIMIT);
   const [scanCursor, setScanCursor] = useState('0');
@@ -72,6 +73,7 @@ const RedisDataView = memo((props: IProps) => {
     setEditorKey(keyDetail.name);
     setEditorType(type || 'string');
     setEditorTtl(ttl);
+    setHashFieldFilter('');
     if (type === 'hash' && value && typeof value === 'object' && !Array.isArray(value)) {
       setHashFields(
         Object.entries(value).map(([field, fieldValue]) => ({
@@ -238,6 +240,7 @@ const RedisDataView = memo((props: IProps) => {
     setEditorTtl(NO_TTL);
     setTextValue('');
     setHashFields([{ id: uuid(), field: '', value: '' }]);
+    setHashFieldFilter('');
   };
 
   const deleteSelectedKey = () => {
@@ -300,6 +303,16 @@ const RedisDataView = memo((props: IProps) => {
   const tableData = useMemo(() => {
     return buildRows(data);
   }, [data]);
+
+  const filteredHashFields = useMemo(() => {
+    const keyword = hashFieldFilter.trim().toLowerCase();
+    if (!keyword) {
+      return hashFields;
+    }
+    return hashFields.filter(
+      (item) => item.field.toLowerCase().includes(keyword) || item.value.toLowerCase().includes(keyword),
+    );
+  }, [hashFieldFilter, hashFields]);
 
   const hashColumns: ColumnsType<IHashFieldRow> = [
     {
@@ -495,6 +508,7 @@ const RedisDataView = memo((props: IProps) => {
                       setEditorType(value);
                       setTextValue('');
                       setHashFields(value === 'hash' ? [{ id: uuid(), field: '', value: '' }] : []);
+                      setHashFieldFilter('');
                     }}
                   />
                 ) : (
@@ -540,7 +554,20 @@ const RedisDataView = memo((props: IProps) => {
     if (type === 'hash') {
       return (
         <>
-          <Table columns={hashColumns} dataSource={hashFields} pagination={false} rowKey="id" size="small" />
+          <div className={styles.hashFilterBar}>
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="过滤字段或值"
+              size="small"
+              value={hashFieldFilter}
+              onChange={(event) => setHashFieldFilter(event.target.value)}
+            />
+            <span>
+              {filteredHashFields.length}/{hashFields.length} 个字段
+            </span>
+          </div>
+          <Table columns={hashColumns} dataSource={filteredHashFields} pagination={false} rowKey="id" size="small" />
           <div className={styles.fieldToolbar}>
             <Button icon={<PlusOutlined />} size="small" onClick={addHashField}>
               字段
