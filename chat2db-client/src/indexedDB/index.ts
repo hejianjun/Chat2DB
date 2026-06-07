@@ -15,9 +15,11 @@ export const createDB = (dbName: string, version: number) => {
       // 创建存储库
       tableList.forEach((item: any) => {
         const { tableDetails } = item;
-        const objectStore = db.createObjectStore(tableDetails.name, tableDetails.primaryKey);
+        const objectStore = db.objectStoreNames.contains(tableDetails.name)
+          ? event.target.transaction.objectStore(tableDetails.name)
+          : db.createObjectStore(tableDetails.name, tableDetails.primaryKey);
         tableDetails.column.forEach((i: any) => {
-          if (i.isIndex) {
+          if (i.isIndex && !objectStore.indexNames.contains(i.name)) {
             objectStore.createIndex(i.name, i.keyPath, i.options);
           }
         });
@@ -91,8 +93,7 @@ export const getDataByIndex = (db: DBType, tableName: TableType, indexName: stri
 };
 
 // 通过游标查询数据，支持传入多个条件
-export const getDataByCursor = (db: DBType, tableName: TableType, condition: {[key in string]: any}
-) => {
+export const getDataByCursor = (db: DBType, tableName: TableType, condition: { [key in string]: any }) => {
   return new Promise((resolve, reject) => {
     const transaction = window._indexedDB[db].transaction(tableName, 'readwrite');
     const objectStore = transaction.objectStore(tableName);
@@ -119,9 +120,7 @@ export const getDataByCursor = (db: DBType, tableName: TableType, condition: {[k
       reject(false);
     };
   });
- 
 };
-
 
 // 修改数据
 export const updateData = (db: DBType, tableName: TableType, data: any) => {
