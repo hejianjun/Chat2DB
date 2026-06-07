@@ -66,6 +66,7 @@ const RedisDataView = memo((props: IProps) => {
   const detailRequestRef = useRef('');
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState(240);
+  const [tableScrollX, setTableScrollX] = useState(1000);
 
   const hydrateEditor = (keyDetail: IRedisKeyItem) => {
     const type = normalizeType(keyDetail.type);
@@ -308,8 +309,9 @@ const RedisDataView = memo((props: IProps) => {
 
     const updateTableScrollY = () => {
       const headerHeight = tableWrap.querySelector('.ant-table-thead')?.getBoundingClientRect().height || 39;
-      const wrapHeight = tableWrap.getBoundingClientRect().height;
+      const { height: wrapHeight, width: wrapWidth } = tableWrap.getBoundingClientRect();
       setTableScrollY(Math.max(120, Math.floor(wrapHeight - headerHeight)));
+      setTableScrollX(Math.max(1000, Math.floor(wrapWidth)));
     };
 
     updateTableScrollY();
@@ -364,64 +366,67 @@ const RedisDataView = memo((props: IProps) => {
     },
   ];
 
-  const columns: ColumnsType<IRedisKeyRow> = [
-    {
-      title: '键',
-      dataIndex: 'displayName',
-      width: '34%',
-      render: (text, record) => {
-        if (record.isGroup) {
+  const columns: ColumnsType<IRedisKeyRow> = useMemo(
+    () => [
+      {
+        title: '键',
+        dataIndex: 'displayName',
+        width: '34%',
+        render: (text, record) => {
+          if (record.isGroup) {
+            return (
+              <span className={styles.groupName}>
+                {text} <span>({record.count})</span>
+              </span>
+            );
+          }
           return (
-            <span className={styles.groupName}>
-              {text} <span>({record.count})</span>
-            </span>
+            <Tooltip title={record.name}>
+              <div className={styles.keyName}>{text}</div>
+            </Tooltip>
           );
-        }
-        return (
-          <Tooltip title={record.name}>
-            <div className={styles.keyName}>{text}</div>
-          </Tooltip>
-        );
+        },
       },
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      width: 120,
-      render: (type, record) => {
-        if (record.isGroup || !type) {
-          return null;
-        }
-        return <Tag color={getTypeColor(type)}>{type}</Tag>;
+      {
+        title: '类型',
+        dataIndex: 'type',
+        width: 120,
+        render: (type, record) => {
+          if (record.isGroup || !type) {
+            return null;
+          }
+          return <Tag color={getTypeColor(type)}>{type}</Tag>;
+        },
       },
-    },
-    {
-      title: '值',
-      dataIndex: 'value',
-      render: (value, record) => {
-        if (record.isGroup) {
-          return null;
-        }
-        return (
-          <Tooltip title={String(value || '')}>
-            <div className={styles.valueCell}>{String(value || '')}</div>
-          </Tooltip>
-        );
+      {
+        title: '值',
+        dataIndex: 'value',
+        render: (value, record) => {
+          if (record.isGroup) {
+            return null;
+          }
+          return (
+            <Tooltip title={String(value || '')}>
+              <div className={styles.valueCell}>{String(value || '')}</div>
+            </Tooltip>
+          );
+        },
       },
-    },
-    {
-      title: '大小',
-      dataIndex: 'size',
-      width: 120,
-      render: (size, record) => (record.isGroup ? null : formatSize(size)),
-    },
-    {
-      title: 'TTL',
-      dataIndex: 'ttl',
-      width: 120,
-      render: (ttl, record) => (record.isGroup ? null : formatTtl(ttl)),
-    },
-  ];
+      {
+        title: '大小',
+        dataIndex: 'size',
+        width: 120,
+        render: (size, record) => (record.isGroup ? null : formatSize(size)),
+      },
+      {
+        title: 'TTL',
+        dataIndex: 'ttl',
+        width: 120,
+        render: (ttl, record) => (record.isGroup ? null : formatTtl(ttl)),
+      },
+    ],
+    [],
+  );
 
   return (
     <div className={styles.redisDataView}>
@@ -452,7 +457,8 @@ const RedisDataView = memo((props: IProps) => {
           rowClassName={(record) => (record.name === selectedKey && !record.isGroup ? styles.selectedRow : '')}
           rowKey="rowKey"
           size="small"
-          scroll={{ y: tableScrollY }}
+          scroll={{ x: tableScrollX, y: tableScrollY }}
+          virtual
           onRow={(record) => ({
             onClick: () => {
               if (!record.isGroup) {
