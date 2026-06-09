@@ -1,6 +1,6 @@
 {
   "dbType": "DLC",
-  "supportDatabase": false,
+  "supportDatabase": true,
   "supportSchema": true,
   "driverConfigList": [
     {
