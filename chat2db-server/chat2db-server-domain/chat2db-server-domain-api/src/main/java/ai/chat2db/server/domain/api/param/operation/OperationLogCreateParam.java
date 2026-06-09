@@ -21,6 +21,11 @@ public class OperationLogCreateParam {
     private Long dataSourceId;
 
     /**
+     * 用户ID
+     */
+    private Long userId;
+
+    /**
      * db名称
      */
     private String databaseName;

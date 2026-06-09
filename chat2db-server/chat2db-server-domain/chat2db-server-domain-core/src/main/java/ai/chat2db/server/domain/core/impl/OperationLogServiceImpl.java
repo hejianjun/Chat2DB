@@ -55,7 +55,7 @@ public class OperationLogServiceImpl implements OperationLogService {
         OperationLogDO userExecutedDdlDO = operationLogConverter.param2do(param);
         userExecutedDdlDO.setGmtCreate(LocalDateTime.now());
         userExecutedDdlDO.setGmtModified(LocalDateTime.now());
-        userExecutedDdlDO.setUserId(ContextUtils.getUserId());
+        userExecutedDdlDO.setUserId(param.getUserId() == null ? ContextUtils.getUserId() : param.getUserId());
         getMapper().insert(userExecutedDdlDO);
         return userExecutedDdlDO.getId();
     }

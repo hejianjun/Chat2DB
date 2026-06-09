@@ -28,6 +28,11 @@ public class ConnectInfo {
      */
     private Long dataSourceId;
 
+    /**
+     * 用户ID
+     */
+    private Long userId;
+
 
     /**
      * 创建时间
@@ -219,6 +224,14 @@ public class ConnectInfo {
 
     public void setDataSourceId(Long dataSourceId) {
         this.dataSourceId = dataSourceId;
+    }
+
+    public Long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public String getDatabaseName() {
@@ -536,6 +549,7 @@ public class ConnectInfo {
         copy.setUrl(this.getUrl());
         copy.setAlias(this.getAlias());
         copy.setDataSourceId(this.getDataSourceId());
+        copy.setUserId(this.getUserId());
         copy.setConsoleId(this.getConsoleId());
         copy.setConsoleOwn(this.getConsoleOwn());
         copy.setDriver(this.getDriver());

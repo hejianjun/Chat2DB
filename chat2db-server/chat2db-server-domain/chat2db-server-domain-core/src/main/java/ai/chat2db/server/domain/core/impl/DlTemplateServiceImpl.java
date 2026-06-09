@@ -7,6 +7,7 @@ import ai.chat2db.server.domain.api.service.OperationLogService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.core.converter.CommandConverter;
 import ai.chat2db.server.domain.core.util.MetaNameUtils;
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
 import ai.chat2db.spi.CommandExecutor;
@@ -210,6 +211,9 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         }
         try {
             ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
+            if (DataSourceTypeEnum.REDIS.getCode().equals(connectInfo.getDbType())) {
+                return;
+            }
             OperationLogCreateParam createParam = new OperationLogCreateParam();
             createParam.setDdl(executeResult.getSql());
             createParam.setStatus(executeResult.getSuccess() ? "success" : "fail");

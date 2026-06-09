@@ -48,6 +48,7 @@ public final class RedisConnectionProvider {
         }
 
         RedisClient client = RedisClient.create(builder.build());
+        client.addListener(new RedisCommandAuditListener(connectInfo));
         StatefulRedisConnection<String, String> connection = client.connect();
         return new RedisConnectionContext(client, connection, session);
     }

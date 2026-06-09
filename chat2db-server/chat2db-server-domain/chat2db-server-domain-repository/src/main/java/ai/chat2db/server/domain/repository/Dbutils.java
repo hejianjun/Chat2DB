@@ -56,6 +56,20 @@ public class Dbutils {
         SQL_SESSION_THREAD_LOCAL.remove();
     }
 
+    public static void runWithSession(Runnable runnable) {
+        if (SQL_SESSION_THREAD_LOCAL.get() != null) {
+            runnable.run();
+            return;
+        }
+        // Background callbacks do not pass through request aspects that normally bind this ThreadLocal.
+        try {
+            setSession();
+            runnable.run();
+        } finally {
+            removeSession();
+        }
+    }
+
     private static SqlSessionFactory sqlSessionFactory;
 
     static {

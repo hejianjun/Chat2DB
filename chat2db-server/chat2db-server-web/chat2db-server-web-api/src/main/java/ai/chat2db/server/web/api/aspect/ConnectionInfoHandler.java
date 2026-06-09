@@ -6,6 +6,7 @@ import ai.chat2db.server.domain.api.service.DataSourceAccessBusinessService;
 import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.common.exception.ParamBusinessException;
+import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequest;
 import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRequestInfo;
 import ai.chat2db.server.web.api.controller.data.source.request.DataSourceConsoleRequestInfo;
@@ -79,6 +80,7 @@ public class ConnectionInfoHandler {
         connectInfo.setUser(dataSource.getUserName());
         connectInfo.setConsoleId(consoleId);
         connectInfo.setDataSourceId(dataSourceId);
+        connectInfo.setUserId(ContextUtils.getUserId());
         connectInfo.setPassword(dataSource.getPassword());
         connectInfo.setDbType(dataSource.getType());
         connectInfo.setUrl(dataSource.getUrl());
