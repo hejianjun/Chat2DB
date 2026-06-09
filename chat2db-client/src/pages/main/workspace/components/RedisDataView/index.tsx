@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Empty, Input, InputNumber, Modal, Select, Table, Tag, Tooltip, message } from 'antd';
 import {
   CloseOutlined,
@@ -9,7 +9,7 @@ import {
   SearchOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { v4 as uuid } from 'uuid';
 
 import redisService, { IRedisKeyItem } from '@/service/redis';
@@ -68,6 +68,8 @@ const RedisDataView = memo((props: IProps) => {
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState(240);
   const [tableScrollX, setTableScrollX] = useState(1000);
+  // 排序状态：field 为排序字段，order 为排序方向（ascend/descend），null 表示取消排序
+  const [sortInfo, setSortInfo] = useState<{ field: string; order: 'ascend' | 'descend' } | null>(null);
 
   const hydrateEditor = (keyDetail: IRedisKeyItem) => {
     const type = normalizeType(keyDetail.type);
@@ -359,9 +361,14 @@ const RedisDataView = memo((props: IProps) => {
     return () => resizeObserver.disconnect();
   }, []);
 
+  // 构建树形数据，若有排序则递归排序每层 children
   const tableData = useMemo(() => {
-    return buildRows(data);
-  }, [data]);
+    const tree = buildRows(data);
+    if (!sortInfo) {
+      return tree;
+    }
+    return sortTree(tree, sortInfo.field, sortInfo.order);
+  }, [data, sortInfo]);
 
   const filteredHashFields = useMemo(() => {
     const keyword = hashFieldFilter.trim().toLowerCase();
@@ -405,6 +412,7 @@ const RedisDataView = memo((props: IProps) => {
         title: '键',
         dataIndex: 'displayName',
         width: '34%',
+        sorter: true,
         render: (text, record) => {
           if (record.isGroup) {
             return (
@@ -424,6 +432,7 @@ const RedisDataView = memo((props: IProps) => {
         title: '类型',
         dataIndex: 'type',
         width: 120,
+        sorter: true,
         render: (type, record) => {
           if (record.isGroup || !type) {
             return null;
@@ -449,15 +458,39 @@ const RedisDataView = memo((props: IProps) => {
         title: '大小',
         dataIndex: 'size',
         width: 120,
+        sorter: true,
         render: (size, record) => (record.isGroup ? null : formatSize(size)),
       },
       {
         title: 'TTL',
         dataIndex: 'ttl',
         width: 120,
+        sorter: true,
         render: (ttl, record) => (record.isGroup ? null : formatTtl(ttl)),
       },
     ],
+    [],
+  );
+
+  // 表格排序变化回调，三次点击循环：升序 → 降序 → 取消
+  const handleTableChange = useCallback(
+    (
+      _pagination: TablePaginationConfig,
+      _filters: Record<string, unknown>,
+      sorter: SorterResult<IRedisKeyRow> | SorterResult<IRedisKeyRow>[],
+    ) => {
+      const s = Array.isArray(sorter) ? sorter[0] : sorter;
+      if (s && s.field) {
+        setSortInfo((prev) => {
+          if (prev?.field === s.field && prev?.order === s.order) {
+            return null;
+          }
+          return { field: s.field as string, order: s.order as 'ascend' | 'descend' };
+        });
+      } else {
+        setSortInfo(null);
+      }
+    },
     [],
   );
 
@@ -491,6 +524,7 @@ const RedisDataView = memo((props: IProps) => {
           rowKey="rowKey"
           size="small"
           scroll={{ x: tableScrollX, y: tableScrollY }}
+          onChange={handleTableChange}
           virtual
           onRow={(record) => ({
             onClick: () => {
@@ -686,6 +720,98 @@ function buildRows(keys: IRedisKeyItem[]) {
   });
 
   return root;
+}
+
+// 获取叶子节点的排序值
+function getLeafValue(node: IRedisKeyRow, field: string): number | string {
+  if (field === 'name') {
+    return node.displayName || '';
+  }
+  if (field === 'type') {
+    return node.type || '';
+  }
+  if (field === 'size') {
+    return node.size || 0;
+  }
+  if (field === 'ttl') {
+    return node.ttl === undefined || node.ttl === null ? -1 : node.ttl;
+  }
+  return '';
+}
+
+// 获取分组节点的聚合排序值（size 取子节点总和，TTL 取最小值）
+function getGroupAggValue(node: IRedisKeyRow, field: string): number | string {
+  if (field === 'name' || field === 'type') {
+    return node.displayName || '';
+  }
+  if (field === 'size') {
+    let total = 0;
+    const stack: IRedisKeyRow[] = [node];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (cur.isGroup && cur.children) {
+        stack.push(...cur.children);
+      } else {
+        total += cur.size || 0;
+      }
+    }
+    return total;
+  }
+  if (field === 'ttl') {
+    let minTtl = Infinity;
+    const stack: IRedisKeyRow[] = [node];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (cur.isGroup && cur.children) {
+        stack.push(...cur.children);
+      } else {
+        const t = cur.ttl === undefined || cur.ttl === null ? -1 : cur.ttl;
+        if (t < minTtl) {
+          minTtl = t;
+        }
+      }
+    }
+    return minTtl === Infinity ? -1 : minTtl;
+  }
+  return '';
+}
+
+// 递归排序树形数据：每层 children 按指定字段和方向排序，同级分组始终排在叶子前面
+function sortTree(tree: IRedisKeyRow[], field: string, order: 'ascend' | 'descend'): IRedisKeyRow[] {
+  const sorted = tree.map((node) => {
+    if (node.isGroup && node.children) {
+      return { ...node, children: sortTree(node.children, field, order) };
+    }
+    return node;
+  });
+
+  sorted.sort((a, b) => {
+    let cmp = 0;
+    if (a.isGroup && b.isGroup) {
+      const valA = getGroupAggValue(a, field);
+      const valB = getGroupAggValue(b, field);
+      if (typeof valA === 'string' || typeof valB === 'string') {
+        cmp = String(valA).localeCompare(String(valB));
+      } else {
+        cmp = (valA as number) - (valB as number);
+      }
+    } else if (a.isGroup) {
+      cmp = -1;
+    } else if (b.isGroup) {
+      cmp = 1;
+    } else {
+      const valA = getLeafValue(a, field);
+      const valB = getLeafValue(b, field);
+      if (typeof valA === 'string' || typeof valB === 'string') {
+        cmp = String(valA).localeCompare(String(valB));
+      } else {
+        cmp = (valA as number) - (valB as number);
+      }
+    }
+    return order === 'ascend' ? cmp : -cmp;
+  });
+
+  return sorted;
 }
 
 function toLeaf(item: IRedisKeyItem, displayName: string): IRedisKeyRow {
