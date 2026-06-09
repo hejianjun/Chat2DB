@@ -66,6 +66,9 @@ chatgpt:
 logbook:
   include:
     - /api/**
+  exclude:
+    - /api/redis/key/stream
+    - /api/redis/monitor/stream
 #server:
 #  undertow:
 #    io-threads: 8

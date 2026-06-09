@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * redis key运维类
@@ -58,6 +60,20 @@ public class RedisKeyManageController {
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(KeyQueryRequest request) throws IOException {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT);
+        AtomicBoolean closed = new AtomicBoolean(false);
+        AtomicReference<CompletableFuture<RedisKeyScanResult>> resultFutureRef = new AtomicReference<>();
+        emitter.onCompletion(() -> {
+            closed.set(true);
+            cancelFuture(resultFutureRef.get());
+        });
+        emitter.onTimeout(() -> {
+            closed.set(true);
+            cancelFuture(resultFutureRef.get());
+        });
+        emitter.onError(throwable -> {
+            closed.set(true);
+            cancelFuture(resultFutureRef.get());
+        });
         emitter.send(SseEmitter.event()
                 .name("connect")
                 .data(LocalDateTime.now().toString())
@@ -68,21 +84,29 @@ public class RedisKeyManageController {
             int count = request.getCount() == null ? DEFAULT_KEY_COUNT : request.getCount();
             CompletableFuture<RedisKeyScanResult> resultFuture = browser.streamKeys(request.getDatabaseName(),
                     request.getSearchKey(), request.getCursor(), count, batch -> {
-                        sendEvent(emitter, "keys", batch.stream().map(this::toVO).toList());
+                        if (!closed.get()) {
+                            sendEvent(emitter, "keys", batch.stream().map(this::toVO).toList());
+                        }
                     });
+            resultFutureRef.set(resultFuture);
             resultFuture.whenCompleteAsync((result, throwable) -> {
+                if (closed.get()) {
+                    return;
+                }
                 if (throwable != null) {
                     Throwable cause = unwrapCompletionException(throwable);
                     sendStreamError(emitter, cause);
                     return;
                 }
                 try {
-                    sendEvent(emitter, "done", Map.of(
+                    if (sendEvent(emitter, "done", Map.of(
                             "total", result.getTotal(),
                             "cursor", result.getCursor(),
                             "hasMore", result.getHasMore()
-                    ));
-                    emitter.complete();
+                    ))) {
+                        closed.set(true);
+                        emitter.complete();
+                    }
                 } catch (Exception e) {
                     sendStreamError(emitter, e);
                 }
@@ -175,10 +199,14 @@ public class RedisKeyManageController {
         return vo;
     }
 
-    private void sendEvent(SseEmitter emitter, String eventName, Object data) {
+    private boolean sendEvent(SseEmitter emitter, String eventName, Object data) {
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
+            return true;
         } catch (IOException e) {
+            if (isClientAbort(e)) {
+                return false;
+            }
             throw new BusinessException("Redis key stream send failed", null, e);
         }
     }
@@ -197,5 +225,23 @@ public class RedisKeyManageController {
             return throwable.getCause();
         }
         return throwable;
+    }
+
+    private void cancelFuture(CompletableFuture<?> future) {
+        if (future != null && !future.isDone()) {
+            future.cancel(true);
+        }
+    }
+
+    private boolean isClientAbort(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause != null) {
+            String className = cause.getClass().getName();
+            if ("org.apache.catalina.connector.ClientAbortException".equals(className)) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 }

@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -103,9 +104,10 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             RedisConnectionProvider.RedisConnectionContext context =
                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo());
             RedisAsyncCommands<String, String> commands = context.connection().async();
-            CompletableFuture<RedisKeyScanResult> result = selectDatabase(commands, databaseName)
+            AtomicBoolean closed = new AtomicBoolean(false);
+            CompletableFuture<RedisKeyScanResult> operation = selectDatabase(commands, databaseName)
                     .thenCompose(ignored -> {
-                        String pattern = StringUtils.isBlank(searchKey) ? null : searchKey;
+                        String pattern = StringUtils.trimToNull(searchKey);
                         if (isInitialCursor(cursor) && isExactKeyPattern(pattern)) {
                             return queryExactKeyAsync(commands, pattern, batchConsumer);
                         }
@@ -113,13 +115,22 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
                         long limit = count < 0 ? Long.MAX_VALUE : count == 0 ? KEY_SCAN_BATCH_SIZE : count;
                         return scanKeyInfoAsync(commands, pattern, cursor, limit, batchConsumer);
                     });
-            return result.whenComplete((ignored, throwable) -> {
-                try {
-                    context.close();
-                } catch (Exception e) {
-                    log.warn("Redis connection close failed", e);
+            CompletableFuture<RedisKeyScanResult> result = new CompletableFuture<>();
+            operation.whenComplete((scanResult, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    result.complete(scanResult);
+                }
+                closeContextAsync(context, closed);
+            });
+            result.whenComplete((ignored, throwable) -> {
+                if (result.isCancelled()) {
+                    operation.cancel(true);
+                    closeContextAsync(context, closed);
                 }
             });
+            return result;
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
@@ -364,6 +375,21 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
 
     private boolean isInitialCursor(String cursor) {
         return StringUtils.isBlank(cursor) || "0".equals(cursor);
+    }
+
+    private void closeContext(RedisConnectionProvider.RedisConnectionContext context, AtomicBoolean closed) {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            context.close();
+        } catch (Exception e) {
+            log.warn("Redis connection close failed", e);
+        }
+    }
+
+    private void closeContextAsync(RedisConnectionProvider.RedisConnectionContext context, AtomicBoolean closed) {
+        CompletableFuture.runAsync(() -> closeContext(context, closed));
     }
 
     private boolean isExactKeyPattern(String pattern) {
