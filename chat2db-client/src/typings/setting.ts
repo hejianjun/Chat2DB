@@ -56,6 +56,7 @@ export interface IModelServiceConfig {
   provider: AIType;
   apiKey?: string;
   apiHost?: string;
+  completionsPath?: string;
   httpProxyHost?: string;
   httpProxyPort?: string;
   organizationId?: string;

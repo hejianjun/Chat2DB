@@ -23,12 +23,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.concurrent.Immutable;
+import java.net.URI;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Service
 public class AiChatConfig {
     private static final String MODEL_SERVICE_CONFIG_CODE = "ai.model.services";
     private static final String MODEL_DEFAULT_CONFIG_CODE = "ai.model.default";
+    private static final String DEFAULT_OPENAI_BASE_URL = "https://api.openai.com";
+    private static final String DEFAULT_COMPLETIONS_PATH = "/v1/chat/completions";
+    private static final Pattern VERSION_PATH_PATTERN = Pattern.compile(".*/v\\d+(?:\\.\\d+)?/?$");
 
     @Autowired
     private ConfigService configService;
@@ -51,10 +56,12 @@ public class AiChatConfig {
         return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false);
     }
 
-    public ChatResponse testModelService(String provider, String apiHost, String apiKey, String model) {
+    public ChatResponse testModelService(String provider, String apiHost, String completionsPath, String apiKey,
+                                         String model) {
         ModelServiceConfig service = new ModelServiceConfig();
         service.setProvider(provider);
         service.setApiHost(apiHost);
+        service.setCompletionsPath(completionsPath);
         service.setApiKey(apiKey);
         ModelItem modelItem = new ModelItem();
         modelItem.setModel(model);
@@ -84,8 +91,12 @@ public class AiChatConfig {
             return ChatClient.builder(chatModel).build();
         }
 
-        String apiHost = service.getApiHost();
-        OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(apiHost).apiKey(service.getApiKey()).build();
+        OpenAiEndpoint endpoint = resolveOpenAiEndpoint(service.getApiHost(), service.getCompletionsPath());
+        OpenAiApi openAiApi = OpenAiApi.builder()
+                .baseUrl(endpoint.baseUrl)
+                .completionsPath(endpoint.completionsPath)
+                .apiKey(service.getApiKey())
+                .build();
         Map<String, Object> extraBody = new HashMap<>();
         if (StringUtils.contains(modelItem.getModel(), "qwen")) {
             extraBody.put("enable_thinking", !fastMode);
@@ -166,6 +177,47 @@ public class AiChatConfig {
         return "";
     }
 
+    private OpenAiEndpoint resolveOpenAiEndpoint(String apiHost, String completionsPath) {
+        OpenAiEndpoint endpoint = new OpenAiEndpoint();
+        endpoint.baseUrl = StringUtils.removeEnd(StringUtils.defaultIfBlank(apiHost, DEFAULT_OPENAI_BASE_URL), "/");
+        endpoint.completionsPath = StringUtils.defaultIfBlank(completionsPath, DEFAULT_COMPLETIONS_PATH);
+
+        if (StringUtils.isNotBlank(completionsPath)) {
+            endpoint.completionsPath = normalizePath(completionsPath);
+            URI uri = URI.create(endpoint.baseUrl);
+            String path = StringUtils.removeEnd(StringUtils.defaultString(uri.getPath()), "/");
+            if (StringUtils.endsWith(path, "/chat/completions") || StringUtils.startsWith(endpoint.completionsPath,
+                    path + "/") || StringUtils.equals(endpoint.completionsPath, path)) {
+                endpoint.baseUrl = buildOrigin(uri);
+            }
+            return endpoint;
+        }
+
+        URI uri = URI.create(endpoint.baseUrl);
+        String path = StringUtils.removeEnd(StringUtils.defaultString(uri.getPath()), "/");
+        if (StringUtils.endsWith(path, "/chat/completions")) {
+            endpoint.baseUrl = buildOrigin(uri);
+            endpoint.completionsPath = path;
+        } else if (StringUtils.isNotBlank(path) && VERSION_PATH_PATTERN.matcher(path).matches()) {
+            endpoint.baseUrl = buildOrigin(uri);
+            endpoint.completionsPath = path + "/chat/completions";
+        }
+        return endpoint;
+    }
+
+    private String normalizePath(String path) {
+        return StringUtils.prependIfMissing(StringUtils.removeEnd(path, "/"), "/");
+    }
+
+    private String buildOrigin(URI uri) {
+        StringBuilder origin = new StringBuilder();
+        origin.append(uri.getScheme()).append("://").append(uri.getHost());
+        if (uri.getPort() > -1) {
+            origin.append(":").append(uri.getPort());
+        }
+        return origin.toString();
+    }
+
     @Data
     private static class DefaultModelConfig {
         private String defaultModelId;
@@ -183,7 +235,13 @@ public class AiChatConfig {
         private String provider;
         private String apiKey;
         private String apiHost;
+        private String completionsPath;
         private List<ModelItem> modelList = new ArrayList<>();
+    }
+
+    private static class OpenAiEndpoint {
+        private String baseUrl;
+        private String completionsPath;
     }
 
     private static class ModelLocateResult {

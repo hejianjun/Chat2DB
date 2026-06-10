@@ -13,6 +13,7 @@ public class ModelServiceResponse {
     private String provider;
     private String apiKey;
     private String apiHost;
+    private String completionsPath;
     private String httpProxyHost;
     private String httpProxyPort;
     private String organizationId;

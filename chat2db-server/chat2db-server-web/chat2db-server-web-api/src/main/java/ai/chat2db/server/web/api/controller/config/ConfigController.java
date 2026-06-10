@@ -100,6 +100,7 @@ public class ConfigController {
         target.setProvider(request.getProvider());
         target.setApiKey(StringUtils.defaultString(request.getApiKey()));
         target.setApiHost(StringUtils.defaultString(request.getApiHost()));
+        target.setCompletionsPath(StringUtils.defaultString(request.getCompletionsPath()));
         target.setHttpProxyHost(StringUtils.defaultString(request.getHttpProxyHost()));
         target.setHttpProxyPort(StringUtils.defaultString(request.getHttpProxyPort()));
         target.setOrganizationId(StringUtils.defaultString(request.getOrganizationId()));
@@ -143,7 +144,8 @@ public class ConfigController {
         String provider = request.getProvider().toUpperCase();
         String model = request.getModelList().get(0).getModel();
         try {
-            aiChatConfig.testModelService(provider, request.getApiHost(), request.getApiKey(), model);
+            aiChatConfig.testModelService(provider, request.getApiHost(), request.getCompletionsPath(),
+                    request.getApiKey(), model);
             return ActionResult.isSuccess();
         } catch (Exception e) {
             return ActionResult.fail("MODEL_SERVICE_TEST_FAILED", e.getMessage(), e.getMessage());

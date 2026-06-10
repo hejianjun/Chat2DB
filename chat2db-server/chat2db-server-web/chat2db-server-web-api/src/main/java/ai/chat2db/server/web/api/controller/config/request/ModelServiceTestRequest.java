@@ -10,5 +10,6 @@ public class ModelServiceTestRequest {
     private String provider;
     private String apiKey;
     private String apiHost;
+    private String completionsPath;
     private List<ModelItemRequest> modelList = new ArrayList<>();
 }

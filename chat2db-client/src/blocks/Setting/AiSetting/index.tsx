@@ -208,7 +208,10 @@ export default function SettingAI(props: IProps) {
             <Select options={providerOptions} />
           </Form.Item>
           <Form.Item name="apiHost" label="API Host">
-            <Input />
+            <Input placeholder="例如 https://api.openai.com 或 https://maas-api.cn-huabei-1.xf-yun.com/v2" />
+          </Form.Item>
+          <Form.Item name="completionsPath" label="Chat Completions Path">
+            <Input placeholder="可选，例如 /v2/chat/completions；不填则自动识别或使用 /v1/chat/completions" />
           </Form.Item>
           <Form.Item name="apiKey" label="API Key">
             <Input.Password />
