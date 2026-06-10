@@ -103,15 +103,11 @@ public class TableServiceImpl implements TableService {
     @Override
     public Table query(TableQueryParam param, TableSelector selector) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        boolean redis = DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType());
-        Connection connection = redis ? null : Chat2DBContext.getConnection();
+        Connection connection =  Chat2DBContext.getConnection();
         List<Table> tables = metaSchema.tables(connection, param.getDatabaseName(),
                 param.getSchemaName(), param.getTableName());
         if (!CollectionUtils.isEmpty(tables)) {
             Table table = tables.get(0);
-            if (redis) {
-                return table;
-            }
             table.setIndexList(
                     metaSchema.indexes(connection, param.getDatabaseName(), param.getSchemaName(),
                             param.getTableName()));
