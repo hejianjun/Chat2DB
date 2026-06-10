@@ -79,8 +79,22 @@ public class TableServiceImpl implements TableService {
     @Override
     public String showCreateTable(ShowCreateTableParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        return metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
+        String dbType = Chat2DBContext.getConnectInfo() == null ? null : Chat2DBContext.getConnectInfo().getDbType();
+        log.info("show create table start, dbType:{}, metaDataClass:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                dbType, metaSchema == null ? null : metaSchema.getClass().getName(), param.getDataSourceId(),
+                param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        String ddl = metaSchema.tableDDL(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(),
                 param.getTableName());
+        if (StringUtils.isBlank(ddl)) {
+            log.warn("show create table returned blank ddl, dbType:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    dbType, param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(),
+                    param.getTableName());
+        } else {
+            log.info("show create table success, dbType:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}, ddlLength:{}",
+                    dbType, param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(),
+                    param.getTableName(), ddl.length());
+        }
+        return ddl;
     }
 
     @Override

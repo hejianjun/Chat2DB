@@ -68,6 +68,8 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 @Slf4j
 public class SQLExecutor implements CommandExecutor {
     private static final Pattern ERROR_LINE_PATTERN = Pattern.compile("(?i)\\bline\\s+(\\d+)\\b");
+    private static final Pattern DLC_SHOW_CREATE_PATTERN = Pattern.compile(
+            "(?is)^\\s*SHOW\\s+CREATE\\s+(TABLE|VIEW)\\s+.+");
 
     /**
      * Singleton instance of SQLExecutor.
@@ -116,6 +118,10 @@ public class SQLExecutor implements CommandExecutor {
                     rs = stmt.getResultSet();
                     // 获取有几列
                     ResultSetMetaData resultSetMetaData = rs.getMetaData();
+                    if (resultSetMetaData == null) {
+                        log.warn("ResultSet metadata is null, sql:{}", sql);
+                        return;
+                    }
                     int col = resultSetMetaData.getColumnCount();
 
                     // 获取header信息
@@ -218,6 +224,11 @@ public class SQLExecutor implements CommandExecutor {
                     rs = stmt.getResultSet();
                     // 获取有几列
                     ResultSetMetaData resultSetMetaData = rs.getMetaData();
+                    if (resultSetMetaData == null) {
+                        handleNullResultSetMetaData(sql, type, rs, executeResult, valueHandler, limitRowSize);
+                        executeResult.setDuration(timeInterval.interval());
+                        return executeResult;
+                    }
                     int col = resultSetMetaData.getColumnCount();
 
                     // 获取header信息
@@ -323,6 +334,38 @@ public class SQLExecutor implements CommandExecutor {
             }
         }
         return executeResult;
+    }
+
+    private void handleNullResultSetMetaData(String sql, String type, ResultSet rs, ExecuteResult executeResult,
+                                             ValueHandler valueHandler, boolean limitRowSize) throws SQLException {
+        if (isDlcShowCreate(sql, type)) {
+            handleDlcShowCreateResult(sql, rs, executeResult, valueHandler, limitRowSize);
+            return;
+        }
+
+        log.warn("ResultSet metadata is null, sql:{}", sql);
+        executeResult.setHeaderList(Collections.emptyList());
+        executeResult.setDataList(Collections.emptyList());
+    }
+
+    private boolean isDlcShowCreate(String sql, String type) {
+        return "DLC".equalsIgnoreCase(type) && DLC_SHOW_CREATE_PATTERN.matcher(sql).matches();
+    }
+
+    private void handleDlcShowCreateResult(String sql, ResultSet rs, ExecuteResult executeResult,
+                                           ValueHandler valueHandler, boolean limitRowSize) throws SQLException {
+        Matcher matcher = DLC_SHOW_CREATE_PATTERN.matcher(sql);
+        boolean isView = matcher.matches() && "VIEW".equalsIgnoreCase(matcher.group(1));
+        executeResult.setHeaderList(Collections.singletonList(Header.builder()
+                .dataType(DataTypeEnum.STRING.getCode())
+                .name(isView ? "createview_stmt" : "createtab_stmt")
+                .build()));
+
+        List<List<String>> dataList = Lists.newArrayList();
+        while (rs.next()) {
+            dataList.add(Collections.singletonList(valueHandler.getString(rs, 1, limitRowSize)));
+        }
+        executeResult.setDataList(dataList);
     }
 
     /**

@@ -132,8 +132,21 @@ public class TableController {
      */
     @GetMapping("/export")
     public DataResult<String> export(@Valid DdlExportRequest request) {
+        log.info("table export request, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}, refresh:{}",
+                request.getDataSourceId(), request.getDatabaseName(), request.getSchemaName(), request.getTableName(),
+                request.isRefresh());
         ShowCreateTableParam param = rdbWebConverter.ddlExport2showCreate(request);
         String ddl = tableService.showCreateTable(param);
+        if (ddl == null) {
+            log.warn("table export ddl is null, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getTableName());
+        } else {
+            log.info("table export ddl success, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}, ddlLength:{}",
+                    param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getTableName(),
+                    ddl.length());
+            log.debug("table export ddl content, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}, ddl:{}",
+                    param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), param.getTableName(), ddl);
+        }
         return DataResult.of(ddl);
     }
 
