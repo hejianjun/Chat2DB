@@ -142,6 +142,21 @@ const envItem = {
   },
 };
 
+const DLC_DEFAULT_URL =
+  'jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog' +
+  '&region=ap-guangzhou&data_engine_name=&result_type=Service&read_type=Stream&resource_group_name=';
+
+const DLC_URL_PATTERN = new RegExp(
+  'jdbc:dlc:([^?]+)\\?task_type=([^&]*)&database_name=([^&]*)&datasource_connection_name=([^&]*)' +
+    '&region=([^&]*)&data_engine_name=([^&]*)(?:&result_type=([^&]*))?(?:&read_type=([^&]*))?' +
+    '(?:&resource_group_name=([^&]*))?',
+);
+
+const DLC_URL_TEMPLATE =
+  'jdbc:dlc:{host}?task_type={taskType}&database_name={databaseName}' +
+  '&datasource_connection_name={datasourceConnection}&region={region}&data_engine_name={dataEngineName}' +
+  '&result_type={resultType}&read_type={readType}&resource_group_name={resourceGroupName}';
+
 export const dataSourceFormConfigs: IConnectionConfig[] = [
   // MYSQL
   {
@@ -1484,6 +1499,11 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
               value: 'SparkSQLTask',
               items: [],
             },
+            {
+              label: 'BatchSQLTask',
+              value: 'BatchSQLTask',
+              items: [],
+            },
           ],
           styles: {
             width: '50%',
@@ -1512,12 +1532,12 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
           },
         },
         {
-          defaultValue: '',
+          defaultValue: 'DataLakeCatalog',
           inputType: InputType.INPUT,
           labelNameCN: '数据源连接',
           labelNameEN: 'Data Source',
           name: 'datasourceConnection',
-          required: false,
+          required: true,
           styles: {
             width: '50%',
           },
@@ -1528,14 +1548,70 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
           labelNameCN: '数据引擎',
           labelNameEN: 'Engine',
           name: 'dataEngineName',
+          required: true,
+          styles: {
+            width: '50%',
+          },
+        },
+        {
+          defaultValue: 'Service',
+          inputType: InputType.SELECT,
+          labelNameCN: '结果获取方式',
+          labelNameEN: 'Result Type',
+          name: 'resultType',
+          required: false,
+          selects: [
+            {
+              label: 'Service',
+              value: 'Service',
+              items: [],
+            },
+            {
+              label: 'COS',
+              value: 'COS',
+              items: [],
+            },
+          ],
+          styles: {
+            width: '50%',
+          },
+        },
+        {
+          defaultValue: 'Stream',
+          inputType: InputType.SELECT,
+          labelNameCN: '读取方式',
+          labelNameEN: 'Read Type',
+          name: 'readType',
+          required: false,
+          selects: [
+            {
+              label: 'Stream',
+              value: 'Stream',
+              items: [],
+            },
+            {
+              label: 'DownloadSingle',
+              value: 'DownloadSingle',
+              items: [],
+            },
+          ],
+          styles: {
+            width: '50%',
+          },
+        },
+        {
+          defaultValue: '',
+          inputType: InputType.INPUT,
+          labelNameCN: '资源组',
+          labelNameEN: 'Resource Group',
+          name: 'resourceGroupName',
           required: false,
           styles: {
             width: '50%',
           },
         },
         {
-          defaultValue:
-            'jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-guangzhou&data_engine_name=',
+          defaultValue: DLC_DEFAULT_URL,
           inputType: InputType.INPUT,
           labelNameCN: 'URL',
           labelNameEN: 'URL',
@@ -1546,10 +1622,8 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
           },
         },
       ],
-      pattern:
-        /jdbc:dlc:(.*?)\?task_type=(.*?)&database_name=([^&]*)&datasource_connection_name=([^&]*)&region=([^&]*)&data_engine_name=([^&]*)/,
-      template:
-        'jdbc:dlc:{host}?task_type={taskType}&database_name={databaseName}&datasource_connection_name={datasourceConnection}&region={region}&data_engine_name={dataEngineName}',
+      pattern: DLC_URL_PATTERN,
+      template: DLC_URL_TEMPLATE,
       // excludes: [OperationColumn.EditTable]
     },
     ssh: sshConfig,

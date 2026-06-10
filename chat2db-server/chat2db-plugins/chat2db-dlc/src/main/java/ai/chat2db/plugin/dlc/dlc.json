@@ -4,7 +4,7 @@
   "supportSchema": false,
   "driverConfigList": [
     {
-      "url": "jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-shanghai&data_engine_name=",
+      "url": "jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-guangzhou&data_engine_name=&result_type=Service&read_type=Stream&resource_group_name=",
       "custom": false,
       "defaultDriver": true,
       "downloadJdbcDriverUrls": [

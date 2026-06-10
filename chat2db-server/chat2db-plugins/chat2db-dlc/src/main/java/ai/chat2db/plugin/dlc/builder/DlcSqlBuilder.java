@@ -13,6 +13,19 @@ import ai.chat2db.spi.model.TableIndexColumn;
 public class DlcSqlBuilder extends DefaultSqlBuilder {
 
     @Override
+    public String pageLimit(String sql, int offset, int pageNo, int pageSize) {
+        StringBuilder sqlBuilder = new StringBuilder(sql.length() + 20);
+        sqlBuilder.append(sql);
+        sqlBuilder.append("\n LIMIT ");
+        if (offset == 0) {
+            sqlBuilder.append(pageSize);
+        } else {
+            sqlBuilder.append(pageSize).append(" OFFSET ").append(offset);
+        }
+        return sqlBuilder.toString();
+    }
+
+    @Override
     public String buildCreateTableSql(Table table) {
         StringBuilder script = new StringBuilder();
         if (StringUtils.isNotBlank(table.getAiComment())) {

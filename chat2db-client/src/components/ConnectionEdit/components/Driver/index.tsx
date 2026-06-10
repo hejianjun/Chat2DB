@@ -3,7 +3,7 @@ import styles from './index.less';
 import classnames from 'classnames';
 import { i18n } from '@/i18n';
 import { Form, Modal, Input, Select } from 'antd';
-import connectionService, { IDriverResponse } from '@/service/connection';
+import connectionService, { IDriverConfig, IDriverResponse } from '@/service/connection';
 import UploadDriver from '@/components/UploadDriver';
 import LoadingGracile from '@/components/Loading/LoadingGracile';
 const { Option } = Select;
@@ -19,6 +19,21 @@ enum DownloadStatus {
   Loading,
   Error,
   Success,
+}
+
+function toSavedDriverConfig(driverConfig?: IDriverConfig) {
+  if (!driverConfig) {
+    return {};
+  }
+  return {
+    url: driverConfig.url,
+    jdbcDriver: driverConfig.jdbcDriver,
+    jdbcDriverClass: driverConfig.jdbcDriverClass,
+    dbType: driverConfig.dbType,
+    custom: driverConfig.custom,
+    extendInfo: driverConfig.extendInfo,
+    defaultDriver: driverConfig.defaultDriver,
+  };
 }
 
 export default memo<IProps>((props) => {
@@ -42,7 +57,7 @@ export default memo<IProps>((props) => {
         jdbcDriver: backfillData?.driverConfig?.jdbcDriver,
       };
       driverForm.setFieldsValue(data);
-      onChange(data);
+      onChange(toSavedDriverConfig(backfillData?.driverConfig));
     }
   }, [backfillData?.driverConfig, backfillData?.id]);
 
@@ -56,12 +71,12 @@ export default memo<IProps>((props) => {
         driverConfigList: res.driverConfigList || [],
       });
       if (res.driverConfigList?.length && !backfillData?.driverConfig?.jdbcDriver) {
-        const data = {
-          jdbcDriverClass: res.driverConfigList[0]?.jdbcDriverClass,
-          jdbcDriver: res.driverConfigList[0]?.jdbcDriver,
-        };
-        driverForm.setFieldsValue(data);
-        onChange(data);
+        const driverConfig = res.driverConfigList[0];
+        driverForm.setFieldsValue({
+          jdbcDriverClass: driverConfig?.jdbcDriverClass,
+          jdbcDriver: driverConfig?.jdbcDriver,
+        });
+        onChange(toSavedDriverConfig(driverConfig));
       }
     });
   }
@@ -95,10 +110,7 @@ export default memo<IProps>((props) => {
     driverForm.setFieldsValue({
       jdbcDriverClass: selected?.jdbcDriverClass,
     });
-    onChange({
-      jdbcDriverClass: selected?.jdbcDriverClass,
-      jdbcDriver: data.jdbcDriver,
-    });
+    onChange(toSavedDriverConfig(selected));
   }
 
   return (

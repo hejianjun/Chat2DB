@@ -43,6 +43,7 @@ public class DlcDBManage extends DefaultDBManage implements DBManage {
         
         String databaseName = connectInfo.getDatabaseName();
         if (StringUtils.isNotBlank(databaseName)) {
+            url = replaceQueryParam(url, DATABASE_NAME_KEY, databaseName);
             properties.put(DATABASE_NAME_KEY, databaseName);
         }
 
@@ -77,5 +78,20 @@ public class DlcDBManage extends DefaultDBManage implements DBManage {
         
         Connection newConnection = getConnection(connectInfo);
         connectInfo.setConnection(newConnection);
+    }
+
+    private String replaceQueryParam(String url, String key, String value) {
+        String param = key + "=";
+        int paramIndex = url.indexOf(param);
+        if (paramIndex < 0) {
+            return url + (url.contains("?") ? "&" : "?") + param + value;
+        }
+
+        int valueStart = paramIndex + param.length();
+        int valueEnd = url.indexOf("&", valueStart);
+        if (valueEnd < 0) {
+            return url.substring(0, valueStart) + value;
+        }
+        return url.substring(0, valueStart) + value + url.substring(valueEnd);
     }
 }

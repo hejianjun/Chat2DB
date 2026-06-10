@@ -18,7 +18,13 @@ public class DefaultValueHandler implements ValueHandler {
 
     @Override
     public String getString(ResultSet rs, int index, boolean limitSize) throws SQLException {
-        Object obj = rs.getObject(index);
+        Object obj;
+        try {
+            obj = rs.getObject(index);
+        } catch (Exception e) {
+            log.warn("getObject失败，使用getString替代: index={}", index, e);
+            return rs.getString(index);
+        }
         if (obj == null) {
             return null;
         }

@@ -2,11 +2,24 @@ import { IPageResponse, IConnectionDetails, ICreateConnectionDetails, IConnectio
 import { DatabaseTypeCode } from '@/constants';
 import createRequest from './base';
 
-export interface IDriverResponse {
-  driverConfigList: {
-    jdbcDriver: string;
-    jdbcDriverClass: string;
+export interface IDriverConfig {
+  url?: string;
+  jdbcDriver: string;
+  jdbcDriverClass: string;
+  downloadJdbcDriverUrls?: string[];
+  dbType?: string;
+  custom?: boolean;
+  extendInfo?: {
+    key: string;
+    value: string;
+    required: boolean;
+    choices?: string[];
   }[];
+  defaultDriver?: boolean;
+}
+
+export interface IDriverResponse {
+  driverConfigList: IDriverConfig[];
   defaultDriverConfig: {
     jdbcDriverClass: string;
   };
