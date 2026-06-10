@@ -1534,19 +1534,8 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
           },
         },
         {
-          defaultValue: '',
-          inputType: InputType.INPUT,
-          labelNameCN: 'Spark App',
-          labelNameEN: 'Spark App',
-          name: 'sparkAppName',
-          required: false,
-          styles: {
-            width: '50%',
-          },
-        },
-        {
           defaultValue:
-            'jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection=&region=ap-guangzhou&data_engine_name=&spark_app_name=',
+            'jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-guangzhou&data_engine_name=',
           inputType: InputType.INPUT,
           labelNameCN: 'URL',
           labelNameEN: 'URL',
@@ -1558,9 +1547,9 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
         },
       ],
       pattern:
-        /jdbc:dlc:(.*?)\?task_type=(.*?)&database_name=([^&]*)&datasource_connection=([^&]*)&region=([^&]*)&data_engine_name=([^&]*)&spark_app_name=([^&]*)/,
+        /jdbc:dlc:(.*?)\?task_type=(.*?)&database_name=([^&]*)&datasource_connection_name=([^&]*)&region=([^&]*)&data_engine_name=([^&]*)/,
       template:
-        'jdbc:dlc:{host}?task_type={taskType}&database_name={databaseName}&datasource_connection={datasourceConnection}&region={region}&data_engine_name={dataEngineName}&spark_app_name={sparkAppName}',
+        'jdbc:dlc:{host}?task_type={taskType}&database_name={databaseName}&datasource_connection_name={datasourceConnection}&region={region}&data_engine_name={dataEngineName}',
       // excludes: [OperationColumn.EditTable]
     },
     ssh: sshConfig,

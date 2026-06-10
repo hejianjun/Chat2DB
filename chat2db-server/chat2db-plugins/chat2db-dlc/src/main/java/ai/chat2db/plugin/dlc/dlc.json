@@ -4,13 +4,13 @@
   "supportSchema": true,
   "driverConfigList": [
     {
-      "url": "jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection=&region=ap-guangzhou&data_engine_name=&spark_app_name=",
+      "url": "jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-shanghai&data_engine_name=",
       "custom": false,
       "defaultDriver": true,
       "downloadJdbcDriverUrls": [
-        "https://dlc-jdbc-1304028854.cos.ap-beijing.myqcloud.com/dlc-jdbc-2.5.3-jar-with-dependencies.jar"
+        "https://dlc-jdbc-1304028854.cos.ap-beijing.myqcloud.com/dlc-jdbc-2.5.9-jar-with-dependencies.jar"
       ],
-      "jdbcDriver": "dlc-jdbc-2.5.3-jar-with-dependencies.jar",
+      "jdbcDriver": "dlc-jdbc-2.5.9-jar-with-dependencies.jar",
       "jdbcDriverClass": "com.tencent.cloud.dlc.jdbc.DlcDriver"
     }
   ],

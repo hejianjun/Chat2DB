@@ -33,3 +33,4 @@ package-lock.json
 .playwright-mcp
 *.png
 logs
+dlc-jdbc-2.5.9-jar-with-dependencies.jar.src
