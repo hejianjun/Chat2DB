@@ -19,18 +19,17 @@ import org.apache.commons.lang3.StringUtils;
 public class DlcMetaData extends DefaultMetaService implements MetaData {
 
     @Override
-    public List<Schema> schemas(Connection connection, String databaseName) {
+    public List<Database> databases(Connection connection) {
         try {
             return SQLExecutor.getInstance().execute(connection, "SHOW DATABASES", resultSet -> {
-                List<Schema> schemas = new ArrayList<>();
+                List<Database> databases = new ArrayList<>();
                 while (resultSet.next()) {
-                    Schema schema = new Schema();
+                    Database database = new Database();
                     String name = resultSet.getString(1);
-                    schema.setName(name);
-                    schema.setDatabaseName(name);
-                    schemas.add(schema);
+                    database.setName(name);
+                    databases.add(database);
                 }
-                return schemas;
+                return databases;
             });
         } catch (Exception e) {
             return Collections.emptyList();
@@ -40,10 +39,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             String sql = "SHOW TABLES";
             if (StringUtils.isNotBlank(tableName)) {
                 sql += " LIKE '" + tableName + "'";
@@ -70,10 +65,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public String tableDDL(Connection connection, String databaseName, String schemaName, String tableName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             String sql = "SHOW CREATE TABLE " + tableName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 if (resultSet.next()) {
@@ -89,10 +80,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String tableName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             String sql = "DESCRIBE TABLE " + tableName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 List<TableColumn> columns = new ArrayList<>();
@@ -130,10 +117,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<Table> views(Connection connection, String databaseName, String schemaName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             return SQLExecutor.getInstance().execute(connection, "SHOW VIEWS", resultSet -> {
                 List<Table> views = new ArrayList<>();
                 while (resultSet.next()) {
@@ -155,10 +138,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public Table view(Connection connection, String databaseName, String schemaName, String viewName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             String sql = "SHOW CREATE VIEW " + viewName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 Table table = new Table();
@@ -179,10 +158,6 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     @Override
     public List<Function> functions(Connection connection, String databaseName, String schemaName) {
         try {
-            if (StringUtils.isNotBlank(schemaName)) {
-                SQLExecutor.getInstance().execute(connection, "USE " + schemaName, resultSet -> null);
-            }
-
             return SQLExecutor.getInstance().execute(connection, "SHOW FUNCTIONS", resultSet -> {
                 List<Function> functions = new ArrayList<>();
                 while (resultSet.next()) {

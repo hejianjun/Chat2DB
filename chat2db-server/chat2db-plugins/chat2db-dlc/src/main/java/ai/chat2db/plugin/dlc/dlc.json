@@ -1,7 +1,7 @@
 {
   "dbType": "DLC",
   "supportDatabase": true,
-  "supportSchema": true,
+  "supportSchema": false,
   "driverConfigList": [
     {
       "url": "jdbc:dlc:dlc.tencentcloudapi.com?task_type=SQLTask&database_name=&datasource_connection_name=DataLakeCatalog&region=ap-shanghai&data_engine_name=",

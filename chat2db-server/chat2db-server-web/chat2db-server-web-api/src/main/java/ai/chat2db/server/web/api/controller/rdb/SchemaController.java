@@ -35,12 +35,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class SchemaController {
 
     @Autowired
-    private TableService tableService;
-
-    @Autowired
-    private DlTemplateService dlTemplateService;
-
-    @Autowired
     private RdbWebConverter rdbWebConverter;
 
     @Autowired
