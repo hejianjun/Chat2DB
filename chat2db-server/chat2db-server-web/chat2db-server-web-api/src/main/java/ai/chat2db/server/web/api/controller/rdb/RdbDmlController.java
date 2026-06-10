@@ -76,15 +76,15 @@ public class RdbDmlController {
             ExecuteResult firstResult = resultList.get(0);
             if (canSuggestVirtualForeignKeys(firstResult)) {
                 List<VirtualForeignKey> existingFKs = foreignKeySyncService.listAllForeignKeys(
-                        request.getDataSourceId(),
-                        request.getDatabaseName(),
-                        request.getSchemaName(),
-                        null
-                ).stream()
+                                request.getDataSourceId(),
+                                request.getDatabaseName(),
+                                request.getSchemaName(),
+                                null
+                        ).stream()
                         .filter(fk -> fk instanceof VirtualForeignKey)
                         .map(fk -> (VirtualForeignKey) fk)
                         .toList();
-                
+
                 List<VirtualForeignKeySuggestion> suggestions = virtualFkSuggestionService.suggest(firstResult.getJsqlStatement(), existingFKs);
                 if (!suggestions.isEmpty()) {
                     firstResult.setVkSuggestions(suggestions);
@@ -103,7 +103,6 @@ public class RdbDmlController {
     }
 
 
-
     /**
      * 查询表结构信息
      *
@@ -115,30 +114,12 @@ public class RdbDmlController {
         DlExecuteParam param = rdbWebConverter.request2param(request);
         // 解析sql
         String type = Chat2DBContext.getConnectInfo().getDbType();
-        if (DataSourceTypeEnum.REDIS.getCode().equals(type)) {
-            MetaData metaData = Chat2DBContext.getMetaData();
-            List<Table> tables = metaData.tables(Chat2DBContext.getConnection(), param.getDatabaseName(), param.getSchemaName(), request.getTableName());
-            for (Table table : tables) {
-                if ("string".equals(table.getType())) {
-                    param.setSql("GET " + request.getTableName());
-                } else if ("hash".equals(table.getType())) {
-                    param.setSql("HGETALL " + request.getTableName());
-                } else if ("list".equals(table.getType())) {
-                    param.setSql("LRANGE " + request.getTableName() + " 0 -1");
-                } else if ("set".equals(table.getType())){
-                    param.setSql("SMEMBERS " + request.getTableName());
-                } else if ("zset".equals(table.getType())){
-                    param.setSql("ZRANGE " + request.getTableName() + " 0 -1");
-                } else if ("stream".equals(table.getType())){
-                    param.setSql("XRANGE " + request.getTableName() + " 0 -1");
-                }
-            }
-        } else if (DataSourceTypeEnum.MONGODB.getCode().equals(type)) {
+        if (DataSourceTypeEnum.MONGODB.getCode().equals(type)) {
             param.setSql("db." + request.getTableName() + ".find()");
         } else if (DataSourceTypeEnum.PHOENIX.getCode().equals(type)) {
             MetaData metaData = Chat2DBContext.getMetaData();
             // 拼接`tableName`，避免关键字被占用问题
-            param.setSql("select * from " + metaData.getMetaDataName(request.getSchemaName(),request.getTableName()));
+            param.setSql("select * from " + metaData.getMetaDataName(request.getSchemaName(), request.getTableName()));
         } else {
             MetaData metaData = Chat2DBContext.getMetaData();
             // 拼接`tableName`，避免关键字被占用问题
