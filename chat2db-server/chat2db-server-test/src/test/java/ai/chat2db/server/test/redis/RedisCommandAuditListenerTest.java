@@ -11,6 +11,9 @@ class RedisCommandAuditListenerTest {
         Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("SET"));
         Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("del"));
         Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("HSET"));
+        Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("EVAL"));
+        Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("evalsha"));
+        Assertions.assertTrue(RedisCommandAuditListener.shouldAudit("SCRIPT"));
     }
 
     @Test

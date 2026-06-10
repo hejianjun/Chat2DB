@@ -41,6 +41,16 @@ class RedisNativeClientTest {
     }
 
     @Test
+    void parseEvalKeepsQuotedLuaScript() {
+        List<String> statements = RedisCommandParser.splitStatements(
+                "eval \"return redis.call('GET', KEYS[1])\" 1 user:1");
+
+        Assertions.assertEquals(1, statements.size());
+        Assertions.assertEquals(List.of("eval", "return redis.call('GET', KEYS[1])", "1", "user:1"),
+                RedisCommandParser.tokenize(statements.get(0)));
+    }
+
+    @Test
     void parseCommandPositionsKeepOriginalLineNumbers() {
         List<RedisCommandParser.StatementPosition> positions = RedisCommandParser.splitStatementPositions("""
                 

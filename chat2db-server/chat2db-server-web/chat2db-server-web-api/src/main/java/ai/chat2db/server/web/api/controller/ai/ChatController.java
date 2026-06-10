@@ -244,6 +244,10 @@ public class ChatController {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
 
+        if (isRedisPromptWithoutTables(request, promptType)) {
+            return ChatEvent.TABLES_NOT_NEEDED;
+        }
+
         if (!hasTables && PromptType.SQL_OPTIMIZER.getCode().equals(promptType)) {
             return ChatEvent.EXPLAIN_TABLES_NOT_SELECTED;
         }
@@ -254,6 +258,22 @@ public class ChatController {
     private boolean isRedisNl2Sql(ChatQueryRequest request, String promptType) {
         String effectivePromptType = StrUtil.isBlank(promptType) ? PromptType.NL_2_SQL.getCode() : promptType;
         if (!PromptType.NL_2_SQL.getCode().equals(effectivePromptType)) {
+            return false;
+        }
+        return isRedisDataSource(request);
+    }
+
+    private boolean isRedisPromptWithoutTables(ChatQueryRequest request, String promptType) {
+        if (!PromptType.SQL_EXPLAIN.getCode().equals(promptType)
+                && !PromptType.SQL_OPTIMIZER.getCode().equals(promptType)
+                && !PromptType.SQL_2_SQL.getCode().equals(promptType)) {
+            return false;
+        }
+        return isRedisDataSource(request);
+    }
+
+    private boolean isRedisDataSource(ChatQueryRequest request) {
+        if (request == null || request.getDataSourceId() == null) {
             return false;
         }
         try {

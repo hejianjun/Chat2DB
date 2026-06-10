@@ -13,13 +13,20 @@ import io.lettuce.core.KeyScanCursor;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
 import io.lettuce.core.api.sync.RedisCommands;
+import io.lettuce.core.codec.StringCodec;
+import io.lettuce.core.output.CommandOutput;
+import io.lettuce.core.protocol.CommandArgs;
+import io.lettuce.core.protocol.CommandType;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -97,6 +104,9 @@ public class RedisCommandExecutor implements CommandExecutor {
                 case "SET" -> status(result, commands.set(required(args, 1, "key"), required(args, 2, "value")));
                 case "KEYS" -> listValues(result, "key", commands.keys(required(args, 1, "pattern")));
                 case "SCAN" -> scan(commands, args, result);
+                case "EVAL" -> scriptCommand(commands, CommandType.EVAL, args, result);
+                case "EVALSHA" -> scriptCommand(commands, CommandType.EVALSHA, args, result);
+                case "SCRIPT" -> scriptCommand(commands, CommandType.SCRIPT, args, result);
                 case "HGET" -> oneValue(result, "value", commands.hget(required(args, 1, "key"),
                         required(args, 2, "field")));
                 case "HGETALL" -> mapValues(result, "field", "value", commands.hgetall(required(args, 1, "key")));
@@ -116,7 +126,7 @@ public class RedisCommandExecutor implements CommandExecutor {
             }
         } catch (Exception e) {
             result.setSuccess(Boolean.FALSE);
-            result.setMessage(e.getMessage());
+            result.setMessage(StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName()));
         } finally {
             result.setDuration(timer.interval());
         }
@@ -172,6 +182,19 @@ public class RedisCommandExecutor implements CommandExecutor {
         result.setFuzzyTotal(scan.isFinished() ? Integer.toString(rows.size()) : rows.size() + "+");
     }
 
+    private void scriptCommand(RedisCommands<String, String> commands, CommandType commandType, List<String> args,
+                               ExecuteResult result) {
+        if (args.size() <= 1) {
+            throw new IllegalArgumentException("Missing Redis command arguments");
+        }
+        CommandArgs<String, String> commandArgs = new CommandArgs<>(StringCodec.UTF8);
+        for (int i = 1; i < args.size(); i++) {
+            commandArgs.add(args.get(i));
+        }
+        Object value = commands.dispatch(commandType, new FlexibleRedisOutput(StringCodec.UTF8), commandArgs);
+        scriptResult(result, value);
+    }
+
     private boolean isScanOption(String token) {
         return "MATCH".equalsIgnoreCase(token) || "COUNT".equalsIgnoreCase(token);
     }
@@ -217,6 +240,34 @@ public class RedisCommandExecutor implements CommandExecutor {
         result.setPageSize(rows.size());
         result.setHasNextPage(Boolean.FALSE);
         result.setFuzzyTotal(Integer.toString(rows.size()));
+    }
+
+    private void scriptResult(ExecuteResult result, Object value) {
+        if (!(value instanceof List<?> values)) {
+            oneValue(result, "value", value);
+            return;
+        }
+        List<List<String>> rows = new ArrayList<>();
+        appendScriptRows(rows, "", values);
+        result.setHeaderList(headers("path", "value"));
+        result.setDataList(rows);
+        result.setSqlType(SqlTypeEnum.SELECT.getCode());
+        result.setPageNo(1);
+        result.setPageSize(rows.size());
+        result.setHasNextPage(Boolean.FALSE);
+        result.setFuzzyTotal(Integer.toString(rows.size()));
+    }
+
+    private void appendScriptRows(List<List<String>> rows, String path, List<?> values) {
+        for (int i = 0; i < values.size(); i++) {
+            String itemPath = path + "[" + i + "]";
+            Object value = values.get(i);
+            if (value instanceof List<?> nestedValues) {
+                appendScriptRows(rows, itemPath, nestedValues);
+            } else {
+                rows.add(Arrays.asList(itemPath, String.valueOf(value)));
+            }
+        }
     }
 
     private List<Header> headers(String... names) {
@@ -266,5 +317,79 @@ public class RedisCommandExecutor implements CommandExecutor {
 
     private double parseDouble(List<String> args, int index, String name) {
         return Double.parseDouble(required(args, index, name));
+    }
+
+    private static class FlexibleRedisOutput extends CommandOutput<String, String, Object> {
+
+        private final Deque<List<Object>> stack = new ArrayDeque<>();
+        private int depth;
+
+        FlexibleRedisOutput(StringCodec codec) {
+            super(codec, null);
+        }
+
+        @Override
+        public void set(ByteBuffer bytes) {
+            append(bytes == null ? null : codec.decodeValue(bytes));
+        }
+
+        @Override
+        public void setSingle(ByteBuffer bytes) {
+            set(bytes);
+        }
+
+        @Override
+        public void setBigNumber(ByteBuffer bytes) {
+            set(bytes);
+        }
+
+        @Override
+        public void set(long integer) {
+            append(integer);
+        }
+
+        @Override
+        public void set(double number) {
+            append(number);
+        }
+
+        @Override
+        public void set(boolean value) {
+            append(value);
+        }
+
+        @Override
+        public void multi(int count) {
+            List<Object> values = new ArrayList<>(Math.max(count, 0));
+            append(values);
+            stack.push(values);
+            depth++;
+        }
+
+        @Override
+        public void multiArray(int count) {
+            multi(count);
+        }
+
+        @Override
+        public void multiMap(int count) {
+            multi(count);
+        }
+
+        @Override
+        public void complete(int depth) {
+            if (depth > 0 && depth < this.depth && !stack.isEmpty()) {
+                stack.pop();
+                this.depth--;
+            }
+        }
+
+        private void append(Object value) {
+            if (stack.isEmpty()) {
+                output = value;
+                return;
+            }
+            stack.peek().add(value);
+        }
     }
 }

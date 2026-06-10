@@ -29,7 +29,7 @@ public class RedisCommandAuditListener implements CommandListener {
     private static final Set<String> WRITE_COMMANDS = Set.of(
             "SET", "DEL", "UNLINK", "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "PERSIST", "RENAME",
             "RENAMENX", "HSET", "HDEL", "LPUSH", "RPUSH", "LPOP", "RPOP", "SADD", "SREM", "ZADD", "ZREM",
-            "INCR", "DECR", "INCRBY", "DECRBY", "APPEND", "SETEX", "PSETEX"
+            "INCR", "DECR", "INCRBY", "DECRBY", "APPEND", "SETEX", "PSETEX", "EVAL", "EVALSHA", "SCRIPT"
     );
 
     private final ConnectInfo connectInfo;
