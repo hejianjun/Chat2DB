@@ -47,9 +47,11 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 List<Table> tables = new ArrayList<>();
                 while (resultSet.next()) {
+                    String namespace = resultSet.getString("namespace");
+                    String name = resultSet.getString("tableName");
                     Table table = Table.builder()
-                            .name(resultSet.getString(1))
-                            .databaseName(databaseName)
+                            .name(name)
+                            .databaseName(StringUtils.isNotBlank(namespace) ? namespace : databaseName)
                             .schemaName(schemaName)
                             .type("TABLE")
                             .build();
