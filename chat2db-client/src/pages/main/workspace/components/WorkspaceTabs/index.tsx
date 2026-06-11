@@ -253,6 +253,7 @@ const WorkspaceTabs = memo(() => {
     let generatedTitle = '';
 
     const params = formatParams({
+      conversationId: uid,
       message: sqlContent,
       promptType: 'TITLE_GENERATION',
       dataSourceId: tabData.uniqueData?.dataSourceId,

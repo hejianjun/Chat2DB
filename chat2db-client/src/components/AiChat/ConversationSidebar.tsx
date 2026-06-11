@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useState, useRef } from 'react';
-import { Button, Input, Modal, Dropdown, message, Spin } from 'antd';
+import { Button, Input, Modal, Dropdown, message, Spin, type MenuProps } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -8,9 +8,12 @@ import {
   MenuUnfoldOutlined,
   MessageOutlined,
   MoreOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import i18n from '@/i18n';
 import { useAiChatStore, AiChatSession } from '@/pages/main/workspace/store/aiChatStore';
+import connectToEventSource from '@/utils/eventSource';
+import { formatParams } from '@/utils/url';
 import styles from './index.less';
 
 interface IConversationItemProps {
@@ -19,10 +22,21 @@ interface IConversationItemProps {
   onClick: () => void;
   onDelete: () => void;
   onRename: (title: string) => void;
+  onGenerateTitle: () => void;
+  generatingTitle: boolean;
 }
 
-const ConversationItem = memo<IConversationItemProps>(({ session, active, onClick, onDelete, onRename }) => {
+const ConversationItem = memo<IConversationItemProps>(({
+  session,
+  active,
+  onClick,
+  onDelete,
+  onRename,
+  onGenerateTitle,
+  generatingTitle,
+}) => {
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState(session.title || '');
   const inputRef = useRef<any>(null);
 
@@ -42,62 +56,72 @@ const ConversationItem = memo<IConversationItemProps>(({ session, active, onClic
   };
 
   const displayTitle = session.title || (session.messages[0]?.content || i18n('chat.header.titleFallback')).slice(0, 20);
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'generateTitle',
+      label: generatingTitle ? i18n('common.text.generatingTitle') : i18n('common.text.generateTitle'),
+      icon: <RobotOutlined />,
+      disabled: generatingTitle,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onGenerateTitle();
+      },
+    },
+    {
+      key: 'rename',
+      label: i18n('chat.sidebar.rename'),
+      icon: <EditOutlined />,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        setEditing(true);
+      },
+    },
+    {
+      key: 'delete',
+      label: i18n('chat.sidebar.delete'),
+      icon: <DeleteOutlined />,
+      danger: true,
+      onClick: ({ domEvent }) => {
+        domEvent.stopPropagation();
+        onDelete();
+      },
+    },
+  ];
 
   return (
-    <div
-      className={`${styles.conversationItem} ${active ? styles.conversationItemActive : ''}`}
-      onClick={editing ? undefined : onClick}
+    <Dropdown
+      menu={{ items: menuItems }}
+      trigger={['contextMenu']}
+      open={menuOpen}
+      onOpenChange={setMenuOpen}
+      placement="bottomRight"
     >
-      <MessageOutlined className={styles.conversationItemIcon} />
-      {editing ? (
-        <Input
-          ref={inputRef}
-          size="small"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onPressEnter={handleSubmit}
-          onBlur={handleSubmit}
-          onClick={(e) => e.stopPropagation()}
-          className={styles.conversationItemInput}
-        />
-      ) : (
-        <span className={styles.conversationItemTitle} title={displayTitle}>
-          {displayTitle}
-        </span>
-      )}
-      <Dropdown
-        menu={{
-          items: [
-            {
-              key: 'rename',
-              label: i18n('chat.sidebar.rename'),
-              icon: <EditOutlined />,
-              onClick: ({ domEvent }) => {
-                domEvent.stopPropagation();
-                setEditing(true);
-              },
-            },
-            {
-              key: 'delete',
-              label: i18n('chat.sidebar.delete'),
-              icon: <DeleteOutlined />,
-              danger: true,
-              onClick: ({ domEvent }) => {
-                domEvent.stopPropagation();
-                onDelete();
-              },
-            },
-          ],
-        }}
-        trigger={['click']}
-        placement="bottomRight"
+      <div
+        className={`${styles.conversationItem} ${active ? styles.conversationItemActive : ''}`}
+        onClick={editing ? undefined : onClick}
       >
-        <MoreOutlined
-          className={styles.conversationItemMore}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </Dropdown>
-    </div>
+        <MessageOutlined className={styles.conversationItemIcon} />
+        {editing ? (
+          <Input
+            ref={inputRef}
+            size="small"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onPressEnter={handleSubmit}
+            onBlur={handleSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className={styles.conversationItemInput}
+          />
+        ) : (
+          <span className={styles.conversationItemTitle} title={displayTitle}>
+            {displayTitle}
+          </span>
+        )}
+        <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
+          <MoreOutlined className={styles.conversationItemMore} onClick={(e) => e.stopPropagation()} />
+        </Dropdown>
+      </div>
+    </Dropdown>
   );
 });
 ConversationItem.displayName = 'ConversationItem';
@@ -120,6 +144,8 @@ export default memo((props: {
     renameSession,
     loadConversationList,
   } = useAiChatStore();
+  const [generatingTitleId, setGeneratingTitleId] = useState<string | null>(null);
+  const closeEventSourceRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     loadConversationList(true);
@@ -143,6 +169,60 @@ export default memo((props: {
   const handleRename = (conversationId: string, title: string) => {
     renameSession(conversationId, title).catch(() => message.error('重命名失败'));
   };
+
+  const handleGenerateTitle = (session: AiChatSession) => {
+    if (generatingTitleId) {
+      return;
+    }
+
+    const messageContent = session.messages.find((item) => item.role === 'user')?.content
+      || session.messages[0]?.content
+      || session.title;
+    if (!messageContent?.trim()) {
+      message.warning(i18n('workspace.tips.noSqlContent'));
+      return;
+    }
+
+    setGeneratingTitleId(session.sessionId);
+    let generatedTitle = '';
+    const params = formatParams({
+      conversationId: session.sessionId,
+      message: messageContent,
+      promptType: 'TITLE_GENERATION',
+      dataSourceId: session.dataSourceId,
+      databaseName: session.databaseName,
+      schemaName: session.schemaName,
+    });
+
+    closeEventSourceRef.current = connectToEventSource({
+      url: `/api/ai/chat?${params}`,
+      uid: session.sessionId,
+      onMessage: (content?: string) => {
+        if (content) {
+          generatedTitle += content;
+        }
+      },
+      onDone: () => {
+        setGeneratingTitleId(null);
+        const cleanTitle = generatedTitle.replace(/^["'`]+|["'`]+$/g, '').trim();
+        if (cleanTitle) {
+          renameSession(session.sessionId, cleanTitle).then(() => message.success(i18n('common.tips.updateSuccess')));
+        } else {
+          message.warning(i18n('workspace.tips.generateTitleFailed'));
+        }
+      },
+      onError: () => {
+        setGeneratingTitleId(null);
+        message.error(i18n('workspace.tips.generateTitleFailed'));
+      },
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      closeEventSourceRef.current?.();
+    };
+  }, []);
 
   if (props.collapsed) {
     return (
@@ -217,6 +297,8 @@ export default memo((props: {
                 onClick={() => switchToSession(item.conversationId)}
                 onDelete={() => handleDelete(item.conversationId)}
                 onRename={(title) => handleRename(item.conversationId, title)}
+                onGenerateTitle={() => handleGenerateTitle(sessionForRender)}
+                generatingTitle={generatingTitleId === item.conversationId}
               />
             );
           })
