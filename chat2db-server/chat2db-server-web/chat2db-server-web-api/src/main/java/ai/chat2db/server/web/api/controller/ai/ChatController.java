@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -90,15 +89,15 @@ public class ChatController {
 
     @GetMapping("/chat")
     @CrossOrigin
-    public SseEmitter chat(ChatQueryRequest queryRequest, @RequestHeader Map<String, String> headers)
-            throws IOException {
-        String uid = headers.get("uid");
-        if (StrUtil.isBlank(uid)) {
-            throw new ParamBusinessException("uid");
+    public SseEmitter chat(ChatQueryRequest queryRequest) throws IOException {
+        queryRequest = resolvePayload(queryRequest);
+
+        String sessionKey = queryRequest.getConversationId();
+        if (StrUtil.isBlank(sessionKey)) {
+            throw new ParamBusinessException("conversationId");
         }
 
-        log.info("[ChatController] Received uid from client: {}", uid);
-        queryRequest = resolvePayload(queryRequest);
+        log.info("[ChatController] Received conversationId: {}", sessionKey);
         SseEmitter sseEmitter = new SseEmitter(CHAT_TIMEOUT);
 
         // 根据提示类型选择是否使用快速模型
@@ -120,7 +119,7 @@ public class ChatController {
         boolean firstTurn = isFirstTurnOfConversation(queryRequest, loginUser);
 
         ChatContext ctx = ChatContext.builder()
-                .uid(uid)
+                .uid(sessionKey)
                 .request(queryRequest)
                 .sseEmitter(sseEmitter)
                 .chatClient(chatClient)
@@ -131,21 +130,21 @@ public class ChatController {
                 .firstTurnOfConversation(firstTurn)
                 .build();
 
-        setupSseCallbacks(sseEmitter, uid, ctx);
+        setupSseCallbacks(sseEmitter, sessionKey, ctx);
 
         sseEmitter.send(SseEmitter.event()
-                .id(uid)
+                .id(sessionKey)
                 .name("connect")
                 .data(LocalDateTime.now().toString())
                 .reconnectTime(3000));
 
-        StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(uid);
+        StateMachine<ChatState, ChatEvent> stateMachine = stateMachineFactory.getStateMachine(sessionKey);
         stateMachine.getExtendedState().getVariables().put("chatContext", ctx);
 
-        activeSessions.put(uid, stateMachine);
-        activeContexts.put(uid, ctx);
-        log.info("[ChatController] Session stored with uid: {}, activeSessions size: {}, activeContexts size: {}",
-                uid, activeSessions.size(), activeContexts.size());
+        activeSessions.put(sessionKey, stateMachine);
+        activeContexts.put(sessionKey, ctx);
+        log.info("[ChatController] Session stored with conversationId: {}, activeSessions size: {}, activeContexts size: {}",
+                sessionKey, activeSessions.size(), activeContexts.size());
 
         stateMachine.startReactively().subscribe();
         ChatEvent initialEvent = determineInitialEvent(queryRequest);
@@ -200,33 +199,33 @@ public class ChatController {
         }
     }
 
-    @DeleteMapping("/chat/{uid}")
+    @DeleteMapping("/chat/{conversationId}")
     @CrossOrigin
-    public ResponseEntity<Void> cancelChat(@PathVariable String uid) {
-        log.info("[ChatController] Cancel request received for uid: {}", uid);
+    public ResponseEntity<Void> cancelChat(@PathVariable String conversationId) {
+        log.info("[ChatController] Cancel request received for conversationId: {}", conversationId);
         log.info("[ChatController] activeSessions keys: {}", activeSessions.keySet());
         log.info("[ChatController] activeContexts keys: {}", activeContexts.keySet());
-        ChatContext ctx = activeContexts.get(uid);
+        ChatContext ctx = activeContexts.get(conversationId);
         if (ctx != null) {
-            log.info("[ChatController] Found context for uid: {}, cancelling...", uid);
+            log.info("[ChatController] Found context for conversationId: {}, cancelling...", conversationId);
             ctx.setCancelled(true);
             try {
                 ctx.getSseEmitter().complete();
             } catch (Exception ignored) {
             }
         } else {
-            log.warn("[ChatController] No context found for uid: {}", uid);
+            log.warn("[ChatController] No context found for conversationId: {}", conversationId);
         }
 
-        StateMachine<ChatState, ChatEvent> sm = activeSessions.get(uid);
+        StateMachine<ChatState, ChatEvent> sm = activeSessions.get(conversationId);
         if (sm != null) {
-            log.info("[ChatController] Found state machine for uid: {}, sending CANCEL event", uid);
+            log.info("[ChatController] Found state machine for conversationId: {}, sending CANCEL event", conversationId);
             sm.sendEvent(MessageBuilder.withPayload(ChatEvent.CANCEL).build());
         } else {
-            log.warn("[ChatController] No state machine found for uid: {}", uid);
+            log.warn("[ChatController] No state machine found for conversationId: {}", conversationId);
         }
 
-        cleanupSession(uid);
+        cleanupSession(conversationId);
         return ResponseEntity.ok().build();
     }
 
