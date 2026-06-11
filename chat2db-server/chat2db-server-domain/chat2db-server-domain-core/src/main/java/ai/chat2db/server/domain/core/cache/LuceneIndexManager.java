@@ -266,6 +266,28 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         }
     }
 
+    @SneakyThrows
+    public T findDocument(T source) {
+        if (source == null) {
+            throw new IllegalArgumentException("Source must not be null");
+        }
+        lock.readLock().lock();
+        try {
+            String fld = StringUtils.uncapitalize(source.getClassType().getSimpleName() + "Name");
+            TermQuery termQuery = new TermQuery(new Term(fld, source.getName()));
+            BooleanQuery query = buildBooleanQuery(source)
+                    .add(termQuery, BooleanClause.Occur.FILTER)
+                    .build();
+            TopDocs topDocs = searcher.search(query, 1);
+            if (topDocs.totalHits.value == 0) {
+                return null;
+            }
+            return (T) getDocument(source.getClassType(), topDocs.scoreDocs[0].doc);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * 构建更新文档时使用的布尔查询
      *

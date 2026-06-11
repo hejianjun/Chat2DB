@@ -80,14 +80,18 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
     @Override
     public void updateComment(Long dataSourceId, String databaseName, String prefix, String comment) {
+        LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
         RedisKeyPrefix source = RedisKeyPrefix.builder()
                 .dataSourceId(dataSourceId)
                 .databaseName(databaseName)
                 .name(prefix)
                 .comment(comment)
-                .refreshVersion(getRunningRefreshVersion(dataSourceId, databaseName))
                 .build();
-        managerFactory.<RedisKeyPrefix>getManager(dataSourceId).updateDocument(source);
+        RedisKeyPrefix storedPrefix = luceneMgr.findDocument(source);
+        if (storedPrefix != null) {
+            source.setRefreshVersion(storedPrefix.getRefreshVersion());
+        }
+        luceneMgr.updateDocument(source);
     }
 
     @Override
@@ -206,14 +210,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .databaseName(databaseName)
                 .build();
         luceneMgr.deleteByDatabaseAndSchemaExceptLongField(queryModel, "refreshVersion", refreshVersion);
-    }
-
-    private Long getRunningRefreshVersion(Long dataSourceId, String databaseName) {
-        RedisKeyPrefixBuildStatus status = statusMap.get(buildStatusKey(dataSourceId, databaseName));
-        if (status == null || !STATUS_RUNNING.equals(status.getStatus())) {
-            return null;
-        }
-        return status.getRefreshVersion();
     }
 
     private String buildStatusKey(Long dataSourceId, String databaseName) {

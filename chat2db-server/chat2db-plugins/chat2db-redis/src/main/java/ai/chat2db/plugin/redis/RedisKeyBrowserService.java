@@ -232,15 +232,11 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
         return commands.scan(scanCursor, scanArgs).toCompletableFuture()
                 .thenCompose(result -> {
                     List<String> keys = result.getKeys();
-                    long remaining = count - emitted;
-                    List<String> selectedKeys = keys.size() > remaining
-                            ? keys.subList(0, Math.toIntExact(remaining))
-                            : keys;
-                    long nextEmitted = emitted + selectedKeys.size();
+                    long nextEmitted = emitted + keys.size();
                     ScanCursor nextCursor = ScanCursor.of(result.getCursor());
                     nextCursor.setFinished(result.isFinished());
                     boolean shouldStop = result.isFinished() || nextEmitted >= count;
-                    return emitKeyInfoAsync(commands, selectedKeys, emitter)
+                    return emitKeyInfoAsync(commands, keys, emitter)
                             .thenCompose(ignored -> {
                                 if (shouldStop) {
                                     return emitter.finish()
@@ -271,14 +267,10 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
         return commands.scan(scanCursor, scanArgs).toCompletableFuture()
                 .thenCompose(result -> {
                     List<String> keys = result.getKeys();
-                    long remaining = count - emitted;
-                    List<String> selectedKeys = keys.size() > remaining
-                            ? keys.subList(0, Math.toIntExact(remaining))
-                            : keys;
-                    if (!selectedKeys.isEmpty()) {
-                        batchConsumer.accept(selectedKeys);
+                    if (!keys.isEmpty()) {
+                        batchConsumer.accept(keys);
                     }
-                    long nextEmitted = emitted + selectedKeys.size();
+                    long nextEmitted = emitted + keys.size();
                     ScanCursor nextCursor = ScanCursor.of(result.getCursor());
                     nextCursor.setFinished(result.isFinished());
                     if (result.isFinished() || nextEmitted >= count) {
