@@ -137,6 +137,41 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     }
 
     @Override
+    public CompletableFuture<RedisKeyScanResult> streamKeyNames(String databaseName, String searchKey, String cursor,
+                                                                int count, Consumer<List<String>> batchConsumer) {
+        try {
+            RedisConnectionProvider.RedisConnectionContext context =
+                    RedisConnectionProvider.open(Chat2DBContext.getConnectInfo());
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            AtomicBoolean closed = new AtomicBoolean(false);
+            CompletableFuture<RedisKeyScanResult> operation = selectDatabase(commands, databaseName)
+                    .thenCompose(ignored -> {
+                        String pattern = StringUtils.trimToNull(searchKey);
+                        long limit = count < 0 ? Long.MAX_VALUE : count == 0 ? KEY_SCAN_BATCH_SIZE : count;
+                        return scanKeyNamesAsync(commands, pattern, cursor, limit, batchConsumer);
+                    });
+            CompletableFuture<RedisKeyScanResult> result = new CompletableFuture<>();
+            operation.whenComplete((scanResult, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    result.complete(scanResult);
+                }
+                closeContextAsync(context, closed);
+            });
+            result.whenComplete((ignored, throwable) -> {
+                if (result.isCancelled()) {
+                    operation.cancel(true);
+                    closeContextAsync(context, closed);
+                }
+            });
+            return result;
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    @Override
     public RedisKeyInfo queryKey(String databaseName, String keyName) {
         try (RedisConnectionProvider.RedisConnectionContext context =
                      RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
@@ -322,6 +357,43 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
                                 }
                                 return scanKeyInfoAsync(commands, scanArgs, nextCursor, count, nextEmitted, emitter);
                             });
+                });
+    }
+
+    private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
+                                                                    String pattern, String cursor, long count,
+                                                                    Consumer<List<String>> batchConsumer) {
+        ScanArgs scanArgs = new ScanArgs().limit(KEY_SCAN_BATCH_SIZE);
+        if (StringUtils.isNotBlank(pattern)) {
+            scanArgs.match(pattern);
+        }
+        return scanKeyNamesAsync(commands, scanArgs, buildScanCursor(cursor), count, 0, batchConsumer);
+    }
+
+    private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
+                                                                    ScanArgs scanArgs, ScanCursor scanCursor,
+                                                                    long count, long emitted,
+                                                                    Consumer<List<String>> batchConsumer) {
+        if (emitted >= count) {
+            return CompletableFuture.completedFuture(buildScanResult(scanCursor, emitted));
+        }
+        return commands.scan(scanCursor, scanArgs).toCompletableFuture()
+                .thenCompose(result -> {
+                    List<String> keys = result.getKeys();
+                    long remaining = count - emitted;
+                    List<String> selectedKeys = keys.size() > remaining
+                            ? keys.subList(0, Math.toIntExact(remaining))
+                            : keys;
+                    if (!selectedKeys.isEmpty()) {
+                        batchConsumer.accept(selectedKeys);
+                    }
+                    long nextEmitted = emitted + selectedKeys.size();
+                    ScanCursor nextCursor = ScanCursor.of(result.getCursor());
+                    nextCursor.setFinished(result.isFinished());
+                    if (result.isFinished() || nextEmitted >= count) {
+                        return CompletableFuture.completedFuture(buildScanResult(nextCursor, nextEmitted));
+                    }
+                    return scanKeyNamesAsync(commands, scanArgs, nextCursor, count, nextEmitted, batchConsumer);
                 });
     }
 

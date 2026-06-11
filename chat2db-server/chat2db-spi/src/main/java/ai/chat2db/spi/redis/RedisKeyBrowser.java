@@ -10,6 +10,12 @@ public interface RedisKeyBrowser {
     CompletableFuture<RedisKeyScanResult> streamKeys(String databaseName, String searchKey, String cursor, int count,
                                                      Consumer<List<RedisKeyInfo>> batchConsumer);
 
+    default CompletableFuture<RedisKeyScanResult> streamKeyNames(String databaseName, String searchKey, String cursor,
+                                                                 int count, Consumer<List<String>> batchConsumer) {
+        return streamKeys(databaseName, searchKey, cursor, count,
+                batch -> batchConsumer.accept(batch.stream().map(RedisKeyInfo::getName).toList()));
+    }
+
     RedisKeyInfo queryKey(String databaseName, String keyName);
 
     void createKey(String databaseName, String keyName, String keyType, Object value, Long ttl);

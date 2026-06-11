@@ -344,7 +344,8 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             source.setVersion(1L);
         }
 
-        // 3. AI注释继承逻辑（新数据为空时从旧数据获取）
+        // 3. 注释继承逻辑（新数据为空时从旧数据获取）
+        handleCommentInheritance(source, sourceMap);
         handleAiCommentInheritance(source, sourceMap);
 
         // 4. 使用注解自动构建字段（替代 instanceof 判断）
@@ -388,6 +389,39 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             if (oldData != null) {
                 source.setAiComment(oldData.getString("aiComment"));
             }
+        }
+    }
+
+    private void handleCommentInheritance(T source, Map<String, JSONObject> sourceMap) {
+        String nameValue = source.getName();
+        if (nameValue == null) {
+            return;
+        }
+
+        String comment = source.getComment();
+        if (comment == null && sourceMap != null) {
+            JSONObject oldData = sourceMap.get(nameValue);
+            if (oldData != null) {
+                source.setComment(oldData.getString("comment"));
+            }
+        }
+    }
+
+    @SneakyThrows
+    public void deleteDocument(T source) {
+        if (source == null) {
+            throw new IllegalArgumentException("Source must not be null");
+        }
+        lock.writeLock().lock();
+        try {
+            String fld = StringUtils.uncapitalize(source.getClassType().getSimpleName() + "Name");
+            BooleanQuery query = buildBooleanQuery(source)
+                    .add(new TermQuery(new Term(fld, source.getName())), BooleanClause.Occur.FILTER)
+                    .build();
+            writer.deleteDocuments(query);
+            reload();
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 

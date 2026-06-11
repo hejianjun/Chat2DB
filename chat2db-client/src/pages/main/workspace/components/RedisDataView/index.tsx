@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Empty, Input, InputNumber, Modal, Select, Table, Tag, Tooltip, message } from 'antd';
+import { Button, Empty, Input, InputNumber, Modal, Segmented, Select, Table, Tag, Tooltip, message } from 'antd';
 import {
   CloseOutlined,
   DeleteOutlined,
@@ -12,7 +12,7 @@ import {
 import type { ColumnsType, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { v4 as uuid } from 'uuid';
 
-import redisService, { IRedisKeyItem } from '@/service/redis';
+import redisService, { IRedisKeyItem, IRedisKeyPrefixBuildStatus, IRedisKeyPrefixItem } from '@/service/redis';
 
 import styles from './index.less';
 
@@ -28,12 +28,19 @@ interface IRedisKeyRow extends IRedisKeyItem {
   displayName: string;
   isGroup?: boolean;
   count?: number;
+  comment?: string;
+  inheritedComment?: string;
+  keyCount?: number;
+  prefixOnly?: boolean;
   children?: IRedisKeyRow[];
 }
 
 const DEFAULT_LIMIT = 5000;
 const NO_TTL = -1;
 const KEY_TYPES = ['string', 'hash', 'list', 'set', 'zset'];
+const SEARCH_MODE_KEY = 'key';
+const SEARCH_MODE_PREFIX = 'prefix';
+const RUNNING_STATUS = 'RUNNING';
 
 interface IHashFieldRow {
   id: string;
@@ -44,11 +51,19 @@ interface IHashFieldRow {
 const RedisDataView = memo((props: IProps) => {
   const { uniqueData } = props;
   const [searchKey, setSearchKey] = useState('');
+  const [searchMode, setSearchMode] = useState<string>(SEARCH_MODE_KEY);
   const [data, setData] = useState<IRedisKeyItem[]>([]);
+  const [prefixComments, setPrefixComments] = useState<Record<string, IRedisKeyPrefixItem>>({});
+  const [prefixSearchData, setPrefixSearchData] = useState<IRedisKeyPrefixItem[]>([]);
+  const [prefixBuildStatus, setPrefixBuildStatus] = useState<IRedisKeyPrefixBuildStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [prefixSaving, setPrefixSaving] = useState(false);
+  const [prefixLoading, setPrefixLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState('');
+  const [selectedPrefix, setSelectedPrefix] = useState('');
+  const [prefixCommentDraft, setPrefixCommentDraft] = useState('');
   const [detail, setDetail] = useState<IRedisKeyItem | null>(null);
   const [editorKey, setEditorKey] = useState('');
   const [editorType, setEditorType] = useState('string');
@@ -80,9 +95,7 @@ const RedisDataView = memo((props: IProps) => {
     setEditorTtl(ttl);
     setHashFieldFilter('');
     if (type === 'hash' && value && typeof value === 'object' && !Array.isArray(value)) {
-      const originalMap = Object.fromEntries(
-        Object.entries(value).map(([k, v]) => [k, String(v ?? '')]),
-      );
+      const originalMap = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, String(v ?? '')]));
       setOriginalHashFields(originalMap);
       setHashFields(
         Object.entries(value).map(([field, fieldValue]) => ({
@@ -101,6 +114,126 @@ const RedisDataView = memo((props: IProps) => {
       return;
     }
     setTextValue(value === undefined || value === null ? '' : String(value));
+  };
+
+  const loadPrefixBuildStatus = () => {
+    if (!uniqueData?.dataSourceId) {
+      return;
+    }
+    redisService
+      .getKeyPrefixBuildStatus({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+      })
+      .then((status) => {
+        setPrefixBuildStatus(status || null);
+      })
+      .catch(() => {
+        setPrefixBuildStatus(null);
+      });
+  };
+
+  const loadPrefixComments = (keyword = '', refresh = false, syncSearchResult = false) => {
+    if (!uniqueData?.dataSourceId) {
+      return;
+    }
+    setPrefixLoading(true);
+    redisService
+      .searchKeyPrefixes({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        searchKey: keyword,
+        refresh,
+      })
+      .then((items) => {
+        const list = items || [];
+        setPrefixComments((current) => mergePrefixComments(current, list));
+        if (syncSearchResult) {
+          setPrefixSearchData(list);
+        }
+      })
+      .catch((error) => {
+        if (syncSearchResult) {
+          message.error(String(error || 'Redis key 前缀加载失败'));
+        }
+      })
+      .finally(() => setPrefixLoading(false));
+  };
+
+  const searchPrefixes = (keyword = searchKey, refresh = false) => {
+    loadPrefixComments(keyword, refresh, true);
+    loadPrefixBuildStatus();
+  };
+
+  const refreshPrefixCache = () => {
+    if (!uniqueData?.dataSourceId) {
+      return;
+    }
+    setPrefixLoading(true);
+    redisService
+      .refreshKeyPrefixCache({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+      })
+      .then(() => {
+        message.success('Redis key 前缀缓存已开始刷新');
+        searchPrefixes(searchMode === SEARCH_MODE_PREFIX ? searchKey : '', false);
+      })
+      .catch((error) => {
+        message.error(String(error || 'Redis key 前缀缓存刷新失败'));
+      })
+      .finally(() => setPrefixLoading(false));
+  };
+
+  const openPrefixEditor = (record: IRedisKeyRow) => {
+    setCreating(false);
+    setDetail(null);
+    setSelectedKey('');
+    setSelectedPrefix(record.name);
+    setPrefixCommentDraft(record.comment || prefixComments[record.name]?.comment || '');
+  };
+
+  const savePrefixComment = () => {
+    if (!uniqueData?.dataSourceId || !selectedPrefix) {
+      return;
+    }
+    const comment = prefixCommentDraft.trim();
+    setPrefixSaving(true);
+    redisService
+      .updateKeyPrefixComment({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        prefix: selectedPrefix,
+        comment,
+      })
+      .then(() => {
+        setPrefixComments((current) => ({
+          ...current,
+          [selectedPrefix]: {
+            ...(current[selectedPrefix] || { name: selectedPrefix }),
+            name: selectedPrefix,
+            comment,
+          },
+        }));
+        setPrefixSearchData((current) =>
+          current.map((item) => (item.name === selectedPrefix ? { ...item, comment } : item)),
+        );
+        message.success('Redis key 前缀注释已保存');
+      })
+      .catch((error) => {
+        message.error(String(error || 'Redis key 前缀注释保存失败'));
+      })
+      .finally(() => setPrefixSaving(false));
+  };
+
+  const loadKeysByPrefix = () => {
+    if (!selectedPrefix) {
+      return;
+    }
+    const keyword = `${selectedPrefix}:*`;
+    setSearchMode(SEARCH_MODE_KEY);
+    setSearchKey(keyword);
+    loadData(keyword, keyLimit);
   };
 
   const loadData = (keyword = searchKey, count = keyLimit, cursor = '0', append = false) => {
@@ -157,6 +290,7 @@ const RedisDataView = memo((props: IProps) => {
     const requestId = uuid();
     detailRequestRef.current = requestId;
     setSelectedKey(keyName);
+    setSelectedPrefix('');
     setCreating(false);
     setDetail(null);
     setDetailLoading(true);
@@ -269,6 +403,7 @@ const RedisDataView = memo((props: IProps) => {
     detailRequestRef.current = '';
     setCreating(true);
     setSelectedKey('');
+    setSelectedPrefix('');
     setDetail({ name: '', type: 'string', value: '', ttl: NO_TTL });
     setEditorKey('');
     setEditorType('string');
@@ -301,6 +436,7 @@ const RedisDataView = memo((props: IProps) => {
           .then(() => {
             message.success('Redis key 已删除');
             setSelectedKey('');
+            setSelectedPrefix('');
             setDetail(null);
             loadData(searchKey, keyLimit);
           })
@@ -311,6 +447,10 @@ const RedisDataView = memo((props: IProps) => {
   };
 
   const refreshData = () => {
+    if (searchMode === SEARCH_MODE_PREFIX) {
+      searchPrefixes(searchKey);
+      return;
+    }
     loadData(searchKey, keyLimit);
   };
 
@@ -330,11 +470,24 @@ const RedisDataView = memo((props: IProps) => {
 
   useEffect(() => {
     loadData('');
+    loadPrefixComments('');
+    loadPrefixBuildStatus();
     return () => {
       closeStreamRef.current?.();
       closeStreamRef.current = null;
     };
   }, [uniqueData?.dataSourceId, uniqueData?.databaseName]);
+
+  useEffect(() => {
+    if (prefixBuildStatus?.status !== RUNNING_STATUS || !uniqueData?.dataSourceId) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      loadPrefixBuildStatus();
+      loadPrefixComments(searchMode === SEARCH_MODE_PREFIX ? searchKey : '', false, searchMode === SEARCH_MODE_PREFIX);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [prefixBuildStatus?.status, searchMode, searchKey, uniqueData?.dataSourceId, uniqueData?.databaseName]);
 
   useEffect(() => {
     const tableWrap = tableWrapRef.current;
@@ -363,12 +516,13 @@ const RedisDataView = memo((props: IProps) => {
 
   // 构建树形数据，若有排序则递归排序每层 children
   const tableData = useMemo(() => {
-    const tree = buildRows(data);
+    const tree =
+      searchMode === SEARCH_MODE_PREFIX ? buildPrefixRows(prefixSearchData) : buildRows(data, prefixComments);
     if (!sortInfo) {
       return tree;
     }
     return sortTree(tree, sortInfo.field, sortInfo.order);
-  }, [data, sortInfo]);
+  }, [data, prefixComments, prefixSearchData, searchMode, sortInfo]);
 
   const filteredHashFields = useMemo(() => {
     const keyword = hashFieldFilter.trim().toLowerCase();
@@ -411,7 +565,7 @@ const RedisDataView = memo((props: IProps) => {
       {
         title: '键',
         dataIndex: 'displayName',
-        width: '34%',
+        width: '28%',
         sorter: true,
         render: (text, record) => {
           if (record.isGroup) {
@@ -424,6 +578,30 @@ const RedisDataView = memo((props: IProps) => {
           return (
             <Tooltip title={record.name}>
               <div className={styles.keyName}>{text}</div>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        title: '注释',
+        dataIndex: 'comment',
+        width: '24%',
+        render: (comment, record) => {
+          if (record.isGroup) {
+            return comment ? (
+              <Tooltip title={comment}>
+                <div className={styles.commentCell}>{comment}</div>
+              </Tooltip>
+            ) : (
+              <span className={styles.emptyComment}>-</span>
+            );
+          }
+          if (!record.inheritedComment) {
+            return null;
+          }
+          return (
+            <Tooltip title={`继承自前缀注释: ${record.inheritedComment}`}>
+              <div className={styles.commentCell}>{record.inheritedComment}</div>
             </Tooltip>
           );
         },
@@ -497,20 +675,42 @@ const RedisDataView = memo((props: IProps) => {
   return (
     <div className={styles.redisDataView}>
       <div className={styles.toolbar}>
+        <Segmented
+          size="small"
+          value={searchMode}
+          options={[
+            { label: 'Key 搜索', value: SEARCH_MODE_KEY },
+            { label: '前缀搜索', value: SEARCH_MODE_PREFIX },
+          ]}
+          onChange={(value) => {
+            const nextMode = String(value);
+            setSearchMode(nextMode);
+            setSortInfo(null);
+            if (nextMode === SEARCH_MODE_PREFIX) {
+              searchPrefixes(searchKey);
+            }
+          }}
+        />
         <Input.Search
           className={styles.searchInput}
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="键包含"
+          placeholder={searchMode === SEARCH_MODE_PREFIX ? '前缀或注释' : '键包含'}
           value={searchKey}
           onChange={(event) => setSearchKey(event.target.value)}
           onSearch={(value) => {
+            if (searchMode === SEARCH_MODE_PREFIX) {
+              searchPrefixes(value);
+              return;
+            }
             setKeyLimit(DEFAULT_LIMIT);
             loadData(value, DEFAULT_LIMIT);
           }}
         />
         <div className={styles.meta}>
-          {data.length} keys{lastRefreshTime ? ` · 上次刷新 ${lastRefreshTime}` : ''}
+          {searchMode === SEARCH_MODE_PREFIX
+            ? `${prefixSearchData.length} prefixes`
+            : `${data.length} keys${lastRefreshTime ? ` · 上次刷新 ${lastRefreshTime}` : ''}`}
         </div>
       </div>
       <div className={styles.tableWrap} ref={tableWrapRef}>
@@ -518,9 +718,11 @@ const RedisDataView = memo((props: IProps) => {
           bordered={false}
           columns={columns}
           dataSource={tableData}
-          loading={loading}
+          loading={searchMode === SEARCH_MODE_PREFIX ? prefixLoading : loading}
           pagination={false}
-          rowClassName={(record) => (record.name === selectedKey && !record.isGroup ? styles.selectedRow : '')}
+          rowClassName={(record) =>
+            (record.name === selectedKey && !record.isGroup) || record.name === selectedPrefix ? styles.selectedRow : ''
+          }
           rowKey="rowKey"
           size="small"
           scroll={{ x: tableScrollX, y: tableScrollY }}
@@ -528,7 +730,11 @@ const RedisDataView = memo((props: IProps) => {
           virtual
           onRow={(record) => ({
             onClick: () => {
-              if (!record.isGroup) {
+              if (record.isGroup) {
+                openPrefixEditor(record);
+                return;
+              }
+              if (!record.prefixOnly) {
                 loadKeyDetail(record.name);
               }
             },
@@ -553,17 +759,82 @@ const RedisDataView = memo((props: IProps) => {
           <Button icon={<ReloadOutlined />} loading={loading} size="small" type="text" onClick={refreshData}>
             刷新
           </Button>
-          <Button disabled={!hasMore} loading={loading} size="small" type="text" onClick={getMoreData}>
+          <Button loading={prefixLoading} size="small" type="text" onClick={refreshPrefixCache}>
+            前缀缓存
+          </Button>
+          <span>{formatPrefixBuildStatus(prefixBuildStatus)}</span>
+          <Button
+            disabled={searchMode === SEARCH_MODE_PREFIX || !hasMore}
+            loading={loading}
+            size="small"
+            type="text"
+            onClick={getMoreData}
+          >
             获取更多
           </Button>
-          <Button loading={loading} size="small" type="text" onClick={getAllData}>
+          <Button
+            disabled={searchMode === SEARCH_MODE_PREFIX}
+            loading={loading}
+            size="small"
+            type="text"
+            onClick={getAllData}
+          >
             获取全部
           </Button>
           <Button icon={<SettingOutlined />} size="small" type="text" />
         </div>
       </div>
       <div className={styles.editorPane}>
-        {detail || detailLoading ? (
+        {selectedPrefix ? (
+          <>
+            <div className={styles.editorHeader}>
+              <span>前缀注释</span>
+              <div className={styles.editorActions}>
+                <Button
+                  icon={<CloseOutlined />}
+                  size="small"
+                  onClick={() => {
+                    setSelectedPrefix('');
+                    setPrefixCommentDraft('');
+                  }}
+                />
+                <Button icon={<SearchOutlined />} size="small" onClick={loadKeysByPrefix}>
+                  加载 keys
+                </Button>
+                <Button
+                  icon={<SaveOutlined />}
+                  loading={prefixSaving}
+                  size="small"
+                  type="primary"
+                  onClick={savePrefixComment}
+                >
+                  保存
+                </Button>
+              </div>
+            </div>
+            <div className={styles.editorBody}>
+              <div className={styles.formRow}>
+                <span className={styles.label}>前缀:</span>
+                <Input value={selectedPrefix} readOnly />
+              </div>
+              <div className={styles.formRow}>
+                <span className={styles.label}>数量:</span>
+                <span className={styles.prefixCount}>{getPrefixCount(selectedPrefix, prefixComments, tableData)}</span>
+              </div>
+              <div className={styles.formRow}>
+                <span className={styles.label}>注释:</span>
+                <Input.TextArea
+                  className={styles.prefixCommentInput}
+                  value={prefixCommentDraft}
+                  rows={5}
+                  maxLength={500}
+                  showCount
+                  onChange={(event) => setPrefixCommentDraft(event.target.value)}
+                />
+              </div>
+            </div>
+          </>
+        ) : detail || detailLoading ? (
           <>
             <div className={styles.editorHeader}>
               <span>{creating ? '新增 Key' : '编辑器'}</span>
@@ -574,6 +845,7 @@ const RedisDataView = memo((props: IProps) => {
                   onClick={() => {
                     setDetail(null);
                     setSelectedKey('');
+                    setSelectedPrefix('');
                     setCreating(false);
                   }}
                 />
@@ -685,14 +957,14 @@ const RedisDataView = memo((props: IProps) => {
   }
 });
 
-function buildRows(keys: IRedisKeyItem[]) {
+function buildRows(keys: IRedisKeyItem[], prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
   const root: IRedisKeyRow[] = [];
   const groupMap = new Map<string, IRedisKeyRow>();
 
   keys.forEach((item) => {
-    const parts = item.name.split(':');
+    const parts = item.name.split(':').filter((part) => part.length > 0);
     if (parts.length === 1) {
-      root.push(toLeaf(item, item.name));
+      root.push(toLeaf(item, item.name, getClosestPrefixComment(item.name, prefixCommentMap)));
       return;
     }
 
@@ -708,18 +980,64 @@ function buildRows(keys: IRedisKeyItem[]) {
           displayName: parts[i],
           isGroup: true,
           count: 0,
+          comment: prefixCommentMap[prefix]?.comment,
+          keyCount: prefixCommentMap[prefix]?.keyCount,
           children: [],
         };
         groupMap.set(prefix, group);
         children.push(group);
       }
+      group.comment = prefixCommentMap[prefix]?.comment;
+      group.keyCount = prefixCommentMap[prefix]?.keyCount;
       group.count = (group.count || 0) + 1;
       children = group.children!;
     }
-    children.push(toLeaf(item, parts[parts.length - 1]));
+    children.push(toLeaf(item, parts[parts.length - 1], getClosestPrefixComment(item.name, prefixCommentMap)));
   });
 
   return root;
+}
+
+function buildPrefixRows(prefixes: IRedisKeyPrefixItem[]) {
+  return prefixes.map<IRedisKeyRow>((item) => ({
+    rowKey: `prefix-${item.name}`,
+    name: item.name,
+    displayName: item.name,
+    isGroup: true,
+    prefixOnly: true,
+    count: item.keyCount,
+    keyCount: item.keyCount,
+    comment: item.comment,
+  }));
+}
+
+function mergePrefixComments(
+  current: Record<string, IRedisKeyPrefixItem>,
+  items: IRedisKeyPrefixItem[],
+): Record<string, IRedisKeyPrefixItem> {
+  if (!items.length) {
+    return current;
+  }
+  const next = { ...current };
+  items.forEach((item) => {
+    next[item.name] = {
+      ...(next[item.name] || {}),
+      ...item,
+    };
+  });
+  return next;
+}
+
+function getClosestPrefixComment(keyName: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
+  const parts = keyName.split(':').filter((part) => part.length > 0);
+  for (let i = parts.length - 1; i > 0; i--) {
+    const prefix = parts.slice(0, i).join(':');
+    const comment = prefixCommentMap[prefix]?.comment;
+    if (comment) {
+      return comment;
+    }
+  }
+  return undefined;
 }
 
 // 获取叶子节点的排序值
@@ -814,12 +1132,48 @@ function sortTree(tree: IRedisKeyRow[], field: string, order: 'ascend' | 'descen
   return sorted;
 }
 
-function toLeaf(item: IRedisKeyItem, displayName: string): IRedisKeyRow {
+function toLeaf(item: IRedisKeyItem, displayName: string, inheritedComment?: string): IRedisKeyRow {
   return {
     ...item,
     rowKey: `key-${item.name}`,
     displayName,
+    inheritedComment,
   };
+}
+
+function formatPrefixBuildStatus(status?: IRedisKeyPrefixBuildStatus | null) {
+  if (!status?.status) {
+    return '前缀缓存: -';
+  }
+  const base = `前缀缓存: ${status.status}`;
+  if (status.status === RUNNING_STATUS) {
+    return `${base} · 已扫描 ${status.scannedCount || 0} · 前缀 ${status.prefixCount || 0}`;
+  }
+  if (status.status === 'FAILED') {
+    return `${base}${status.errorMessage ? ` · ${status.errorMessage}` : ''}`;
+  }
+  if (status.prefixCount !== undefined) {
+    return `${base} · 前缀 ${status.prefixCount}`;
+  }
+  return base;
+}
+
+function getPrefixCount(prefix: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>, rows: IRedisKeyRow[]) {
+  const cachedCount = prefixCommentMap[prefix]?.keyCount;
+  if (cachedCount !== undefined) {
+    return `${cachedCount} keys`;
+  }
+  const stack = [...rows];
+  while (stack.length) {
+    const item = stack.pop()!;
+    if (item.name === prefix) {
+      return `${item.count || 0} keys`;
+    }
+    if (item.children) {
+      stack.push(...item.children);
+    }
+  }
+  return '-';
 }
 
 function getTypeColor(type: string) {

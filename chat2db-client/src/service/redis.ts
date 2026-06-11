@@ -18,6 +18,47 @@ export interface IRedisKeyItem {
   size?: number;
 }
 
+export interface IRedisKeyPrefixItem {
+  name: string;
+  comment?: string;
+  keyCount?: number;
+  building?: boolean;
+}
+
+export interface IRedisKeyPrefixSearchParams {
+  dataSourceId: number;
+  databaseName?: string;
+  searchKey?: string;
+  refresh?: boolean;
+}
+
+export interface IRedisKeyPrefixCommentUpdateParams {
+  dataSourceId: number;
+  databaseName?: string;
+  prefix: string;
+  comment: string;
+}
+
+export interface IRedisKeyPrefixRefreshParams {
+  dataSourceId: number;
+  databaseName?: string;
+}
+
+export interface IRedisKeyPrefixBuildStatusParams {
+  dataSourceId: number;
+  databaseName?: string;
+}
+
+export interface IRedisKeyPrefixBuildStatus {
+  status?: 'IDLE' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELLED' | string;
+  cursor?: string;
+  scannedCount?: number;
+  prefixCount?: number;
+  startedAt?: string;
+  updatedAt?: string;
+  errorMessage?: string;
+}
+
 export interface IRedisKeyQueryParams {
   dataSourceId: number;
   databaseName?: string;
@@ -83,6 +124,31 @@ const getKeyList = createRequest<IRedisKeyListParams, IRedisKeyItem[]>('/api/red
 const queryKey = createRequest<IRedisKeyQueryParams, IRedisKeyItem>('/api/redis/key/query', {
   method: 'get',
 });
+
+const searchKeyPrefixes = createRequest<IRedisKeyPrefixSearchParams, IRedisKeyPrefixItem[]>(
+  '/api/redis/key-prefix/search',
+  {
+    method: 'get',
+  },
+);
+
+const updateKeyPrefixComment = createRequest<IRedisKeyPrefixCommentUpdateParams, void>(
+  '/api/redis/key-prefix/comment',
+  {
+    method: 'post',
+  },
+);
+
+const refreshKeyPrefixCache = createRequest<IRedisKeyPrefixRefreshParams, void>('/api/redis/key-prefix/refresh', {
+  method: 'post',
+});
+
+const getKeyPrefixBuildStatus = createRequest<IRedisKeyPrefixBuildStatusParams, IRedisKeyPrefixBuildStatus>(
+  '/api/redis/key-prefix/status',
+  {
+    method: 'get',
+  },
+);
 
 const updateKey = createRequest<IRedisKeyUpdateParams, void>('/api/redis/key/update', {
   method: 'post',
@@ -192,10 +258,14 @@ const streamKeyList = (options: IRedisKeyStreamOptions) => {
 export default {
   createKey,
   deleteKey,
+  getKeyPrefixBuildStatus,
   getKeyList,
   partialUpdateKey,
   queryKey,
+  refreshKeyPrefixCache,
+  searchKeyPrefixes,
   streamKeyList,
   streamMonitor,
+  updateKeyPrefixComment,
   updateKey,
 };

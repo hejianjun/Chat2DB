@@ -84,6 +84,18 @@
   white-space: nowrap;
 }
 
+.commentCell {
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyComment {
+  color: var(--color-text-45);
+}
+
 .groupName {
   font-weight: 500;
 }
@@ -169,6 +181,15 @@
 
 .typeSelect {
   width: 160px;
+}
+
+.prefixCount {
+  line-height: 32px;
+  color: var(--color-text);
+}
+
+.prefixCommentInput {
+  flex: 1;
 }
 
 .ttlHint {
