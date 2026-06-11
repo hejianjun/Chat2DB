@@ -16,11 +16,15 @@ public interface ForeignKeySyncService {
 
     VirtualForeignKey createVirtualFK(CreateVirtualFKParam param);
 
+    ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params);
+
     List<VirtualForeignKey> createInferredVirtualFKs(List<CreateVirtualFKParam> params);
 
     VirtualForeignKey updateVirtualFK(UpdateVirtualFKParam param);
 
     void deleteVirtualFK(Long id);
+
+    int deleteVirtualFKs(List<Long> ids);
 
     String deleteRealFK(Long id);
 
@@ -48,5 +52,18 @@ public interface ForeignKeySyncService {
         public int getAdded() { return added; }
         public int getDeleted() { return deleted; }
         public int getUnchanged() { return unchanged; }
+    }
+
+    class ImportVirtualFKResult {
+        private int created;
+        private int updated;
+
+        public ImportVirtualFKResult(int created, int updated) {
+            this.created = created;
+            this.updated = updated;
+        }
+
+        public int getCreated() { return created; }
+        public int getUpdated() { return updated; }
     }
 }

@@ -532,6 +532,20 @@ export interface ICreateVirtualFKParams {
   comment?: string;
 }
 
+/** 批量导入虚拟外键参数 */
+export interface IImportVirtualFKParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
+  virtualForeignKeys: Array<Omit<ICreateVirtualFKParams, 'dataSourceId' | 'databaseName' | 'schemaName'>>;
+}
+
+/** 批量导入虚拟外键结果 */
+export interface IImportVirtualFKResult {
+  created: number;
+  updated: number;
+}
+
 /** 更新虚拟外键参数 */
 export interface IUpdateVirtualFKParams {
   id: number;
@@ -555,6 +569,11 @@ export interface IDeleteFKParams {
 /** 删除外键结果 */
 export interface IDeleteFKResult {
   executedDDL: string | null;
+}
+
+/** 批量删除虚拟外键参数 */
+export interface IDeleteVirtualFKBatchParams {
+  ids: number[];
 }
 
 /** 虚拟外键推断参数 */
@@ -586,10 +605,18 @@ const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>(
 const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', {
   method: 'post',
 });
+const importVirtualForeignKeys = createRequest<IImportVirtualFKParams, IImportVirtualFKResult>(
+  '/api/rdb/fk/virtual/import',
+  { method: 'post' },
+);
 const updateVirtualForeignKey = createRequest<IUpdateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/update', {
   method: 'post',
 });
 const deleteForeignKey = createRequest<IDeleteFKParams, IDeleteFKResult>('/api/rdb/fk/delete', { method: 'post' });
+const deleteVirtualForeignKeysBatch = createRequest<IDeleteVirtualFKBatchParams, number>(
+  '/api/rdb/fk/virtual/delete_batch',
+  { method: 'post' },
+);
 const inferVirtualForeignKeys = createRequest<IInferVirtualFKParams, IInferVirtualFkResult>(
   '/api/rdb/er/infer-virtual-fk',
   { method: 'post' },
@@ -675,7 +702,9 @@ export default {
   truncateTable,
   inferVirtualForeignKeys,
   createVirtualForeignKey,
+  importVirtualForeignKeys,
   deleteForeignKey,
+  deleteVirtualForeignKeysBatch,
   updateVirtualForeignKey,
   syncForeignKeys,
   batchOptimizeTables,

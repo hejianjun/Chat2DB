@@ -77,7 +77,7 @@ public class TableController {
         tableSelector.setIndexList(false);
         List<Table> tables = tableService.pageQuery(queryParam, tableSelector);
         List<TableVO> tableVOS = rdbWebConverter.tableDto2vo(tables);
-        return WebPageResult.of(tableVOS, queryParam.getLastDocId());
+        return WebPageResult.of(tableVOS, queryParam);
     }
 
     /**

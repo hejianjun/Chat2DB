@@ -175,6 +175,113 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     }
 
     @Override
+    public ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params) {
+        if (CollectionUtils.isEmpty(params)) {
+            return new ImportVirtualFKResult(0, 0);
+        }
+
+        CreateVirtualFKParam first = params.get(0);
+        MetaData metaData = Chat2DBContext.getMetaData();
+        Connection connection = Chat2DBContext.getConnection();
+        Map<String, String> tableMap = Optional.ofNullable(
+                        metaData.tables(connection, first.getDatabaseName(), first.getSchemaName(), null))
+                .orElse(Collections.emptyList())
+                .stream()
+                .map(Table::getName)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toMap(
+                        name -> normalizeVirtualForeignKeyPart(name),
+                        name -> name,
+                        (oldValue, newValue) -> oldValue));
+        Set<String> involvedTables = params.stream()
+                .flatMap(param -> Arrays.stream(new String[]{param.getTableName(), param.getReferencedTable()}))
+                .filter(StringUtils::isNotBlank)
+                .map(this::normalizeVirtualForeignKeyPart)
+                .filter(tableMap::containsKey)
+                .collect(Collectors.toSet());
+        Map<String, Map<String, String>> columnMap = new HashMap<>();
+        for (String normalizedTableName : involvedTables) {
+            String actualTableName = tableMap.get(normalizedTableName);
+            Map<String, String> columns = Optional.ofNullable(
+                            metaData.columns(connection, first.getDatabaseName(), first.getSchemaName(), actualTableName))
+                    .orElse(Collections.emptyList())
+                    .stream()
+                    .map(TableColumn::getName)
+                    .filter(StringUtils::isNotBlank)
+                    .collect(Collectors.toMap(
+                            this::normalizeVirtualForeignKeyPart,
+                            name -> name,
+                            (oldValue, newValue) -> oldValue));
+            columnMap.put(normalizedTableName, columns);
+        }
+
+        List<VirtualForeignKeyDO> existingFKs = queryVirtualFKsFromH2(
+                first.getDataSourceId(),
+                first.getDatabaseName(),
+                first.getSchemaName(),
+                null);
+        Map<String, VirtualForeignKeyDO> existingMap = existingFKs.stream()
+                .collect(Collectors.toMap(vfk -> buildVirtualForeignKeyKey(
+                                vfk.getDataSourceId(),
+                                vfk.getDatabaseName(),
+                                vfk.getSchemaName(),
+                                vfk.getTableName(),
+                                vfk.getColumnName()),
+                        vfk -> vfk,
+                        (oldValue, newValue) -> oldValue));
+
+        int created = 0;
+        int updated = 0;
+        Set<String> handledKeys = new HashSet<>();
+        for (CreateVirtualFKParam param : params) {
+            String sourceTableKey = normalizeVirtualForeignKeyPart(param.getTableName());
+            String referencedTableKey = normalizeVirtualForeignKeyPart(param.getReferencedTable());
+            String sourceColumnKey = normalizeVirtualForeignKeyPart(param.getColumnName());
+            String referencedColumnKey = normalizeVirtualForeignKeyPart(param.getReferencedColumnName());
+            if (!tableMap.containsKey(sourceTableKey)
+                    || !tableMap.containsKey(referencedTableKey)
+                    || !columnMap.getOrDefault(sourceTableKey, Collections.emptyMap()).containsKey(sourceColumnKey)
+                    || !columnMap.getOrDefault(referencedTableKey, Collections.emptyMap()).containsKey(referencedColumnKey)) {
+                throw new BusinessException("VIRTUAL_FK_RELATION_INVALID", new Object[]{"虚拟外键关联表或字段不存在"});
+            }
+
+            String key = buildVirtualForeignKeyKey(
+                    param.getDataSourceId(),
+                    param.getDatabaseName(),
+                    param.getSchemaName(),
+                    tableMap.get(sourceTableKey),
+                    columnMap.get(sourceTableKey).get(sourceColumnKey));
+            if (!handledKeys.add(key)) {
+                continue;
+            }
+
+            param.setTableName(tableMap.get(sourceTableKey));
+            param.setColumnName(columnMap.get(sourceTableKey).get(sourceColumnKey));
+            param.setReferencedTable(tableMap.get(referencedTableKey));
+            param.setReferencedColumnName(columnMap.get(referencedTableKey).get(referencedColumnKey));
+
+            VirtualForeignKeyDO existing = existingMap.get(key);
+            if (existing == null) {
+                VirtualForeignKeyDO entity = buildVirtualForeignKeyDO(param);
+                getVFKMapper().insert(entity);
+                created++;
+                continue;
+            }
+
+            VirtualForeignKeyDO updateDO = new VirtualForeignKeyDO();
+            updateDO.setId(existing.getId());
+            updateDO.setReferencedTable(param.getReferencedTable());
+            updateDO.setReferencedColumnName(param.getReferencedColumnName());
+            updateDO.setComment(param.getComment());
+            updateDO.setSourceType(param.getSourceType());
+            getVFKMapper().updateById(updateDO);
+            updated++;
+        }
+
+        return new ImportVirtualFKResult(created, updated);
+    }
+
+    @Override
     public List<VirtualForeignKey> createInferredVirtualFKs(List<CreateVirtualFKParam> params) {
         if (CollectionUtils.isEmpty(params)) {
             return Collections.emptyList();
@@ -297,6 +404,14 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
             throw new BusinessException("VIRTUAL_FK_NOT_FOUND", new Object[]{"虚拟外键不存在"});
         }
         getVFKMapper().deleteById(id);
+    }
+
+    @Override
+    public int deleteVirtualFKs(List<Long> ids) {
+        if (CollectionUtils.isEmpty(ids)) {
+            return 0;
+        }
+        return getVFKMapper().deleteBatchIds(ids);
     }
 
     /**

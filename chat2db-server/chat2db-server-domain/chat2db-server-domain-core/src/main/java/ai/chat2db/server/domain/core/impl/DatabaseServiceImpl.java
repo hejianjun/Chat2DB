@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 
 import ai.chat2db.server.domain.api.param.datasource.DatabaseCreateParam;
@@ -279,7 +280,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             List<Table> tables = tableService.pageQuery(queryParam, tableSelector);
             return tables.stream().map(table -> {
                 StringBuilder sb = new StringBuilder(table.getName());
-                String comment = StringUtils.defaultString(table.getComment(), table.getAiComment());
+                String comment = Objects.toString(table.getComment(), table.getAiComment());
                 List<ForeignKey> foreignKeys = table.getForeignKeyList();
 
                 List<VirtualForeignKey> virtualForeignKeys = table.getVirtualForeignKeyList();

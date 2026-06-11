@@ -31,8 +31,6 @@ interface IVirtualFkImportItem {
 const buildVirtualFkKey = (item: IVirtualFkImportItem) =>
   [item.tableName, item.columnName].map((value) => `${value || ''}`.trim().toLowerCase()).join('\u0001');
 
-const getNormalizedName = (value?: string) => `${value || ''}`.trim().toLowerCase();
-
 const TableRelationModal = memo((props: IProps) => {
   const { treeNodeData } = props;
   const { dataSourceId, databaseName, schemaName } = treeNodeData.extraParams || {};
@@ -216,11 +214,9 @@ const TableRelationModal = memo((props: IProps) => {
       onOk: async () => {
         setDeletingAllVirtual(true);
         try {
-          await Promise.all(
-            virtualForeignKeys
-              .filter((item) => item.id)
-              .map((item) => sqlService.deleteForeignKey({ id: item.id!, sourceType: 'VIRTUAL' })),
-          );
+          await sqlService.deleteVirtualForeignKeysBatch({
+            ids: virtualForeignKeys.map((item) => item.id).filter(Boolean) as number[],
+          });
           message.success(i18n('workspace.tableRelation.deleteAllVirtualSuccess'));
           fetchForeignKeys();
         } catch {
@@ -312,73 +308,6 @@ const TableRelationModal = memo((props: IProps) => {
     return Array.from(itemMap.values());
   };
 
-  const validateAndNormalizeImportList = async (importList: IVirtualFkImportItem[]) => {
-    const tableList = await sqlService.getAllTableList({
-      dataSourceId: dataSourceId!,
-      databaseName,
-      schemaName,
-    });
-    const tableNameMap = new Map((tableList || []).map((item) => [getNormalizedName(item.name), item.name]));
-    const involvedTableNames = Array.from(
-      new Set(
-        importList
-          .flatMap((item) => [item.tableName, item.referencedTable])
-          .map(getNormalizedName)
-          .filter(Boolean),
-      ),
-    );
-    const columnNameMap: Record<string, Map<string, string>> = {};
-
-    await Promise.all(
-      involvedTableNames
-        .filter((normalizedTableName) => tableNameMap.has(normalizedTableName))
-        .map(async (normalizedTableName) => {
-          const actualTableName = tableNameMap.get(normalizedTableName)!;
-          const columns = await sqlService.getColumnList({
-            dataSourceId: dataSourceId!,
-            databaseName,
-            schemaName,
-            tableName: actualTableName,
-          });
-          columnNameMap[normalizedTableName] = new Map(
-            (columns || []).map((column) => [getNormalizedName(column.name), column.name]),
-          );
-        }),
-    );
-
-    const invalidItems: string[] = [];
-    const normalizedList: IVirtualFkImportItem[] = [];
-    importList.forEach((item) => {
-      const sourceTableKey = getNormalizedName(item.tableName);
-      const sourceColumnKey = getNormalizedName(item.columnName);
-      const referencedTableKey = getNormalizedName(item.referencedTable);
-      const referencedColumnKey = getNormalizedName(item.referencedColumnName);
-      const sourceTable = tableNameMap.get(sourceTableKey);
-      const referencedTable = tableNameMap.get(referencedTableKey);
-      const sourceColumn = columnNameMap[sourceTableKey]?.get(sourceColumnKey);
-      const referencedColumn = columnNameMap[referencedTableKey]?.get(referencedColumnKey);
-      const relationText = [
-        `${item.tableName}.${item.columnName}`,
-        `${item.referencedTable}.${item.referencedColumnName}`,
-      ].join(' -> ');
-
-      if (!sourceTable || !referencedTable || !sourceColumn || !referencedColumn) {
-        invalidItems.push(relationText);
-        return;
-      }
-
-      normalizedList.push({
-        tableName: sourceTable,
-        columnName: sourceColumn,
-        referencedTable,
-        referencedColumnName: referencedColumn,
-        comment: item.comment,
-      });
-    });
-
-    return { invalidItems, normalizedList };
-  };
-
   const handleImport = async (file: File) => {
     if (!dataSourceId || !databaseName) return false;
     setImporting(true);
@@ -390,65 +319,20 @@ const TableRelationModal = memo((props: IProps) => {
         return false;
       }
 
-      const { invalidItems, normalizedList } = await validateAndNormalizeImportList(importList);
-      if (invalidItems.length) {
-        Modal.error({
-          title: i18n('workspace.tableRelation.importInvalidTitle'),
-          content: (
-            <div>
-              <div>{i18n('workspace.tableRelation.importInvalidContent', invalidItems.length)}</div>
-              <pre className={styles.importInvalidPreview}>{invalidItems.slice(0, 10).join('\n')}</pre>
-            </div>
-          ),
-          width: 640,
-        });
-        return false;
-      }
-
-      const currentVirtualFKs = await sqlService.getForeignKeyList({
+      const result = await sqlService.importVirtualForeignKeys({
         dataSourceId: dataSourceId!,
         databaseName,
         schemaName,
+        virtualForeignKeys: importList.map((item) => ({
+          tableName: item.tableName!,
+          columnName: item.columnName!,
+          referencedTable: item.referencedTable!,
+          referencedColumnName: item.referencedColumnName!,
+          comment: item.comment,
+        })),
       });
-      const currentMap = new Map(
-        (currentVirtualFKs || [])
-          .filter((item) => item.sourceType === 'VIRTUAL' && item.id)
-          .map((item) => [buildVirtualFkKey(item), item]),
-      );
 
-      let created = 0;
-      let updated = 0;
-      for (const item of normalizedList) {
-        const existing = currentMap.get(buildVirtualFkKey(item));
-        if (existing?.id) {
-          await sqlService.updateVirtualForeignKey({
-            id: existing.id,
-            dataSourceId: dataSourceId!,
-            databaseName,
-            schemaName,
-            tableName: item.tableName,
-            columnName: item.columnName,
-            referencedTable: item.referencedTable,
-            referencedColumnName: item.referencedColumnName,
-            comment: item.comment,
-          });
-          updated++;
-        } else {
-          await sqlService.createVirtualForeignKey({
-            dataSourceId: dataSourceId!,
-            databaseName,
-            schemaName,
-            tableName: item.tableName!,
-            columnName: item.columnName!,
-            referencedTable: item.referencedTable!,
-            referencedColumnName: item.referencedColumnName!,
-            comment: item.comment,
-          });
-          created++;
-        }
-      }
-
-      message.success(i18n('workspace.tableRelation.importSuccess', created, updated));
+      message.success(i18n('workspace.tableRelation.importSuccess', result?.created || 0, result?.updated || 0));
       fetchForeignKeys();
     } catch {
       message.error(i18n('workspace.tableRelation.importError'));

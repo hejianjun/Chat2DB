@@ -6,6 +6,7 @@ export interface IPageResponse<T> {
   pageSize: number;
   total: number;
   hasNextPage?: boolean;
+  lastDocId?: number;
 }
 
 export interface IPageParams {
@@ -13,6 +14,7 @@ export interface IPageParams {
   pageNo: number;
   pageSize: number;
   refresh?: boolean;
+  lastDocId?: number;
 }
 
 export interface IPagingData {

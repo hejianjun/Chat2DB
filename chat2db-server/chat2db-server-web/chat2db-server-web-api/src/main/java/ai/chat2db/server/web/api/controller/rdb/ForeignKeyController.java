@@ -8,10 +8,12 @@ import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.web.api.controller.rdb.request.CreateVirtualFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.DeleteVirtualFKBatchRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKByNameRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeyListRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeySyncRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.ImportVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.UpdateVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.DeleteFKResult;
 import ai.chat2db.server.web.api.controller.rdb.vo.ForeignKeyVO;
@@ -93,6 +95,24 @@ public class ForeignKeyController {
         return DataResult.of(foreignKeySyncService.createVirtualFK(param));
     }
 
+    @PostMapping("/virtual/import")
+    public DataResult<ForeignKeySyncService.ImportVirtualFKResult> importVirtual(
+            @Valid @RequestBody ImportVirtualFKRequest request) {
+        List<CreateVirtualFKParam> params = request.getVirtualForeignKeys().stream()
+                .map(item -> CreateVirtualFKParam.builder()
+                        .dataSourceId(request.getDataSourceId())
+                        .databaseName(request.getDatabaseName())
+                        .schemaName(request.getSchemaName())
+                        .tableName(item.getTableName())
+                        .columnName(item.getColumnName())
+                        .referencedTable(item.getReferencedTable())
+                        .referencedColumnName(item.getReferencedColumnName())
+                        .comment(item.getComment())
+                        .build())
+                .collect(Collectors.toList());
+        return DataResult.of(foreignKeySyncService.importVirtualFKs(params));
+    }
+
     @PostMapping("/virtual/update")
     public DataResult<VirtualForeignKey> updateVirtual(@Valid @RequestBody UpdateVirtualFKRequest request) {
         UpdateVirtualFKParam param = UpdateVirtualFKParam.builder()
@@ -119,6 +139,11 @@ public class ForeignKeyController {
             String ddl = foreignKeySyncService.deleteRealFK(request.getId());
             return DataResult.of(DeleteFKResult.builder().executedDDL(ddl).build());
         }
+    }
+
+    @PostMapping("/virtual/delete_batch")
+    public DataResult<Integer> deleteVirtualBatch(@Valid @RequestBody DeleteVirtualFKBatchRequest request) {
+        return DataResult.of(foreignKeySyncService.deleteVirtualFKs(request.getIds()));
     }
 
     @PostMapping("/delete_by_name")

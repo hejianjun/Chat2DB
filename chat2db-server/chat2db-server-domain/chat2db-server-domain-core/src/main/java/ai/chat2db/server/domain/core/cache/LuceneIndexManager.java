@@ -39,6 +39,7 @@ import com.google.common.collect.Sets;
 
 import ai.chat2db.spi.model.BaseModel;
 import ai.chat2db.spi.model.IndexModel;
+import ai.chat2db.server.tools.base.wrapper.param.PageQueryParam;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -539,30 +540,36 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     public <E extends BaseModel> List<T> search(E queryModel, Integer lastDocId, String queryStr, String sortField, boolean reverse) {
         lock.readLock().lock();
         try {
+            this.lastDocId = null;
             BooleanQuery booleanQuery = buildSearchQuery(queryModel, queryStr);
             ScoreDoc lastScoreDoc = null;
             if (lastDocId != null) {
                 lastScoreDoc = new ScoreDoc(lastDocId, 1);
             }
+            int pageSize = 1000;
+            if ((Object) queryModel instanceof PageQueryParam pageQueryParam && pageQueryParam.getPageSize() != null) {
+                pageSize = pageQueryParam.getPageSize();
+            }
+            int searchLimit = pageSize == Integer.MAX_VALUE ? pageSize : pageSize + 1;
 
             TopDocs topDocs;
             if (StringUtils.isNotBlank(sortField)) {
                 // 使用排序搜索（字段名直接对应 @LuceneField 注解的 name 属性）
                 Sort sort = createSort(sortField, reverse);
                 if (sort != null) {
-                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000, sort);
+                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, searchLimit, sort);
                 } else {
-                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
+                    topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, searchLimit);
                 }
             } else {
                 // 不使用排序
-                topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, 1000);
+                topDocs = searcher.searchAfter(lastScoreDoc, booleanQuery, searchLimit);
             }
-            long total = topDocs.totalHits.value;
-            if (total >= 1000) {
-                this.lastDocId = topDocs.scoreDocs[topDocs.scoreDocs.length - 1].doc;
+            if (topDocs.scoreDocs.length > pageSize) {
+                this.lastDocId = topDocs.scoreDocs[pageSize - 1].doc;
             }
             return Arrays.stream(topDocs.scoreDocs)
+                    .limit(pageSize)
                     .map(scoreDoc -> {
                         T doc = (T) getDocument(queryModel.getClassType(), scoreDoc.doc);
                         return doc;

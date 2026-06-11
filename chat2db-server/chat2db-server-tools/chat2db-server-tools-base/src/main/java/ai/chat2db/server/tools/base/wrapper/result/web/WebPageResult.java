@@ -76,6 +76,11 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
         this.data = new Page<>(data, total, pageNo, pageSize);
     }
 
+    private WebPageResult(List<T> data, Long total, Integer pageNo, Integer pageSize, Integer lastDocId) {
+        this.success = Boolean.TRUE;
+        this.data = new Page<>(data, total, pageNo, pageSize, lastDocId);
+    }
+
     private WebPageResult(List<T> data, Integer lastDocId) {
         this.success = Boolean.TRUE;
         this.data = new Page<>(data, lastDocId);
@@ -109,6 +114,11 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
         return new WebPageResult<>(data, total, pageNo, pageSize);
     }
 
+    public static <T> WebPageResult<T> of(List<T> data, Long total, Integer pageNo, Integer pageSize,
+                                         Integer lastDocId) {
+        return new WebPageResult<>(data, total, pageNo, pageSize, lastDocId);
+    }
+
     public static <T> WebPageResult<T> of(List<T> data, Integer lastDocId) {
         return new WebPageResult<>(data, lastDocId);
     }
@@ -123,7 +133,11 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
      * @return 分页返回对象
      */
     public static <T> WebPageResult<T> of(List<T> data, Long total, PageQueryParam param) {
-        return new WebPageResult<>(data, total, param.getPageNo(), param.getPageSize());
+        return new WebPageResult<>(data, total, param.getPageNo(), param.getPageSize(), param.getLastDocId());
+    }
+
+    public static <T> WebPageResult<T> of(List<T> data, PageQueryParam param) {
+        return new WebPageResult<>(data, 0L, param.getPageNo(), param.getPageSize(), param.getLastDocId());
     }
 
     /**
@@ -329,6 +343,12 @@ public class WebPageResult<T> implements Serializable, Result<List<T>> {
             if (pageSize != null) {
                 this.pageSize = pageSize;
             }
+        }
+
+        private Page(List<T> data, Long total, Integer pageNo, Integer pageSize, Integer lastDocId) {
+            this(data, total, pageNo, pageSize);
+            this.lastDocId = lastDocId;
+            this.hasNextPage = lastDocId != null;
         }
 
         private Page(List<T> data, Integer lastDocId) {

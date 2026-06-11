@@ -367,18 +367,13 @@ public class TableServiceImpl implements TableService {
             tables = pinTable(tables, param);
             tables = deprecatedTable(tables, param);
         }
+        Map<String, List<TableColumn>> tableColumnMap = Collections.emptyMap();
+        if (Boolean.TRUE.equals(selector.getColumnList())) {
+            tableColumnMap = getTableColumns((LuceneIndexManager) luceneMgr, param, tables);
+        }
         for (Table table : tables) {
-            TableQueryParam queryParam = TableQueryParam.builder()
-                    .dataSourceId(param.getDataSourceId())
-                    .schemaName(table.getSchemaName())
-                    .databaseName(table.getDatabaseName())
-                    .tableName(table.getName())
-                    .refresh(param.isRefresh())
-                    .build();
             if (Boolean.TRUE.equals(selector.getColumnList())) {
-                queryParam.setClassType(TableColumn.class);
-                List<TableColumn> columnList = getTableColumns((LuceneIndexManager) luceneMgr, queryParam);
-                table.setColumnList(columnList);
+                table.setColumnList(tableColumnMap.getOrDefault(table.getName(), Collections.emptyList()));
             }
             if (Boolean.TRUE.equals(selector.getIndexList())) {
                 MetaData metaSchema = Chat2DBContext.getMetaData();
@@ -566,7 +561,7 @@ public class TableServiceImpl implements TableService {
     }
 
     private List<TableColumn> getTableColumns(LuceneIndexManager<TableColumn> mgr,
-                                              TableQueryParam param) {
+                                               TableQueryParam param) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
         Long version = mgr.getMaxVersion(param);
         if (param.isRefresh() || version == null) {
@@ -584,6 +579,77 @@ public class TableServiceImpl implements TableService {
             }
         }
         return mgr.search(param, null, null);
+    }
+
+    private Map<String, List<TableColumn>> getTableColumns(LuceneIndexManager<TableColumn> mgr,
+                                                           TablePageQueryParam param,
+                                                           List<Table> tables) {
+        if (CollectionUtils.isEmpty(tables)) {
+            return Collections.emptyMap();
+        }
+        TableQueryParam queryParam = TableQueryParam.builder()
+                .dataSourceId(param.getDataSourceId())
+                .databaseName(param.getDatabaseName())
+                .schemaName(param.getSchemaName())
+                .refresh(param.isRefresh())
+                .classType(TableColumn.class)
+                .build();
+        Long version = mgr.getMaxVersion(queryParam);
+        if (!param.isRefresh() && version != null) {
+            Map<String, List<TableColumn>> cachedColumns = groupTableColumns(mgr.search(queryParam, null, null), tables);
+            if (hasAllTableColumns(cachedColumns, tables)) {
+                return cachedColumns;
+            }
+        }
+        return groupTableColumns(loadAndCacheTableColumns(mgr, queryParam, version), tables);
+    }
+
+    private List<TableColumn> loadAndCacheTableColumns(LuceneIndexManager<TableColumn> mgr,
+                                                       TableQueryParam param,
+                                                       Long version) {
+        MetaData metaSchema = Chat2DBContext.getMetaData();
+        mgr.getLock().writeLock().lock();
+        try {
+            List<TableColumn> columns = metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(),
+                    param.getSchemaName(), null);
+            if (CollectionUtils.isNotEmpty(columns)) {
+                Map<String, List<TableColumn>> columnsByTable = columns.stream()
+                        .filter(column -> StringUtils.isNotBlank(column.getTableName()))
+                        .collect(Collectors.groupingBy(TableColumn::getTableName));
+                for (List<TableColumn> tableColumns : columnsByTable.values()) {
+                    mgr.updateDocuments(tableColumns, version);
+                }
+            }
+            return columns;
+        } catch (Exception e) {
+            log.error("getTableColumns error", e);
+        } finally {
+            mgr.getLock().writeLock().unlock();
+        }
+        return Collections.emptyList();
+    }
+
+    private Map<String, List<TableColumn>> groupTableColumns(List<TableColumn> columns, List<Table> tables) {
+        if (CollectionUtils.isEmpty(columns)) {
+            return Collections.emptyMap();
+        }
+        Set<String> tableNames = tables.stream()
+                .map(Table::getName)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+        return columns.stream()
+                .filter(column -> tableNames.contains(column.getTableName()))
+                .collect(Collectors.groupingBy(TableColumn::getTableName));
+    }
+
+    private boolean hasAllTableColumns(Map<String, List<TableColumn>> tableColumnMap, List<Table> tables) {
+        if (tableColumnMap.isEmpty()) {
+            return false;
+        }
+        return tables.stream()
+                .map(Table::getName)
+                .filter(StringUtils::isNotBlank)
+                .allMatch(tableName -> CollectionUtils.isNotEmpty(tableColumnMap.get(tableName)));
     }
 
     @Override

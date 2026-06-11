@@ -39,4 +39,12 @@ public class BusinessException extends RuntimeException {
         this.args = args;
     }
 
+    public String getCode() {
+        return code;
+    }
+
+    public Object[] getArgs() {
+        return args;
+    }
+
 }

@@ -362,6 +362,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
               pageSize: res.pageSize,
               total: res.total,
               hasNextPage: res.hasNextPage,
+              lastDocId: res.lastDocId,
             } as any);
           })
           .catch((error) => {
