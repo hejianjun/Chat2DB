@@ -115,8 +115,8 @@ public class ChatController {
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
-        ensureConversationExists(queryRequest, loginUser);
-        boolean firstTurn = isFirstTurnOfConversation(queryRequest, loginUser);
+        boolean isSimpleTask = promptType != null && promptType.isSimpleTask();
+        boolean firstTurn = !isSimpleTask && isFirstTurnOfConversation(queryRequest, loginUser);
 
         ChatContext ctx = ChatContext.builder()
                 .uid(sessionKey)
@@ -152,7 +152,7 @@ public class ChatController {
                 Mono.just(MessageBuilder.withPayload(initialEvent).build())
         ).subscribe();
 
-        if (firstTurn && promptType == PromptType.NL_2_SQL) {
+        if (firstTurn) {
             try {
                 aiConversationTitleTask.generateTitleAsync(queryRequest.getConversationId(), queryRequest.getMessage());
             } catch (Exception e) {
@@ -177,27 +177,6 @@ public class ChatController {
         }
     }
 
-    private void ensureConversationExists(ChatQueryRequest request, LoginUser loginUser) {
-        if (request == null || StrUtil.isBlank(request.getConversationId())) {
-            return;
-        }
-        try {
-            if (aiConversationService.findByConversationId(request.getConversationId()) != null) {
-                return;
-            }
-            AiConversationCreateParam param = new AiConversationCreateParam();
-            param.setConversationId(request.getConversationId());
-            param.setUserId(loginUser == null ? null : loginUser.getId());
-            param.setDataSourceId(request.getDataSourceId());
-            param.setDatabaseName(request.getDatabaseName());
-            param.setSchemaName(request.getSchemaName());
-            param.setTitle("新对话");
-            aiConversationService.create(param);
-        } catch (Exception e) {
-            log.warn("[ChatController] Ensure conversation failed for {}: {}",
-                    request.getConversationId(), e.getMessage());
-        }
-    }
 
     @DeleteMapping("/chat/{conversationId}")
     @CrossOrigin

@@ -217,6 +217,10 @@ public class StreamAction extends BaseChatAction {
                 || assistantContent == null || assistantContent.isEmpty()) {
             return;
         }
+        if (request.getPromptType() != null && PromptType.valueOf(request.getPromptType()).isSimpleTask()) {
+            log.debug("[StreamAction] Skip persist for transient prompt, uid: {}", ctx.getUid());
+            return;
+        }
         LoginUser loginUser = ctx.getLoginUser();
         Long userId = loginUser != null ? loginUser.getId() : null;
         String promptType = request.getPromptType();

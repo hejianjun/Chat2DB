@@ -14,6 +14,7 @@ import i18n from '@/i18n';
 import { useAiChatStore, AiChatSession } from '@/pages/main/workspace/store/aiChatStore';
 import connectToEventSource from '@/utils/eventSource';
 import { formatParams } from '@/utils/url';
+import { v4 as uuidv4 } from 'uuid';
 import styles from './index.less';
 
 interface IConversationItemProps {
@@ -185,8 +186,9 @@ export default memo((props: {
 
     setGeneratingTitleId(session.sessionId);
     let generatedTitle = '';
+    const transientConversationId = uuidv4();
     const params = formatParams({
-      conversationId: session.sessionId,
+      conversationId: transientConversationId,
       message: messageContent,
       promptType: 'TITLE_GENERATION',
       dataSourceId: session.dataSourceId,
@@ -196,7 +198,7 @@ export default memo((props: {
 
     closeEventSourceRef.current = connectToEventSource({
       url: `/api/ai/chat?${params}`,
-      uid: session.sessionId,
+      uid: transientConversationId,
       onMessage: (content?: string) => {
         if (content) {
           generatedTitle += content;
