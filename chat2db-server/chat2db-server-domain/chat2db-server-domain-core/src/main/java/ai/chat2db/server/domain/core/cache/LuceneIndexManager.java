@@ -16,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.StringField;
@@ -452,6 +453,24 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 builder.add(new TermQuery(new Term("schemaName", schemaName)), BooleanClause.Occur.MUST);
             }
             writer.deleteDocuments(builder.build());
+            reload();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @SneakyThrows
+    public <E extends BaseModel<?>> void deleteByDatabaseAndSchemaExceptLongField(E queryModel, String fieldName,
+                                                                                  long fieldValue) {
+        if (queryModel == null || StringUtils.isBlank(queryModel.getDatabaseName())) {
+            return;
+        }
+        lock.writeLock().lock();
+        try {
+            BooleanQuery query = buildBooleanQuery(queryModel)
+                    .add(LongPoint.newExactQuery(fieldName, fieldValue), BooleanClause.Occur.MUST_NOT)
+                    .build();
+            writer.deleteDocuments(query);
             reload();
         } finally {
             lock.writeLock().unlock();

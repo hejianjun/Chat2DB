@@ -62,12 +62,14 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             return;
         }
 
+        Long refreshVersion = System.currentTimeMillis();
         ConnectInfo asyncConnectInfo = connectInfo.copy();
         RedisKeyPrefixBuildStatus status = RedisKeyPrefixBuildStatus.builder()
                 .status(STATUS_RUNNING)
                 .cursor("0")
                 .scannedCount(0L)
                 .prefixCount(0L)
+                .refreshVersion(refreshVersion)
                 .startedAt(now())
                 .updatedAt(now())
                 .build();
@@ -83,6 +85,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .databaseName(databaseName)
                 .name(prefix)
                 .comment(comment)
+                .refreshVersion(getRunningRefreshVersion(dataSourceId, databaseName))
                 .build();
         managerFactory.<RedisKeyPrefix>getManager(dataSourceId).updateDocument(source);
     }
@@ -113,6 +116,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
         AtomicLong scannedCount = new AtomicLong();
         AtomicLong lastFlushScannedCount = new AtomicLong();
+        Long refreshVersion = status.getRefreshVersion();
         try {
             Chat2DBContext.putContext(connectInfo);
             RedisKeyBrowser browser = getRedisKeyBrowser();
@@ -124,11 +128,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 status.setPrefixCount((long) prefixCountMap.size());
                 status.setUpdatedAt(now());
                 if (scanned - lastFlushScannedCount.get() >= FLUSH_KEY_THRESHOLD) {
-                    flushPrefixes(luceneMgr, dataSourceId, databaseName, prefixCountMap);
+                    flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
                     lastFlushScannedCount.set(scanned);
                 }
             }).join();
-            flushPrefixes(luceneMgr, dataSourceId, databaseName, prefixCountMap);
+            flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
+            deleteStalePrefixes(luceneMgr, databaseName, refreshVersion);
             status.setStatus(STATUS_DONE);
             status.setCursor("0");
             status.setPrefixCount((long) prefixCountMap.size());
@@ -173,7 +178,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     }
 
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
-                               Map<String, Long> prefixCountMap) {
+                               Long refreshVersion, Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
             return;
         }
@@ -183,12 +188,32 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                         .databaseName(databaseName)
                         .name(entry.getKey())
                         .keyCount(entry.getValue())
+                        .refreshVersion(refreshVersion)
                         .build())
                 .toList();
         for (int i = 0; i < prefixes.size(); i += FLUSH_DOCUMENT_BATCH_SIZE) {
             int toIndex = Math.min(i + FLUSH_DOCUMENT_BATCH_SIZE, prefixes.size());
             luceneMgr.updateDocuments(prefixes.subList(i, toIndex), null, false);
         }
+    }
+
+    private void deleteStalePrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, String databaseName,
+                                     Long refreshVersion) {
+        if (refreshVersion == null) {
+            return;
+        }
+        RedisKeyPrefix queryModel = RedisKeyPrefix.builder()
+                .databaseName(databaseName)
+                .build();
+        luceneMgr.deleteByDatabaseAndSchemaExceptLongField(queryModel, "refreshVersion", refreshVersion);
+    }
+
+    private Long getRunningRefreshVersion(Long dataSourceId, String databaseName) {
+        RedisKeyPrefixBuildStatus status = statusMap.get(buildStatusKey(dataSourceId, databaseName));
+        if (status == null || !STATUS_RUNNING.equals(status.getStatus())) {
+            return null;
+        }
+        return status.getRefreshVersion();
     }
 
     private String buildStatusKey(Long dataSourceId, String databaseName) {

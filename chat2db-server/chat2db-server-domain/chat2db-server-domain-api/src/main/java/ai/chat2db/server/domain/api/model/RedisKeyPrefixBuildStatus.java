@@ -19,6 +19,8 @@ public class RedisKeyPrefixBuildStatus {
 
     private Long prefixCount;
 
+    private Long refreshVersion;
+
     private String startedAt;
 
     private String updatedAt;

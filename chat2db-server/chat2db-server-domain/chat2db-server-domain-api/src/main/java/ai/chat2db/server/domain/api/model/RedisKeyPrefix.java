@@ -35,6 +35,9 @@ public class RedisKeyPrefix implements IndexModel {
 
     private Boolean building;
 
+    @LuceneField(name = "refreshVersion", type = LuceneFieldType.LONG)
+    private Long refreshVersion;
+
     private Long version;
 
     @Override
