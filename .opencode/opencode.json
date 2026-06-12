@@ -1,6 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "lsp":true,
+  "lsp":{
+    "jdtls": {
+      "command": [
+        "jdtls"
+      ],
+      "env": {
+        "JAVA_TOOL_OPTIONS": "-javaagent:E:\\repository\\org\\projectlombok\\lombok\\1.18.30\\lombok-1.18.30.jar"
+      }
+    }
+  },
   "mcp": {
     "browsermcp": {
       "type": "local",
