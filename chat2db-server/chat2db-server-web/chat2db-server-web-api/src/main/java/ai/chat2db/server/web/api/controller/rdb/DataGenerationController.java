@@ -4,6 +4,7 @@ import ai.chat2db.server.domain.api.param.DataGenerationRequest;
 import ai.chat2db.server.domain.api.service.DataGenerationService;
 import ai.chat2db.server.domain.api.service.DataGenerationRuleService;
 import ai.chat2db.server.domain.api.vo.DataGenerationPreviewVO;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
@@ -33,7 +34,9 @@ public class DataGenerationController {
             return ListResult.of(dataGenerationService.getTableColumns(request));
         } catch (Exception e) {
             log.error("Failed to get table columns for data generation", e);
-            return ListResult.error("获取表列信息失败: " + e.getMessage(), null);
+            String detail = e instanceof BusinessException be && be.getArgs() != null && be.getArgs().length > 0
+                    ? String.valueOf(be.getArgs()[0]) : e.getMessage();
+            return ListResult.error("获取表列信息失败: " + detail, null);
         }
     }
 
@@ -47,7 +50,9 @@ public class DataGenerationController {
             return DataResult.of(dataGenerationService.generatePreview(request));
         } catch (Exception e) {
             log.error("Failed to generate data preview", e);
-            return DataResult.error("GENERATE_PREVIEW_ERROR", "生成预览失败: " + e.getMessage());
+            String detail = e instanceof BusinessException be && be.getArgs() != null && be.getArgs().length > 0
+                    ? String.valueOf(be.getArgs()[0]) : e.getMessage();
+            return DataResult.error("GENERATE_PREVIEW_ERROR", "生成预览失败: " + detail);
         }
     }
 

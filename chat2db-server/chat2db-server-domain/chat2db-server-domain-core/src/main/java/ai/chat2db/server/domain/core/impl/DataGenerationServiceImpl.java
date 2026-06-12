@@ -131,7 +131,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
                 throw new BusinessException("GET_TABLE_COLUMNS_ERROR", new Object[]{"获取表列信息失败"});
             }
 
-            ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(request);
+ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(request, columns);
             List<Map<String, Object>> previewData = generateDataRows(request, columns, foreignKeyValueProvider, 10);
 
             DataGenerationPreviewVO previewVO = new DataGenerationPreviewVO();
@@ -278,18 +278,26 @@ public class DataGenerationServiceImpl implements DataGenerationService {
         column.setReferencedColumnName(foreignKey.getReferencedColumn());
     }
 
-    private ForeignKeyValueProvider buildForeignKeyValueProvider(DataGenerationRequest request) {
+    private ForeignKeyValueProvider buildForeignKeyValueProvider(DataGenerationRequest request, List<ColumnConfigParam> columns) {
         List<ForeignKey> foreignKeys = loadForeignKeys(request, false);
         if (foreignKeys.isEmpty()) {
             return ForeignKeyValueProvider.empty();
         }
+
+        Set<String> nullableColumns = columns.stream()
+                .filter(c -> Boolean.TRUE.equals(c.getNullable()))
+                .map(ColumnConfigParam::getColumnName)
+                .collect(Collectors.toSet());
 
         Map<String, List<ForeignKey>> groupedForeignKeys = foreignKeys.stream()
                 .collect(Collectors.groupingBy(fk -> buildForeignKeyGroupKey(request, fk), LinkedHashMap::new,
                         Collectors.toList()));
         Map<String, ForeignKeyValueGroup> columnGroupMap = new HashMap<>();
         for (List<ForeignKey> groupForeignKeys : groupedForeignKeys.values()) {
-            ForeignKeyValueGroup valueGroup = buildForeignKeyValueGroup(request, groupForeignKeys);
+            ForeignKeyValueGroup valueGroup = buildForeignKeyValueGroup(request, groupForeignKeys, nullableColumns);
+            if (valueGroup == null) {
+                continue;
+            }
             for (String columnName : valueGroup.childColumns()) {
                 columnGroupMap.put(columnName, valueGroup);
             }
@@ -297,7 +305,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
         return new ForeignKeyValueProvider(columnGroupMap);
     }
 
-    private ForeignKeyValueGroup buildForeignKeyValueGroup(DataGenerationRequest request, List<ForeignKey> foreignKeys) {
+    private ForeignKeyValueGroup buildForeignKeyValueGroup(DataGenerationRequest request, List<ForeignKey> foreignKeys, Set<String> nullableColumns) {
         ForeignKey first = foreignKeys.get(0);
         MetaData metaData = Chat2DBContext.getMetaData();
         String tableName = buildQualifiedTableName(first.getReferencedTable(),
@@ -328,7 +336,11 @@ public class DataGenerationServiceImpl implements DataGenerationService {
 
         List<List<Object>> referencedRows = queryReferencedRows(sql.toString(), referencedColumns.size());
         if (referencedRows.isEmpty()) {
-            throw new RuntimeException("外键引用表无可用数据：" + buildForeignKeyRelationText(first));
+            boolean allNullable = childColumns.stream().allMatch(c -> nullableColumns.contains(c));
+            if (allNullable) {
+                return null;
+            }
+            throw new BusinessException("FOREIGN_KEY_NO_DATA", new Object[]{buildForeignKeyRelationText(first)});
         }
         return new ForeignKeyValueGroup(childColumns, referencedRows);
     }
@@ -442,7 +454,7 @@ public class DataGenerationServiceImpl implements DataGenerationService {
             if (columns == null) {
                 throw new RuntimeException("获取表列信息失败");
             }
-            ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(request);
+            ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(request, columns);
 
             int totalRows = request.getRowCount() != null ? request.getRowCount() : 100;
             int batchSize = request.getBatchSize() != null ? request.getBatchSize() : 1000;

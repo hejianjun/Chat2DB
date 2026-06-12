@@ -89,6 +89,7 @@ public class TableController {
     @GetMapping("/table_list")
     public ListResult<SimpleTable> tableList(@Valid TableBriefQueryRequest request) {
         TablePageQueryParam queryParam = rdbWebConverter.tablePageRequest2param(request);
+        queryParam.queryAll();
         List<SimpleTable> tables = tableService.queryTables(queryParam);
         return ListResult.of(tables);
     }
