@@ -56,11 +56,12 @@ public class ForeignKeyController {
 
     @GetMapping("/list")
     public ListResult<ForeignKeyVO> list(@Valid ForeignKeyListRequest request) {
-        List<ForeignKey> fks = foreignKeySyncService.listAllForeignKeys(
+        List<ForeignKey> fks = foreignKeySyncService.listForeignKeys(
                 request.getDataSourceId(),
                 request.getDatabaseName(),
                 request.getSchemaName(),
-                request.getTableName()
+                request.getTableName(),
+                request.getRelation()
         );
         List<ForeignKeyVO> voList = fks.stream()
                 .map(fk -> ForeignKeyVO.builder()

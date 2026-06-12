@@ -421,6 +421,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           databaseName: boundInfo.databaseName || '',
           schemaName: boundInfo.schemaName,
           tableName: currentTableName,
+          relation: 'ANY',
         });
 
         console.log('[SQL 补全 - JOIN] 外键数量:', foreignKeys.length);
@@ -465,30 +466,34 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
           const relatedTableItems: any[] = [];
           const processedTables = new Set<string>();
 
-          // 收集所有关联的表（通过外键引用的表）
+          // 收集所有关联的表（当前表作为外键表或被引用表）
           for (const fk of foreignKeys as IForeignKeyVO[]) {
-            const refTable = cleanIdentifier(fk.referencedTable);
-            if (!refTable || joinedTableNames.has(refTable) || processedTables.has(refTable)) {
+            const sourceTable = cleanIdentifier(fk.tableName);
+            const referencedTable = cleanIdentifier(fk.referencedTable);
+            const isSourceTable = sourceTable === currentTableName;
+            const relatedTable = isSourceTable ? referencedTable : sourceTable;
+            if (!relatedTable || joinedTableNames.has(relatedTable) || processedTables.has(relatedTable)) {
               continue;
             }
 
-            processedTables.add(refTable);
-            const alias = generateAlias(refTable, usedAliases);
+            processedTables.add(relatedTable);
+            const alias = generateAlias(relatedTable, usedAliases);
 
-            // 使用 snippet 格式：表名 别名 ON 当前表.外键列 = 关联表.主键列
-            const snippetText =
-              `${refTable} ${alias} ON ` +
-              `${currentTableAlias}.${fk.columnName} = ${alias}.${fk.referencedColumnName}`;
+            const leftCondition = isSourceTable
+              ? `${currentTableAlias}.${fk.columnName}`
+              : `${currentTableAlias}.${fk.referencedColumnName}`;
+            const rightCondition = isSourceTable ? `${alias}.${fk.referencedColumnName}` : `${alias}.${fk.columnName}`;
+            const snippetText = `${relatedTable} ${alias} ON ${leftCondition} = ${rightCondition}`;
 
-            const label = parentName ? `${refTable} (${parentName})` : refTable;
+            const label = parentName ? `${relatedTable} (${parentName})` : relatedTable;
             relatedTableItems.push({
               label,
               insertText: snippetText,
               insertTextRules: 4, // Monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-              sortText: `A${refTable}`, // A 开头优先显示
+              sortText: `A${relatedTable}`, // A 开头优先显示
               kind: monaco.languages.CompletionItemKind.Struct as any,
               detail: `(关联) ${fk.columnName} → ${fk.referencedColumnName}`,
-              documentation: fk.comment || `通过 ${fk.columnName} 关联到 ${refTable}.${fk.referencedColumnName}`,
+              documentation: fk.comment || `通过 ${fk.columnName} 关联到 ${relatedTable}`,
             });
           }
 

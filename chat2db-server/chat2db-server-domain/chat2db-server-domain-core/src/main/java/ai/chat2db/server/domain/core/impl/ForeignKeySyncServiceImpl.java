@@ -21,6 +21,7 @@ import ai.chat2db.spi.model.VirtualForeignKey;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -127,14 +128,20 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
      */
     @Override
     public List<ForeignKey> listAllForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+        return listForeignKeys(dataSourceId, databaseName, schemaName, tableName, ForeignKeyRelation.SOURCE);
+    }
+
+    @Override
+    public List<ForeignKey> listForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName,
+                                            ForeignKeyRelation relation) {
         List<ForeignKey> result = new ArrayList<>();
 
-        List<ForeignKeyDO> realFKs = queryRealFKsFromH2(dataSourceId, databaseName, schemaName, tableName);
+        List<ForeignKeyDO> realFKs = queryRealFKsFromH2(dataSourceId, databaseName, schemaName, tableName, relation);
         for (ForeignKeyDO fk : realFKs) {
             result.add(convertDOToModel(fk));
         }
 
-        List<VirtualForeignKeyDO> virtualFKs = queryVirtualFKsFromH2(dataSourceId, databaseName, schemaName, tableName);
+        List<VirtualForeignKeyDO> virtualFKs = queryVirtualFKsFromH2(dataSourceId, databaseName, schemaName, tableName, relation);
         for (VirtualForeignKeyDO vk : virtualFKs) {
             result.add(convertVirtualDOToModel(vk));
         }
@@ -586,11 +593,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
      * @return List<ForeignKeyDO> 真实外键实体列表
      */
     private List<ForeignKeyDO> queryRealFKsFromH2(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+        return queryRealFKsFromH2(dataSourceId, databaseName, schemaName, tableName, ForeignKeyRelation.SOURCE);
+    }
+
+    private List<ForeignKeyDO> queryRealFKsFromH2(Long dataSourceId, String databaseName, String schemaName,
+                                                  String tableName, ForeignKeyRelation relation) {
         LambdaQueryWrapper<ForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ForeignKeyDO::getDataSourceId, dataSourceId)
-                .eq(StringUtils.isNotBlank(tableName), ForeignKeyDO::getTableName, tableName)
                 .eq(StringUtils.isNotBlank(databaseName), ForeignKeyDO::getDatabaseName, databaseName)
                 .eq(StringUtils.isNotBlank(schemaName), ForeignKeyDO::getSchemaName, schemaName);
+        appendTableRelationFilter(wrapper, tableName, relation, ForeignKeyDO::getTableName, ForeignKeyDO::getReferencedTable);
         return getFKMapper().selectList(wrapper);
     }
 
@@ -605,12 +617,35 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
      * @return List<VirtualForeignKeyDO> 虚拟外键实体列表
      */
     private List<VirtualForeignKeyDO> queryVirtualFKsFromH2(Long dataSourceId, String databaseName, String schemaName, String tableName) {
+        return queryVirtualFKsFromH2(dataSourceId, databaseName, schemaName, tableName, ForeignKeyRelation.SOURCE);
+    }
+
+    private List<VirtualForeignKeyDO> queryVirtualFKsFromH2(Long dataSourceId, String databaseName, String schemaName,
+                                                            String tableName, ForeignKeyRelation relation) {
         LambdaQueryWrapper<VirtualForeignKeyDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VirtualForeignKeyDO::getDataSourceId, dataSourceId)
-                .eq(StringUtils.isNotBlank(tableName), VirtualForeignKeyDO::getTableName, tableName)
                 .eq(StringUtils.isNotBlank(databaseName), VirtualForeignKeyDO::getDatabaseName, databaseName)
                 .eq(StringUtils.isNotBlank(schemaName), VirtualForeignKeyDO::getSchemaName, schemaName);
+        appendTableRelationFilter(wrapper, tableName, relation, VirtualForeignKeyDO::getTableName,
+                VirtualForeignKeyDO::getReferencedTable);
         return getVFKMapper().selectList(wrapper);
+    }
+
+    private <T> void appendTableRelationFilter(LambdaQueryWrapper<T> wrapper, String tableName,
+                                               ForeignKeyRelation relation,
+                                               SFunction<T, ?> tableColumn,
+                                               SFunction<T, ?> referencedTableColumn) {
+        if (StringUtils.isBlank(tableName)) {
+            return;
+        }
+        ForeignKeyRelation queryRelation = relation == null ? ForeignKeyRelation.SOURCE : relation;
+        if (queryRelation == ForeignKeyRelation.REFERENCED) {
+            wrapper.eq(referencedTableColumn, tableName);
+        } else if (queryRelation == ForeignKeyRelation.ANY) {
+            wrapper.and(item -> item.eq(tableColumn, tableName).or().eq(referencedTableColumn, tableName));
+        } else {
+            wrapper.eq(tableColumn, tableName);
+        }
     }
 
     private void validateVirtualForeignKeyRelation(String databaseName,

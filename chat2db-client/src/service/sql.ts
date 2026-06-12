@@ -487,6 +487,7 @@ export interface IForeignKeyListParams {
   databaseName?: string;
   schemaName?: string;
   tableName?: string;
+  relation?: 'SOURCE' | 'REFERENCED' | 'ANY';
 }
 
 /** 外键列表响应 */

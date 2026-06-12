@@ -374,11 +374,19 @@ export default memo<IProps>((props) => {
 
     setRelatedTablesLoading(true);
     try {
-      const foreignKeys = await sqlService.getForeignKeyList({
-        dataSourceId: boundInfo.dataSourceId,
-        databaseName: boundInfo.databaseName,
-        schemaName: boundInfo.schemaName,
-      });
+      const foreignKeys = (
+        await Promise.all(
+          currentTables.map((tableName) =>
+            sqlService.getForeignKeyList({
+              dataSourceId: boundInfo.dataSourceId,
+              databaseName: boundInfo.databaseName,
+              schemaName: boundInfo.schemaName,
+              tableName,
+              relation: 'ANY',
+            }),
+          ),
+        )
+      ).flat();
       const selectedTableSet = new Set(currentTables);
       const nextTables = [...currentTables];
 

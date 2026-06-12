@@ -14,6 +14,9 @@ public interface ForeignKeySyncService {
 
     List<ForeignKey> listAllForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName);
 
+    List<ForeignKey> listForeignKeys(Long dataSourceId, String databaseName, String schemaName, String tableName,
+                                     ForeignKeyRelation relation);
+
     VirtualForeignKey createVirtualFK(CreateVirtualFKParam param);
 
     ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params);
@@ -37,6 +40,12 @@ public interface ForeignKeySyncService {
     List<VirtualForeignKey> queryAllVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName);
 
     int cleanInvalidVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName, List<String> existingTableNames);
+
+    enum ForeignKeyRelation {
+        SOURCE,
+        REFERENCED,
+        ANY
+    }
 
     class SyncResult {
         private int added;
