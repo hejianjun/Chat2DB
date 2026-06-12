@@ -21,6 +21,7 @@ const changeTypeLabel: Record<string, string> = {
   DELETE: i18n('schemaDiff.removed'),
 };
 
+/** 列差异 / 索引差异 / 外键差异在 antd Table 中需要的统一行结构。 */
 interface IDiffRow {
   key: string;
   changeType: string;
@@ -29,6 +30,7 @@ interface IDiffRow {
   [key: string]: any;
 }
 
+/** 把 undefined / null 渲染成 “-”，避免表格里出现空白单元格难以阅读。 */
 const formatDiffValue = (value?: string) => (value === undefined || value === null ? '-' : value);
 
 const diffColumns = [
@@ -147,6 +149,13 @@ function buildFkRows(diffs: IForeignKeyDiff[]): IDiffRow[] {
   });
 }
 
+/**
+ * 表差异详情视图。
+ *
+ * 根据传入的 ITableDiff 动态构建 Tab：列差异、索引差异、外键差异、表选项差异
+ * 各占一个 Tab，最后再带一个 DDL 预览 Tab；任一类目无差异则隐藏该 Tab。
+ * 行内的「查看差异」按钮会弹出 Modal，展示该字段在源/目标的具体取值，便于排查。
+ */
 const DetailView: React.FC<DetailViewProps> = memo(({ tableDiff }) => {
   const [currentDiff, setCurrentDiff] = useState<IDiffRow | null>(null);
   const hasColumns = tableDiff.columnDiffs && tableDiff.columnDiffs.length > 0;

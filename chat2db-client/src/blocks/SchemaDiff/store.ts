@@ -9,12 +9,22 @@ import {
   IMigrateResult,
 } from '@/typings/schemaDiff';
 
+/** 数据源下拉选项的精简结构（id + 别名 + 数据库类型）。 */
 export interface IConnectionOption {
   id: number;
   alias: string;
   dbType: string;
 }
 
+/**
+ * SchemaDiff 模块的 Zustand 状态结构。
+ *
+ * 状态分为三段：
+ * 1. 源/目标选择：sourceDataSource、sourceDatabase、sourceSchema 及 target 同名字段；
+ * 2. 比较：compareOption（比较选项）、compareResult（结果）、comparing（加载中）；
+ * 3. 迁移：selectedTableDiffs（表勾选）、selectedStatementIndexes（语句勾选）、
+ *    detailViewTableName（右侧详情）、migrationExecuting / migrationResult。
+ */
 export interface ISchemaDiffStore {
   sourceDataSource: IConnectionOption | null;
   targetDataSource: IConnectionOption | null;
@@ -32,6 +42,7 @@ export interface ISchemaDiffStore {
   migrationResult: IMigrateResult | null;
 }
 
+/** 默认比较选项：开启全部对比项，忽略 MySQL 显示宽度/字符集别名/自增起始值，排除废弃表。 */
 const defaultCompareOption: ICompareOption = {
   compareColumn: true,
   compareIndex: true,
@@ -44,6 +55,7 @@ const defaultCompareOption: ICompareOption = {
   ignoreAutoIncrement: true,
 };
 
+/** Store 的初始值，用于打开面板与 resetStore 时复用。 */
 export const initSchemaDiffStore = {
   sourceDataSource: null,
   targetDataSource: null,
@@ -66,6 +78,9 @@ export const useSchemaDiffStore = createWithEqualityFn<ISchemaDiffStore>(
   shallow,
 );
 
+// 下面这些 setter 在切换上游条件时会主动清空下游派生状态（库/Schema/比较结果），
+// 避免出现「数据源换了但还显示老库列表」之类的脏数据。
+
 export const setSourceDataSource = (sourceDataSource: IConnectionOption | null) =>
   useSchemaDiffStore.setState({ sourceDataSource, sourceDatabase: '', sourceSchema: '', compareResult: null });
 
@@ -84,9 +99,11 @@ export const setSourceSchema = (sourceSchema: string) =>
 export const setTargetSchema = (targetSchema: string) =>
   useSchemaDiffStore.setState({ targetSchema, compareResult: null });
 
+// 比较选项变化也会让旧结果失效，强制用户重新比较，避免选项与结果不匹配。
 export const setCompareOption = (compareOption: ICompareOption) =>
   useSchemaDiffStore.setState({ compareOption, compareResult: null });
 
+// 写入新比较结果时，连带重置勾选与详情视图，防止残留旧表的勾选状态。
 export const setCompareResult = (compareResult: ISchemaDiffResult | null) =>
   useSchemaDiffStore.setState({ compareResult, selectedTableDiffs: {}, selectedStatementIndexes: {}, detailViewTableName: null });
 
@@ -108,5 +125,6 @@ export const setMigrationExecuting = (migrationExecuting: boolean) =>
 export const setMigrationResult = (migrationResult: IMigrateResult | null) =>
   useSchemaDiffStore.setState({ migrationResult });
 
+/** 关闭面板或需要彻底清空时调用，把 store 还原成初始状态。 */
 export const resetStore = () =>
   useSchemaDiffStore.setState({ ...initSchemaDiffStore });

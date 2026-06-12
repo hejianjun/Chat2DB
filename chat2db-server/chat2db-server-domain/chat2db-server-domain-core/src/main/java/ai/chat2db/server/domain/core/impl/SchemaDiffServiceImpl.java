@@ -55,14 +55,30 @@ import ai.chat2db.spi.sql.ConnectInfo;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Schema diff and migration service implementation.
- * Provides functionality to compare database structures between source and target,
- * and execute DDL migration statements.
+ * 表结构对比与迁移服务实现。
+ *
+ * <p>主要职责：
+ * <ul>
+ *   <li>对比源数据库与目标数据库之间的表结构（表、列、索引、外键、表选项）。</li>
+ *   <li>根据对比结果生成可在目标库执行的 DDL 语句（CREATE / ALTER）。</li>
+ *   <li>按用户选中的 DDL 语句执行迁移，支持事务与失败继续两种模式。</li>
+ * </ul>
+ *
+ * <p>设计要点：
+ * <ul>
+ *   <li>大小写敏感：通过 {@link CompareOption#isCaseSensitive()} 决定表名/列名的归一化方式。</li>
+ *   <li>性能优化：表列表与表详情均通过 {@link CompletableFuture} 并行获取，并使用批量接口避免 N+1 查询。</li>
+ *   <li>方言差异：MySQL 整型显示宽度、字符集别名（utf8 / utf8mb3）等差异通过开关进行规范化忽略。</li>
+ * </ul>
  */
 @Service
 @Slf4j
 public class SchemaDiffServiceImpl implements SchemaDiffService {
 
+    /**
+     * MySQL 整型列类型（含显示宽度）的匹配模式，用于在忽略显示宽度场景下做归一化。
+     * 例如：{@code int(11) unsigned} → {@code int unsigned}。
+     */
     private static final Pattern MYSQL_INTEGER_COLUMN_TYPE_WITH_WIDTH = Pattern.compile(
             "(?i)^(tinyint|smallint|mediumint|int|integer|bigint)\\s*\\(\\s*\\d+\\s*\\)(\\s+unsigned)?$");
 
@@ -76,14 +92,11 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     private DeprecatedTableService deprecatedTableService;
 
     /**
-     * Compare database structures between source and target.
-     * Supports case-sensitive and case-insensitive comparison modes.
-     * 
-     * @param param comparison parameters including source/target connection info and options
-     * @return schema diff result containing table differences and DDL statements
-     */
-    /**
-     * 数据库比较上下文，封装比较过程中的所有必要信息
+     * 表结构比较过程中的上下文对象。
+     *
+     * <p>封装比较一次所需的全部输入：插件、元数据、连接、比较选项、废弃表集合，
+     * 以及预先抓取的源/目标表名列表与表详情。各比较步骤通过该对象共享数据，
+     * 避免重复查询。
      */
     private static class CompareContext {
         final Plugin sourcePlugin;
@@ -122,7 +135,13 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 表比较结果统计
+     * 表比较结果数量统计。
+     * <ul>
+     *   <li>{@code onlyInSource}：仅存在于源库的表（即目标库需要新增）。</li>
+     *   <li>{@code onlyInTarget}：仅存在于目标库的表（即目标库相对源库多余）。</li>
+     *   <li>{@code modified}：两边都存在但结构有差异的表。</li>
+     *   <li>{@code unchanged}：两边都存在且结构完全一致的表。</li>
+     * </ul>
      */
     private static class CompareStats {
         int onlyInSource = 0;
@@ -131,6 +150,22 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         int unchanged = 0;
     }
 
+    /**
+     * 比较源库与目标库的表结构。
+     *
+     * <p>整体流程：
+     * <ol>
+     *   <li>解析源 / 目标的数据库类型并加载对应插件；</li>
+     *   <li>建立连接（try-with-resources 自动释放）；</li>
+     *   <li>初始化比较选项及废弃表过滤集合；</li>
+     *   <li>并行获取两边的表名列表并批量获取表详情；</li>
+     *   <li>对所有表名取并集后并行比较，得到 {@link TableDiff} 列表；</li>
+     *   <li>统计差异并构建最终的 {@link SchemaDiffResult}。</li>
+     * </ol>
+     *
+     * @param param 比较参数（含数据源、库/Schema、可选表名过滤、比较选项）
+     * @return 比较结果，含每张表的差异详情、汇总统计与 DDL
+     */
     @Override
     public SchemaDiffResult compare(SchemaCompareParam param) {
         long startTime = System.currentTimeMillis();
@@ -193,7 +228,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 获取数据库插件并验证
+     * 加载并校验数据源对应的数据库插件。
+     *
+     * @throws RuntimeException 当数据源类型未注册任何插件实现时抛出
      */
     private Plugin getPlugin(Long dataSourceId) {
         String dbType = getDbType(dataSourceId);
@@ -205,7 +242,8 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 验证并获取比较选项
+     * 校验比较选项的有效性。
+     * 选项目前是必传项，未来如有默认值可在此扩展。
      */
     private CompareOption validateAndGetOption(CompareOption option) {
         if (option == null) {
@@ -215,7 +253,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 根据选项查询废弃表
+     * 当比较选项开启「排除废弃表」时，从废弃表服务中查询源/目标库的废弃表名集合。
+     * 否则返回空集，让所有表都参与比较。
+     *
+     * @param isSource {@code true} 表示查询源库的废弃表，{@code false} 表示查询目标库
      */
     private Set<String> queryDeprecatedIfNeeded(SchemaCompareParam param, CompareOption option, boolean isSource) {
         if (!option.isExcludeDeprecated()) {
@@ -230,7 +271,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 并行获取表列表
+     * 异步获取一侧（源或目标）的表名列表。
+     *
+     * <p>调用方一般会同时为源库和目标库各发起一次该调用以并行抓取，
+     * 表名结果会过滤掉废弃表，并按照传入的 {@code tableNames} 做白名单筛选（可选）。
      */
     private List<String> fetchTableListsParallel(Connection conn, MetaData meta, SchemaCompareParam param,
                                                   Set<String> deprecatedSet, boolean isSource) {
@@ -251,7 +295,15 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 并行比较所有表
+     * 并行比较所有表。
+     *
+     * <p>步骤：
+     * <ol>
+     *   <li>按 {@link CompareOption#isCaseSensitive()} 选择表名归一化函数；</li>
+     *   <li>分别构建源 / 目标的「归一化表名 → 原表名」映射；</li>
+     *   <li>对两侧归一化表名取并集，对每个表名异步执行 {@link #createCompareTask}；</li>
+     *   <li>等待所有任务完成，过滤空结果（详情缺失时为 null）后返回。</li>
+     * </ol>
      */
     private List<TableDiff> compareTablesParallel(CompareContext context) {
         long compareTime = System.currentTimeMillis();
@@ -288,7 +340,14 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 创建单个表的比较任务
+     * 创建单个表的异步比较任务。
+     *
+     * <p>差异类型判定：
+     * <ul>
+     *   <li>仅源库存在 → {@link TableDiffType#ADDED}（目标库需新增）；</li>
+     *   <li>仅目标库存在 → {@link TableDiffType#REMOVED}（目标库相对源库多余）；</li>
+     *   <li>两边都存在 → 进一步比较列、索引、外键、表选项等明细。</li>
+     * </ul>
      */
     private CompletableFuture<TableDiff> createCompareTask(String normalizedName,
                                                             Map<String, String> sourceTableMap,
@@ -321,7 +380,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 比较仅在源库中存在的表
+     * 处理仅在源库中存在的表：在目标库相当于新增，需要 {@code CREATE TABLE} DDL。
      */
     private TableDiff compareTableOnlyInSource(String sourceName, CompareContext context) {
         Table sourceTable = context.sourceTableDetails.get(sourceName);
@@ -341,7 +400,8 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 比较仅在目标库中存在的表
+     * 处理仅在目标库中存在的表：相对源库多余。
+     * 默认不主动产出删表 DDL（避免误删数据），由前端按需展示与确认。
      */
     private TableDiff compareTableOnlyInTarget(String targetName, CompareContext context) {
         Table targetTable = context.targetTableDetails.get(targetName);
@@ -359,7 +419,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 比较两边都存在的表
+     * 处理两边都存在的表：根据比较选项依次比较列、索引、外键、表选项。
+     * 任一类别存在差异则视为 {@link TableDiffType#MODIFIED} 并构建 ALTER DDL；
+     * 全部一致则标记为 {@link TableDiffType#UNCHANGED}。
      */
     private TableDiff compareTableInBoth(String sourceName, String targetName, CompareContext context) {
         Table sourceTable = context.sourceTableDetails.get(sourceName);
@@ -432,7 +494,11 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 构建有变更的表差异
+     * 构建 {@link TableDiffType#MODIFIED} 类型的表差异结果。
+     *
+     * <p>核心是把源表与各类差异组装为一个「带 EditStatus 标记」的虚拟表，
+     * 再交给目标库插件的 {@link SqlBuilder#buildModifyTaleSql} 生成 ALTER 语句。
+     * 由目标库插件来生成 DDL，能保证语法符合目标方言。
      */
     private TableDiff buildModifiedTableDiff(String sourceName, Table sourceTable, Table targetTable,
                                               List<ColumnDiff> columnDiffs, List<IndexDiff> indexDiffs,
@@ -462,7 +528,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 计算比较统计
+     * 按 {@link TableDiffType} 累计各类表的数量，供 {@link DiffSummary} 使用。
      */
     private CompareStats calculateStats(List<TableDiff> tableDiffs) {
         CompareStats stats = new CompareStats();
@@ -486,7 +552,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * 构建比较结果
+     * 把比较过程的输入与输出整合成最终响应：
+     * 计算被排除的废弃表数量、参与比较的表总数，并填充 {@link DiffSummary}，
+     * 同时附带源/目标的「数据源.库.Schema」标识，便于前端发起后续迁移调用。
      */
     private SchemaDiffResult buildCompareResult(SchemaCompareParam param, CompareContext context,
                                                  List<TableDiff> tableDiffs, CompareStats stats, long startTime) {
@@ -537,11 +605,20 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Execute DDL migration statements on the target database.
-     * Supports transaction mode and continue-on-error mode.
-     * 
-     * @param param migration parameters including DDL statements and execution options
-     * @return migration result with per-statement execution status
+     * 在目标库执行 DDL 迁移语句。
+     *
+     * <p>执行模式：
+     * <ul>
+     *   <li>{@code executeInTransaction = true}：所有语句在同一事务内执行，任一失败回滚；</li>
+     *   <li>{@code continueOnError = true}：单条失败后继续执行剩余语句，最终返回每条的执行结果；
+     *       与事务模式同时开启时，遇到失败仍会回滚已执行的语句。</li>
+     * </ul>
+     *
+     * <p>执行前会临时把 {@link Chat2DBContext} 切换到目标连接，结束后恢复原上下文，
+     * 防止污染调用线程的连接信息。
+     *
+     * @param param 迁移参数（目标连接、库/Schema、DDL 列表、执行选项）
+     * @return 每条语句的执行明细以及成功/失败计数
      */
     @Override
     public MigrateResult migrate(SchemaMigrateParam param) {
@@ -671,7 +748,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Get database type from data source.
+     * 通过数据源 id 拿到对应的数据库类型（如 mysql/postgres/oracle 等）。
      */
     private String getDbType(Long dataSourceId) {
         DataSource ds = dataSourceService.queryById(dataSourceId);
@@ -679,8 +756,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Create a database connection with proper context management.
-     * Sets up Chat2DBContext for the plugin to access connection info.
+     * 创建数据库连接，并保证调用线程的 {@link Chat2DBContext} 不被污染。
+     *
+     * <p>插件内部依赖 {@link Chat2DBContext} 读取连接信息，所以连接前必须把当前
+     * {@link ConnectInfo} 暂存进上下文；连接建立后立即恢复调用前的上下文。
      */
     private Connection createConnection(Long dataSourceId, String databaseName, String schemaName) {
         ConnectInfo connectInfo = createConnectInfo(dataSourceId, databaseName, schemaName);
@@ -733,7 +812,8 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Query deprecated table names for exclusion during comparison.
+     * 查询当前用户在指定库/Schema 下被标记为「废弃」的表名集合。
+     * 比较时若开启「排除废弃表」，会跳过这些表。
      */
     private Set<String> queryDeprecatedTableNames(Long dataSourceId, String databaseName, String schemaName) {
         DeprecatedTableParam param = new DeprecatedTableParam();
@@ -746,7 +826,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * List table names from database metadata, filtering by specific tables and deprecated set.
+     * 列出库/Schema 下的表名，并按用户指定的表名白名单与废弃表黑名单过滤。
+     *
+     * @param specificTables 仅比较的表名集合，{@code null} 或空表示比较全部
+     * @param deprecatedSet  需要排除的废弃表名集合
      */
     private List<String> listTableNames(Connection conn, MetaData meta, String databaseName, String schemaName,
                                          List<String> specificTables, Set<String> deprecatedSet) {
@@ -990,6 +1073,13 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         return diffs;
     }
 
+    /**
+     * 比较两个列对象是否完全等价。
+     *
+     * <p>比较项包括：数据类型、列长度（受 {@link CompareOption#isIgnoreIntegerDisplayWidth} 影响）、
+     * 小数位数、可空、默认值、注释、自增、字符集/排序规则（受 {@link CompareOption#isIgnoreCharsetAlias} 影响）、
+     * 完整列类型字符串。
+     */
     private boolean columnEquals(TableColumn a, TableColumn b, CompareOption option) {
         if (a == b) return true;
         if (a == null || b == null) return false;
@@ -1005,6 +1095,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
                 && columnTypeEquals(a.getColumnType(), b.getColumnType(), option);
     }
 
+    /**
+     * 列出两个列之间所有不同的字段，前端会展示这些差异详情。
+     */
     private List<FieldDiff> describeColumnDiff(TableColumn source, TableColumn target, CompareOption option) {
         List<FieldDiff> changedFields = new ArrayList<>();
         addChangedField(changedFields, "dataType", source.getDataType(), target.getDataType());
@@ -1024,6 +1117,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         return changedFields;
     }
 
+    /**
+     * 比较两个 MySQL 整型列的长度。
+     * 当开启「忽略整型显示宽度」选项且两边都是 MySQL 整型时，直接判定相等。
+     */
     private boolean columnSizeEquals(TableColumn source, TableColumn target, CompareOption option) {
         if (option.isIgnoreIntegerDisplayWidth() && isMysqlIntegerType(source.getDataType(), source.getColumnType())
                 && isMysqlIntegerType(target.getDataType(), target.getColumnType())) {
@@ -1032,6 +1129,11 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         return Objects.equals(source.getColumnSize(), target.getColumnSize());
     }
 
+    /**
+     * 比较列类型字符串。
+     * 在「忽略整型显示宽度」开启时，会先去掉 MySQL 整型的 {@code (n)} 显示宽度再比较，
+     * 例如 {@code int(11)} 与 {@code int} 视作相等。
+     */
     private boolean columnTypeEquals(String sourceValue, String targetValue, CompareOption option) {
         if (!option.isIgnoreIntegerDisplayWidth()) {
             return Objects.equals(sourceValue, targetValue);
@@ -1098,10 +1200,16 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Compare indexes between source and target tables.
-     * 
-     * @param caseSensitive whether to use case-sensitive name matching
-     * @return list of index differences with change types
+     * 比较源表与目标表的索引差异。
+     *
+     * <p>规则：
+     * <ul>
+     *   <li>仅在目标库存在 → ADD；</li>
+     *   <li>两边都存在但属性不同 → MODIFY；</li>
+     *   <li>仅在源库存在 → DELETE。</li>
+     * </ul>
+     *
+     * @param caseSensitive 是否对索引名做大小写敏感匹配
      */
     private List<IndexDiff> compareIndexes(List<TableIndex> sourceIdxs, List<TableIndex> targetIdxs, boolean caseSensitive) {
         List<IndexDiff> diffs = new ArrayList<>();
@@ -1174,10 +1282,11 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Compare foreign keys between source and target tables.
-     * 
-     * @param caseSensitive whether to use case-sensitive name matching
-     * @return list of foreign key differences with change types
+     * 比较源表与目标表的外键差异。
+     *
+     * <p>规则与 {@link #compareIndexes} 一致：以外键名为主键做集合差集 + 属性比较。
+     *
+     * @param caseSensitive 是否对外键名做大小写敏感匹配
      */
     private List<ForeignKeyDiff> compareForeignKeys(List<ForeignKey> sourceFKs, List<ForeignKey> targetFKs, boolean caseSensitive) {
         List<ForeignKeyDiff> diffs = new ArrayList<>();
@@ -1251,6 +1360,10 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         return diff.getSourceForeignKey() == null ? null : diff.getSourceForeignKey().getName();
     }
 
+    /**
+     * 比较两个表的非结构信息（注释、引擎、字符集、排序规则、自增起始值）。
+     * 自增起始值受 {@link CompareOption#isIgnoreAutoIncrement} 控制是否参与比较。
+     */
     private boolean tableOptionsEqual(Table a, Table b, CompareOption option) {
         if (a == b) return true;
         if (a == null || b == null) return false;
@@ -1307,10 +1420,15 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
     }
 
     /**
-     * Build a target table with edit status flags set based on diff results.
-     * Used for generating ALTER TABLE DDL statements.
-     * 
-     * @param caseSensitive whether to use case-sensitive name matching
+     * 根据列/索引/外键的差异，构造一份「带 {@link EditStatus} 标记」的虚拟表。
+     *
+     * <p>这个虚拟表会传给目标库插件的 SqlBuilder，由它生成 ALTER TABLE 等 DDL：
+     * <ul>
+     *   <li>差异中的 ADD（即只在目标库存在）→ 在虚拟表中标记为 DELETE，让 SqlBuilder 输出 DROP；</li>
+     *   <li>差异中的 DELETE（即只在源库存在）→ 在虚拟表中标记为 ADD，让 SqlBuilder 输出 ADD；</li>
+     *   <li>差异中的 MODIFY → 复制源对象并标 MODIFY，必要时记录 oldName 以支持改名。</li>
+     * </ul>
+     * 自增起始值是否沿用目标库由 {@link CompareOption#isIgnoreAutoIncrement} 决定。
      */
     private Table buildTableWithEditStatus(Table sourceTable, Table targetTable,
                                             List<ColumnDiff> columnDiffs, List<IndexDiff> indexDiffs,
@@ -1448,6 +1566,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         return target;
     }
 
+    /**
+     * 安静关闭连接，吞掉 {@link SQLException} 仅打印 warn 日志。
+     */
     private void closeQuietly(Connection conn) {
         if (conn != null) {
             try {

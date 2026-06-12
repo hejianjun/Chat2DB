@@ -15,13 +15,16 @@ import MigrationPanel from './MigrationPanel';
 import styles from './index.less';
 
 /**
- * SchemaDiffPanel - Database schema comparison component.
- * 
- * Allows users to:
- * 1. Select source and target data sources, databases, and schemas
- * 2. Configure comparison options (columns, indexes, foreign keys, case sensitivity)
- * 3. View comparison results with diff details and DDL statements
- * 4. Execute migration to apply changes to the target database
+ * SchemaDiffPanel - 表结构对比主面板。
+ *
+ * 提供完整的对比 → 预览 → 迁移闭环：
+ * 1. 选择源 / 目标的数据源、数据库以及（可选）Schema；
+ * 2. 配置比较选项（列、索引、外键、大小写敏感、忽略 MySQL 显示宽度等）；
+ * 3. 触发比较，按表展示差异、改动详情与待执行 DDL；
+ * 4. 勾选要执行的表，由 {@link MigrationPanel} 在目标库上执行 DDL 完成迁移。
+ *
+ * 组件本身只负责头部选择器、加载态与汇总条；详情和迁移分别交给 {@link ResultPanel}
+ * 与 {@link MigrationPanel}，状态通过 useSchemaDiffStore 共享。
  */
 const SchemaDiffPanel: React.FC = memo(() => {
   // Store state
@@ -34,8 +37,9 @@ const SchemaDiffPanel: React.FC = memo(() => {
   } = useSchemaDiffStore();
 
   const connectionList = useConnectionStore((s) => s.connectionList);
-  
-  // Local state for database/schema lists and loading indicators
+
+  // 数据库 / Schema 列表与各自的加载态。这些数据依赖于上游选择，放本地 state 是为了
+  // 避免污染全局 store；切换上游时下面的 useEffect 会负责清空与重新拉取。
   const [sourceDatabases, setSourceDatabases] = useState<IDatabaseItem[]>([]);
   const [targetDatabases, setTargetDatabases] = useState<IDatabaseItem[]>([]);
   const [sourceSchemas, setSourceSchemas] = useState<ISchemaItem[]>([]);
@@ -45,14 +49,14 @@ const SchemaDiffPanel: React.FC = memo(() => {
   const [sourceSchemaLoading, setSourceSchemaLoading] = useState(false);
   const [targetSchemaLoading, setTargetSchemaLoading] = useState(false);
 
-  // Load connection list on mount
+  // 首次挂载时若全局连接列表还没初始化，则触发拉取。
   useEffect(() => {
     if (!connectionList) {
       getConnectionList();
     }
   }, [connectionList]);
 
-  // Load databases when source data source changes
+  // 源数据源变化 → 拉源库列表。
   useEffect(() => {
     if (sourceDataSource?.id) {
       setSourceDbLoading(true);
@@ -72,6 +76,7 @@ const SchemaDiffPanel: React.FC = memo(() => {
     }
   }, [sourceDataSource?.id]);
 
+  // 目标数据源变化 → 拉目标库列表。
   useEffect(() => {
     if (targetDataSource?.id) {
       setTargetDbLoading(true);
@@ -91,6 +96,7 @@ const SchemaDiffPanel: React.FC = memo(() => {
     }
   }, [targetDataSource?.id]);
 
+  // 源库选好后 → 拉源 Schema 列表（部分库不区分 schema，结果可能为空）。
   useEffect(() => {
     if (sourceDataSource?.id && sourceDatabase) {
       setSourceSchemaLoading(true);
@@ -110,6 +116,7 @@ const SchemaDiffPanel: React.FC = memo(() => {
     }
   }, [sourceDataSource?.id, sourceDatabase]);
 
+  // 目标库选好后 → 拉目标 Schema 列表。
   useEffect(() => {
     if (targetDataSource?.id && targetDatabase) {
       setTargetSchemaLoading(true);
@@ -129,7 +136,12 @@ const SchemaDiffPanel: React.FC = memo(() => {
     }
   }, [targetDataSource?.id, targetDatabase]);
 
-  // Execute schema comparison
+  /**
+   * 触发后端 /api/rdb/schema/diff/compare：
+   * 1. 必填项校验（缺源/目标的库则直接提示）；
+   * 2. 调用接口写回 compareResult；
+   * 3. 默认勾选所有「非未变化」的表，方便用户一键全选迁移。
+   */
   const handleCompare = useCallback(async () => {
     if (!sourceDataSource || !targetDataSource || !sourceDatabase || !targetDatabase) {
       message.warning(i18n('schemaDiff.selectSource'));
@@ -163,14 +175,14 @@ const SchemaDiffPanel: React.FC = memo(() => {
     }
   }, [sourceDataSource, targetDataSource, sourceDatabase, targetDatabase, sourceSchema, targetSchema, compareOption]);
 
-  // Calculate total number of changes for display
+  // 头部汇总条用：把新增 / 删除 / 修改的表数加起来，用于展示「共 N 处变更」。
   const totalChanges = compareResult
     ? (compareResult.summary?.tablesOnlyInSource || 0)
     + (compareResult.summary?.tablesOnlyInTarget || 0)
     + (compareResult.summary?.modifiedTables || 0)
     : 0;
 
-  // Render: header with selectors, options, loading spinner, and results
+  // 渲染：顶部选择器 + 比较选项 + 加载态 + 汇总条 + 详情/迁移面板。
   return (
     <div className={styles.schemaDiffPanel}>
       <div className={styles.header}>

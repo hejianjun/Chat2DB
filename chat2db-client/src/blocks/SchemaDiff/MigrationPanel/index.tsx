@@ -7,17 +7,27 @@ import sqlService from '@/service/sql';
 import { useSchemaDiffStore, setMigrationExecuting, setMigrationResult, setSelectedTableDiffs } from '../store';
 import styles from './index.less';
 
+/**
+ * 迁移面板：列出已勾选表的待执行 DDL，并负责调用 /migrate 接口。
+ *
+ * 主要交互：
+ * - 通过「全选 / 反选」一次性切换所有变更表的勾选；
+ * - 弹出确认框后调用 sqlService.migrateSchema，按返回结果给每条 SQL 标注 OK/FAIL；
+ * - 失败的语句会在底部统一展示，便于用户复制错误信息排查。
+ */
 const MigrationPanel: React.FC = memo(() => {
   const {
     compareResult, selectedTableDiffs, migrationExecuting, migrationResult,
   } = useSchemaDiffStore();
   const [confirmVisible, setConfirmVisible] = useState(false);
 
+  // 把「勾选的表」展开成扁平的语句列表，按表 + 顺序保留，UI 与执行使用同一份数据。
   const pendingStatements = useMemo(() => {
     if (!compareResult?.tableDiffs) return [];
     const stmts: { tableName: string; sql: string }[] = [];
     for (const td of compareResult.tableDiffs) {
       if (selectedTableDiffs[td.tableName] && td.ddlStatement) {
+        // 后端可能返回拆分好的 ddlStatements；为兼容旧版本，回退到单条 ddlStatement。
         const ddlStatements = td.ddlStatements?.length ? td.ddlStatements : [td.ddlStatement];
         for (const ddlStatement of ddlStatements) {
           if (ddlStatement.trim().length > 0) {
@@ -34,6 +44,7 @@ const MigrationPanel: React.FC = memo(() => {
     [selectedTableDiffs],
   );
 
+  // 是否「所有有变更的表」都已选中，用于切换全选/反选按钮文案。
   const allSelected = useMemo(
     () => {
       const changed = (compareResult?.tableDiffs || []).filter(td => td.diffType !== 'UNCHANGED');
@@ -42,6 +53,7 @@ const MigrationPanel: React.FC = memo(() => {
     [compareResult, selectedTableDiffs],
   );
 
+  /** 全选 / 全不选：根据当前 allSelected 取反应用到所有变更表。 */
   const handleSelectAll = useCallback(() => {
     const changed = (compareResult?.tableDiffs || []).filter(td => td.diffType !== 'UNCHANGED');
     const newSelected: Record<string, boolean> = {};
@@ -49,6 +61,11 @@ const MigrationPanel: React.FC = memo(() => {
       setSelectedTableDiffs(newSelected);
   }, [compareResult, allSelected]);
 
+  /**
+   * 调用后端 /migrate 执行迁移。
+   * 目标连接信息从 compareResult.targetKey 中拆分得到（格式见 SchemaDiffResult#targetKey）。
+   * 当前默认 continueOnError = true：失败语句不会阻断后续执行，结果中逐条标注。
+   */
   const handleMigrate = useCallback(async () => {
     if (!compareResult) return;
     const stmts = pendingStatements.map(s => s.sql);
