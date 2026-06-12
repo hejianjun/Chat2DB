@@ -1,6 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Input, Spin, message, Tag, Alert, Modal, Select } from 'antd';
-import { DownOutlined, RightOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons';
+import { DownOutlined, RightOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, LinkOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -240,6 +240,7 @@ export default memo<IProps>((props) => {
   const extractedSqlRef = useRef<string | null>(null);
   const [tableSelectorOpen, setTableSelectorOpen] = useState(false);
   const [tableSelectorLoading, setTableSelectorLoading] = useState(false);
+  const [relatedTablesLoading, setRelatedTablesLoading] = useState(false);
   const [databaseTables, setDatabaseTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [selectedTableDraft, setSelectedTableDraft] = useState<string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -359,6 +360,54 @@ export default memo<IProps>((props) => {
     setTableSelectorOpen(false);
     setInputValue((value) => (value.endsWith('@') ? value.slice(0, -1) : value));
   }, [selectedTableDraft, syncSelectedTables]);
+
+  const handleAddRelatedTables = useCallback(async () => {
+    const currentTables = currentSession?.selectedTables || boundInfo.tableNames || [];
+    if (!currentTables.length) {
+      message.warning('请先选择表');
+      return;
+    }
+    if (!boundInfo.dataSourceId || !boundInfo.databaseName) {
+      message.warning('请先选择数据库连接');
+      return;
+    }
+
+    setRelatedTablesLoading(true);
+    try {
+      const foreignKeys = await sqlService.getForeignKeyList({
+        dataSourceId: boundInfo.dataSourceId,
+        databaseName: boundInfo.databaseName,
+        schemaName: boundInfo.schemaName,
+      });
+      const selectedTableSet = new Set(currentTables);
+      const nextTables = [...currentTables];
+
+      (foreignKeys || []).forEach((foreignKey) => {
+        let relatedTable: string | null = null;
+        if (selectedTableSet.has(foreignKey.tableName)) {
+          relatedTable = foreignKey.referencedTable;
+        } else if (selectedTableSet.has(foreignKey.referencedTable)) {
+          relatedTable = foreignKey.tableName;
+        }
+        if (relatedTable && !nextTables.includes(relatedTable)) {
+          nextTables.push(relatedTable);
+        }
+      });
+
+      if (nextTables.length === currentTables.length) {
+        message.info('未找到新的关联表');
+        return;
+      }
+
+      syncSelectedTables(nextTables);
+      message.success(`已添加 ${nextTables.length - currentTables.length} 张关联表`);
+    } catch (error) {
+      console.error('[AiChat] Failed to load related tables:', error);
+      message.error('加载关联表失败');
+    } finally {
+      setRelatedTablesLoading(false);
+    }
+  }, [boundInfo, currentSession?.selectedTables, syncSelectedTables]);
 
   const sendAiChatInternal = useCallback(
     async (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', info: typeof boundInfo, ext?: string) => {
@@ -803,6 +852,15 @@ export default memo<IProps>((props) => {
               disabled={isProcessing || !boundInfo.dataSourceId}
             >
               @ 表
+            </Button>
+            <Button
+              size="small"
+              icon={<LinkOutlined />}
+              onClick={handleAddRelatedTables}
+              loading={relatedTablesLoading}
+              disabled={isProcessing || !boundInfo.dataSourceId || selectedTablesForDisplay.length === 0}
+            >
+              关联表
             </Button>
           </div>
           {isProcessing && (
