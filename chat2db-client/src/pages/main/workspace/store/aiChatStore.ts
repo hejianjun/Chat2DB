@@ -27,6 +27,7 @@ export interface IChatMessage {
 
 export interface AiChatSession {
   sessionId: string;
+  transient?: boolean;
   state: ChatStateType;
   messages: IChatMessage[];
   currentContent: string;
@@ -112,6 +113,15 @@ const generateTitleFromMessage = (message: string): string => {
 
 const persistStorage = createJSONStorage(() => createIndexedDbStorage('aiChatStore', 'current'));
 
+const filterPersistentSessions = (sessions: Record<string, AiChatSession>): Record<string, AiChatSession> => {
+  return Object.entries(sessions).reduce<Record<string, AiChatSession>>((result, [sessionId, session]) => {
+    if (!session.transient) {
+      result[sessionId] = session;
+    }
+    return result;
+  }, {});
+};
+
 export const useAiChatStore = create<IAiChatStore>()(
   persist(
     (set, get) => ({
@@ -137,7 +147,7 @@ export const useAiChatStore = create<IAiChatStore>()(
             ...initial,
           };
           const existsInList = state.conversationList.some((item) => item.conversationId === sessionId);
-          const conversationList = existsInList
+          const conversationList = newSession.transient || existsInList
             ? state.conversationList
             : [
                 {
@@ -490,8 +500,10 @@ export const useAiChatStore = create<IAiChatStore>()(
       name: 'ai-chat-store',
       storage: persistStorage,
       partialize: (state) => ({
-        sessions: state.sessions,
-        currentSessionId: state.currentSessionId,
+        sessions: filterPersistentSessions(state.sessions),
+        currentSessionId: state.currentSessionId && state.sessions[state.currentSessionId]?.transient
+          ? null
+          : state.currentSessionId,
         conversationList: state.conversationList,
         conversationListPageNo: state.conversationListPageNo,
         conversationListHasMore: state.conversationListHasMore,

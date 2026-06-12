@@ -217,7 +217,7 @@ public class StreamAction extends BaseChatAction {
                 || assistantContent == null || assistantContent.isEmpty()) {
             return;
         }
-        if (request.getPromptType() != null && PromptType.valueOf(request.getPromptType()).isSimpleTask()) {
+        if (isSimpleTask(request.getPromptType())) {
             log.debug("[StreamAction] Skip persist for transient prompt, uid: {}", ctx.getUid());
             return;
         }
@@ -264,5 +264,17 @@ public class StreamAction extends BaseChatAction {
             }
         }
         return null;
+    }
+
+    private boolean isSimpleTask(String promptType) {
+        if (promptType == null || promptType.isEmpty()) {
+            return false;
+        }
+        try {
+            return PromptType.valueOf(promptType).isSimpleTask();
+        } catch (IllegalArgumentException e) {
+            log.warn("[StreamAction] Invalid promptType: {}", promptType);
+            return false;
+        }
     }
 }

@@ -1,6 +1,6 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Input, Spin, message, Tag, Alert, Modal, Select } from 'antd';
-import { DownOutlined, RightOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, LinkOutlined } from '@ant-design/icons';
+import { DownOutlined, RightOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, LinkOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,7 +9,14 @@ import connectToEventSource, { cancelChatSession, createChatPayload } from '@/ut
 import CascaderDB from '@/components/CascaderDB';
 import aiConversationService from '@/service/aiConversation';
 import sqlService from '@/service/sql';
-import { IAiChatPromptType, ITableCommentResult, IBatchTableCommentResult, IFieldMappingResult, IDataExpressionResult } from '@/pages/main/workspace/store/common';
+import {
+  IAiChatPromptType,
+  ITableCommentResult,
+  IBatchTableCommentResult,
+  IFieldMappingResult,
+  IDataExpressionResult,
+  isSimpleTaskPromptType,
+} from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { useAiChatStore, ChatStateType, IChatMessage, generateTitle } from '@/pages/main/workspace/store/aiChatStore';
 import ConversationSidebar from './ConversationSidebar';
@@ -295,6 +302,12 @@ export default memo<IProps>((props) => {
     setDatabaseTables([]);
   }, [boundInfo.dataSourceId, boundInfo.databaseName, boundInfo.schemaName]);
 
+  useEffect(() => {
+    if (currentSession?.transient) {
+      setSidebarCollapsed(true);
+    }
+  }, [currentSession?.transient]);
+
   const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', tableNames?: string[] | null, ext?: string) => {
     const infoWithTables = {
       ...boundInfo,
@@ -434,6 +447,7 @@ export default memo<IProps>((props) => {
       const existingSessionId = storeState.currentSessionId;
       const existingSession = existingSessionId ? storeState.sessions[existingSessionId] : null;
       const previousRequest = storeState.lastRequest;
+      const isSimpleTask = isSimpleTaskPromptType(promptType);
       const isSameConnection =
         existingSession
           ? existingSession.dataSourceId === info.dataSourceId &&
@@ -444,6 +458,7 @@ export default memo<IProps>((props) => {
               normalizeNullableText(previousRequest.databaseName) === normalizeNullableText(info.databaseName) &&
               normalizeNullableText(previousRequest.schemaName) === normalizeNullableText(info.schemaName));
       const canReuseNl2SqlConversation =
+        !isSimpleTask &&
         promptType === 'NL_2_SQL' &&
         isSameConnection &&
         !!existingSessionId &&
@@ -451,6 +466,7 @@ export default memo<IProps>((props) => {
         existingSession.messages.length > 0 &&
         !isActiveState(existingSession.state);
       const canUseEmptyConversation =
+        !isSimpleTask &&
         promptType === 'NL_2_SQL' &&
         isSameConnection &&
         !!existingSessionId &&
@@ -478,17 +494,20 @@ export default memo<IProps>((props) => {
           schemaName: info.schemaName,
           selectedTables: requestTableNames || undefined,
           title: sessionTitle,
+          transient: isSimpleTask,
         });
-        try {
-          await aiConversationService.createAiConversation({
-            conversationId: sessionId,
-            dataSourceId: info.dataSourceId,
-            databaseName: info.databaseName,
-            schemaName: info.schemaName,
-            title: sessionTitle,
-          });
-        } catch (error) {
-          console.warn('[AiChat] Create conversation before chat failed, backend will retry:', error);
+        if (!isSimpleTask) {
+          try {
+            await aiConversationService.createAiConversation({
+              conversationId: sessionId,
+              dataSourceId: info.dataSourceId,
+              databaseName: info.databaseName,
+              schemaName: info.schemaName,
+              title: sessionTitle,
+            });
+          } catch (error) {
+            console.warn('[AiChat] Create conversation before chat failed, backend will retry:', error);
+          }
         }
       }
 
@@ -870,6 +889,17 @@ export default memo<IProps>((props) => {
             >
               关联表
             </Button>
+            {selectedTablesForDisplay.length > 0 && (
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => syncSelectedTables([])}
+                disabled={isProcessing}
+              >
+                清空
+              </Button>
+            )}
           </div>
           {isProcessing && (
             <Button size="small" danger onClick={handleCancel}>

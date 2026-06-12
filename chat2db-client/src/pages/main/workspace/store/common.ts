@@ -6,12 +6,28 @@ export type IAiChatPromptType =
   | 'SQL_EXPLAIN'
   | 'SQL_OPTIMIZER'
   | 'SQL_2_SQL'
+  | 'TITLE_GENERATION'
+  | 'SELECT_TABLES'
   | 'NL_2_COMMENT'
   | 'NL_2_COMMENT_BATCH'
   | 'NL_2_FIELD_MAPPING'
   | 'NL_2_DATA_EXPRESSION'
   | 'SQL_FIX'
   | 'SQL_COMPLETION';
+
+export const SIMPLE_TASK_PROMPT_TYPES = [
+  'TITLE_GENERATION',
+  'SELECT_TABLES',
+  'NL_2_COMMENT',
+  'NL_2_COMMENT_BATCH',
+  'NL_2_FIELD_MAPPING',
+  'NL_2_DATA_EXPRESSION',
+  'SQL_COMPLETION',
+] as const;
+
+export const isSimpleTaskPromptType = (promptType?: string | null): boolean => {
+  return SIMPLE_TASK_PROMPT_TYPES.includes(promptType as (typeof SIMPLE_TASK_PROMPT_TYPES)[number]);
+};
 
 export interface IColumnComment {
   column_name: string;
