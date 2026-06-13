@@ -14,7 +14,7 @@ import {
 } from '@ant-design/icons';
 import { useReactFlow } from '@xyflow/react';
 import i18n from '@/i18n';
-import { LayoutType } from '../store';
+import type { LayoutType } from '../store';
 import styles from './Toolbar.less';
 
 interface IToolbarProps {

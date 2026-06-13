@@ -22,11 +22,11 @@ import dagre from '@dagrejs/dagre';
 import { toPng } from 'html-to-image';
 import { WorkspaceTabType } from '@/constants';
 import i18n from '@/i18n';
-import sqlService, { IColumn, IInferVirtualFkItem } from '@/service/sql';
+import sqlService, { IColumn, IErDiagram, IErParams, IInferVirtualFkItem } from '@/service/sql';
 import { createConsole } from '@/pages/main/workspace/store/console';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { compatibleDataBaseName } from '@/utils/database';
-import useErDiagramStore, { LayoutType } from './store';
+import type { LayoutType } from './store';
 import TableNode, { IErDiagramFieldHandlePayload } from './components/TableNode';
 import RelationEdge from './components/RelationEdge';
 import Toolbar from './components/Toolbar';
@@ -51,14 +51,13 @@ const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { relationEdge: RelationEdge };
 const FIELD_HANDLE_PREFIX = 'field:';
 
-/** dagre图对象，用于层级布局计算 */
-const dagreGraph = new dagre.graphlib.Graph({ multigraph: true, compound: false });
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
 /**
  * 使用dagre算法计算层级布局
  */
 const getDagreLayout = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'TB') => {
+  const dagreGraph = new dagre.graphlib.Graph({ multigraph: true, compound: false });
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
   // 1. 先分堆
   const connectedNodeIds = new Set<string>();
   edges.forEach((e) => {
@@ -220,32 +219,77 @@ const parseFieldHandle = (handleId?: string | null): IErDiagramFieldHandlePayloa
 /** ER图内部组件，需要ReactFlowProvider包裹 */
 const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-
-  const {
-    erDiagramData,
-    loading,
-    filterText,
-    layoutType,
-    includeVirtualFk,
-    showOnlyRelatedTables,
-    selectedTableId,
-    fetchErDiagram,
-    inferVirtualForeignKeys,
-    deleteVirtualForeignKey,
-    setFilterText,
-    setLayoutType,
-    setSelectedTableId,
-    setIncludeVirtualFk,
-    setShowOnlyRelatedTables,
-  } = useErDiagramStore();
+  const fetchRequestSeqRef = useRef(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [erDiagramData, setErDiagramData] = useState<IErDiagram | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [layoutType, setLayoutType] = useState<LayoutType>('dagre');
+  const [includeVirtualFk, setIncludeVirtualFk] = useState(true);
+  const [showOnlyRelatedTables, setShowOnlyRelatedTables] = useState(false);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [inferring, setInferring] = React.useState(false);
   const [expandedTableNames, setExpandedTableNames] = useState<Set<string>>(new Set());
   const [columnMap, setColumnMap] = useState<Record<string, IColumn[]>>({});
   const [columnLoadingMap, setColumnLoadingMap] = useState<Record<string, boolean>>({});
   const currentConnectionDetails = useWorkspaceStore((state) => state.currentConnectionDetails);
+
+  const fetchErDiagram = useCallback(async (params: IErParams) => {
+    const requestSeq = fetchRequestSeqRef.current + 1;
+    fetchRequestSeqRef.current = requestSeq;
+    setLoading(true);
+
+    try {
+      const res = await sqlService.getErDiagram(params);
+      if (fetchRequestSeqRef.current === requestSeq) {
+        setErDiagramData(res);
+      }
+    } catch (error) {
+      console.error('Failed to fetch ER diagram data:', error);
+    } finally {
+      if (fetchRequestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  const inferVirtualForeignKeys = useCallback(
+    async (params: IErParams) => {
+      try {
+        const result = await sqlService.inferVirtualForeignKeys(params);
+        await fetchErDiagram(params);
+        return result;
+      } catch (error) {
+        console.error('Failed to infer virtual foreign keys:', error);
+        throw error;
+      }
+    },
+    [fetchErDiagram],
+  );
+
+  const deleteVirtualForeignKey = useCallback(
+    async (edgeId: string, params: IErParams) => {
+      try {
+        const edge = erDiagramData?.edges.find((item) => item.id === edgeId);
+        if (!edge?.virtual) return;
+
+        await sqlService.deleteVirtualForeignKey({
+          dataSourceId: params.dataSourceId,
+          databaseName: params.databaseName,
+          schemaName: params.schemaName,
+          tableName: edge.source,
+          keyName: edge.id,
+        });
+        await fetchErDiagram(params);
+      } catch (error) {
+        console.error('Failed to delete virtual foreign key:', error);
+        throw error;
+      }
+    },
+    [erDiagramData?.edges, fetchErDiagram],
+  );
 
   const fetchData = useCallback(
     (syncForeignKeys?: boolean) => {
