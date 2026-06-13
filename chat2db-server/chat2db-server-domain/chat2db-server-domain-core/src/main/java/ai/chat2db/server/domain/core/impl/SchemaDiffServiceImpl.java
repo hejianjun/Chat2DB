@@ -389,7 +389,8 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             return null;
         }
         
-        String ddl = context.sourcePlugin.getMetaData().getSqlBuilder().buildCreateTableSql(sourceTable);
+        String ddl = context.sourcePlugin.getMetaData().getSqlBuilder()
+                .buildCreateTableSql(copyTableWithoutQualifier(sourceTable));
         return TableDiff.builder()
                 .tableName(sourceName)
                 .diffType(TableDiffType.ADDED)
@@ -506,7 +507,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         Table tableForDDL = buildTableWithEditStatus(sourceTable, targetTable,
                 columnDiffs, indexDiffs, fkDiffs, context.option);
         SqlBuilder sqlBuilder = context.targetPlugin.getMetaData().getSqlBuilder();
-        String alterDdl = sqlBuilder.buildModifyTaleSql(targetTable, tableForDDL);
+        String alterDdl = sqlBuilder.buildModifyTaleSql(copyTableWithoutQualifier(targetTable), tableForDDL);
         List<FieldDiff> tableOptionDiffs = context.option.isCompareTableOption()
                 ? describeTableOptionDiff(sourceTable, targetTable, context.option)
                 : Collections.emptyList();
@@ -1438,7 +1439,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         result.setName(shouldPreserveTargetName(sourceTable, targetTable, caseSensitive)
                 ? targetTable.getName() : sourceTable.getName());
         result.setComment(sourceTable.getComment());
-        result.setDatabaseName(targetTable.getDatabaseName());
+        result.setDatabaseName(null);
         result.setSchemaName(targetTable.getSchemaName());
         result.setEngine(sourceTable.getEngine());
         result.setCharset(sourceTable.getCharset());
@@ -1523,6 +1524,40 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
 
     private boolean shouldPreserveTargetName(Table sourceTable, Table targetTable, boolean caseSensitive) {
         return !caseSensitive && StringUtils.equalsIgnoreCase(sourceTable.getName(), targetTable.getName());
+    }
+
+    private Table copyTableWithoutQualifier(Table source) {
+        Table target = new Table();
+        BeanUtils.copyProperties(source, target);
+        target.setDatabaseName(null);
+        target.setColumnList(copyColumnsWithoutQualifier(source.getColumnList()));
+        target.setIndexList(copyIndexesWithoutQualifier(source.getIndexList()));
+        target.setForeignKeyList(copyForeignKeysWithoutQualifier(source.getForeignKeyList()));
+        return target;
+    }
+
+    private List<TableColumn> copyColumnsWithoutQualifier(List<TableColumn> source) {
+        List<TableColumn> columns = copyColumns(source);
+        for (TableColumn column : columns) {
+            column.setDatabaseName(null);
+        }
+        return columns;
+    }
+
+    private List<TableIndex> copyIndexesWithoutQualifier(List<TableIndex> source) {
+        List<TableIndex> indexes = copyIndexes(source);
+        for (TableIndex index : indexes) {
+            index.setDatabaseName(null);
+        }
+        return indexes;
+    }
+
+    private List<ForeignKey> copyForeignKeysWithoutQualifier(List<ForeignKey> source) {
+        List<ForeignKey> foreignKeys = copyForeignKeys(source);
+        for (ForeignKey foreignKey : foreignKeys) {
+            foreignKey.setDatabaseName(null);
+        }
+        return foreignKeys;
     }
 
     private List<TableColumn> copyColumns(List<TableColumn> source) {

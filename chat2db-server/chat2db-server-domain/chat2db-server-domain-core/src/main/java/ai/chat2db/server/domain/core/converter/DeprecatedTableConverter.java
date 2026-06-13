@@ -2,10 +2,18 @@ package ai.chat2db.server.domain.core.converter;
 
 import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.repository.entity.DeprecatedTableDO;
-import org.mapstruct.Mapper;
+import org.springframework.stereotype.Component;
 
-@Mapper(componentModel = "spring")
-public abstract class DeprecatedTableConverter {
+@Component
+public class DeprecatedTableConverter {
 
-    public abstract DeprecatedTableDO param2do(DeprecatedTableParam param);
+    public DeprecatedTableDO param2do(DeprecatedTableParam param) {
+        DeprecatedTableDO deprecatedTableDO = new DeprecatedTableDO();
+        deprecatedTableDO.setDataSourceId(param.getDataSourceId());
+        deprecatedTableDO.setDatabaseName(param.getDatabaseName());
+        deprecatedTableDO.setSchemaName(param.getSchemaName());
+        deprecatedTableDO.setTableName(param.getTableName());
+        deprecatedTableDO.setUserId(param.getUserId());
+        return deprecatedTableDO;
+    }
 }
