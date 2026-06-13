@@ -37,6 +37,7 @@ export interface ITreeNode {
   page?: number;
   pageSize?: number;
   total?: number;
+  count?: number;
 }
 
 // 视图  函数  触发器  过程 通用的返回结果

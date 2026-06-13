@@ -122,6 +122,7 @@ const mapDatabaseListToTreeNodes = (list: any[], extraParams: any): ITreeNode[] 
       uuid: uuid(),
       key: t.name,
       name: t.name,
+      count: t.count,
       treeNodeType: TreeNodeType.DATABASE,
       extraParams: {
         ...extraParams,

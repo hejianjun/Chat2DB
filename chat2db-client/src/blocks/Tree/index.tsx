@@ -4,7 +4,7 @@ import classnames from 'classnames';
 import Iconfont from '@/components/Iconfont';
 import { Tooltip, Dropdown } from 'antd';
 import { ITreeNode } from '@/typings';
-import { TreeNodeType, databaseMap } from '@/constants';
+import { DatabaseTypeCode, TreeNodeType, databaseMap } from '@/constants';
 import { treeConfig, switchIcon, ITreeConfigItem } from './treeConfig';
 import { useCommonStore } from '@/store/common';
 import { setCurrentWorkspaceGlobalExtend } from '@/pages/main/workspace/store/common';
@@ -110,6 +110,25 @@ function searchTree(treeData: ITreeNode[], searchValue: string): ITreeNode[] {
 
 const itemHeight = 26; // 每个 item 的高度
 const paddingCount = 2;
+
+const formatRedisKeyCount = (count?: number) => {
+  if (count == null) {
+    return undefined;
+  }
+  return count.toLocaleString();
+};
+
+const getTreeNodeTooltipTitle = (treeNodeData: ITreeNode) => {
+  const redisKeyCount = formatRedisKeyCount(treeNodeData.count);
+  if (
+    treeNodeData.treeNodeType === TreeNodeType.DATABASE &&
+    treeNodeData.extraParams?.databaseType === DatabaseTypeCode.REDIS &&
+    redisKeyCount
+  ) {
+    return `Key 数量：${redisKeyCount}`;
+  }
+  return treeNodeData.comment;
+};
 
 const Tree = (props: IProps) => {
   const { className, treeData: outerTreeData, searchValue, refreshRootData } = props;
@@ -615,6 +634,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
       return menuItem;
     };
     const dropdownsItems: any = rightClickMenu.map(buildMenuItem);
+    const tooltipTitle = getTreeNodeTooltipTitle(treeNodeData);
     return (
       <Dropdown
         trigger={['contextMenu']}
@@ -626,7 +646,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
           zIndex: 1080,
         }}
       >
-        <Tooltip placement="right" color={window._AppThemePack?.colorPrimary} title={treeNodeData.comment}>
+        <Tooltip placement="right" color={window._AppThemePack?.colorPrimary} title={tooltipTitle}>
           <div
             className={classnames(styles.treeNode, { [styles.treeNodeFocus]: isFocus })}
             onClick={handelClickTreeNode}
@@ -673,7 +693,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
         </Tooltip>
       </Dropdown>
     );
-  }, [isFocus, isLoading, rightClickMenu, treeNodeData.children]);
+  }, [isFocus, isLoading, rightClickMenu, treeNodeData.children, treeNodeData.comment, treeNodeData.count]);
 
   return treeNodeDom;
 });

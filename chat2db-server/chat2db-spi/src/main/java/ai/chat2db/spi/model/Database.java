@@ -40,4 +40,9 @@ public class Database implements Serializable {
     private String collation;
 
     private String owner;
+
+    /**
+     * 数据库下对象数量。Redis 中表示 key 数量。
+     */
+    private Integer count;
 }

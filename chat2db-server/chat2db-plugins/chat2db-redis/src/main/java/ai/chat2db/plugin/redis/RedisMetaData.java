@@ -23,6 +23,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import static ai.chat2db.plugin.redis.RedisConnectionHelper.selectDatabase;
+
 /**
  * Redis 元数据门面类。
  * <p>
@@ -49,10 +51,27 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
             List<Database> databases = new ArrayList<>();
             if (StringUtils.isNotBlank(count)) {
                 for (int i = 0; i < Integer.parseInt(count); i++) {
-                    databases.add(Database.builder().name(String.valueOf(i)).build());
+                    String databaseName = String.valueOf(i);
+                    databases.add(Database.builder()
+                            .name(databaseName)
+                            .count(queryKeyCount(commands, databaseName))
+                            .build());
                 }
             }
             return databases;
+        }
+    }
+
+    private Integer queryKeyCount(io.lettuce.core.api.async.RedisAsyncCommands<String, String> commands,
+                                  String databaseName) {
+        try {
+            Long keyCount = selectDatabase(commands, databaseName)
+                    .thenCompose(ignored -> commands.dbsize().toCompletableFuture())
+                    .join();
+            return Math.toIntExact(Math.min(keyCount, Integer.MAX_VALUE));
+        } catch (Exception e) {
+            log.warn("Query redis database key count failed, databaseName={}", databaseName, e);
+            return null;
         }
     }
 

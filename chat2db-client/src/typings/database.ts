@@ -116,6 +116,7 @@ export interface IForeignKey {
 export interface IDatabaseItem {
   name: string;
   comment?: string;
+  count?: number;
 }
 
 /** Schema列表项 */
