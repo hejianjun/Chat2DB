@@ -172,13 +172,11 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 parts.add(rawPart);
             }
         }
-        for (int i = 1; i < parts.size(); i++) {
-            StringJoiner joiner = new StringJoiner(":");
-            for (int j = 0; j < i; j++) {
-                joiner.add(parts.get(j));
-            }
-            prefixCountMap.merge(joiner.toString(), 1L, Long::sum);
+        StringJoiner joiner = new StringJoiner(":");
+        for (int i = 0; i < parts.size() - 1; i++) {
+            joiner.add(parts.get(i));
         }
+        prefixCountMap.merge(joiner.toString(), 1L, Long::sum);
     }
 
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
