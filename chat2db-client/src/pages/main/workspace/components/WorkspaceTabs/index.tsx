@@ -20,6 +20,7 @@ import ERDiagram from '../ERDiagram';
 import SchemaDiffPanel from '@/blocks/SchemaDiff';
 import Iconfont from '@/components/Iconfont';
 import ShortcutKey from '@/components/ShortcutKey';
+import TableRelationModal from '@/blocks/Tree/components/TableRelationModal';
 
 // ---- store -----
 import {
@@ -469,6 +470,8 @@ const WorkspaceTabs = memo(() => {
         return <RedisMonitorView uniqueData={item.uniqueData} />;
       case WorkspaceTabType.ViewERDiagram:
         return renderViewERDiagram(item);
+      case WorkspaceTabType.ViewTableRelation:
+        return renderViewTableRelation(item);
       case WorkspaceTabType.SchemaDiff:
         return <SchemaDiffPanel />;
       default:
@@ -480,6 +483,12 @@ const WorkspaceTabs = memo(() => {
   const renderViewERDiagram = (item: IWorkspaceTab) => {
     const { uniqueData } = item;
     return <ERDiagram uniqueData={uniqueData} />;
+  };
+
+  // 渲染表间关系
+  const renderViewTableRelation = (item: IWorkspaceTab) => {
+    const { uniqueData } = item;
+    return <TableRelationModal treeNodeData={uniqueData.treeNodeData} pageMode />;
   };
   // 判断是否是可以生成标题的 tab 类型
   const canGenerateTitleType = (type: WorkspaceTabType) => {

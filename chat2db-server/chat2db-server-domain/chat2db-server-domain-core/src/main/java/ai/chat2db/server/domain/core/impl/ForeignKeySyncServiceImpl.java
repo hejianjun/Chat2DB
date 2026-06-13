@@ -28,6 +28,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -543,6 +545,42 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     }
 
     @Override
+    public VirtualForeignKeyConsistencyResult validateVirtualForeignKeys(Long dataSourceId, String databaseName,
+                                                                         String schemaName, String tableName,
+                                                                         ForeignKeyRelation relation,
+                                                                         List<Long> ids) {
+        List<VirtualForeignKeyDO> virtualFKs = queryVirtualFKsFromH2(
+                dataSourceId,
+                databaseName,
+                schemaName,
+                tableName,
+                relation == null ? ForeignKeyRelation.SOURCE : relation);
+        if (!CollectionUtils.isEmpty(ids)) {
+            Set<Long> idSet = new HashSet<>(ids);
+            virtualFKs = virtualFKs.stream()
+                    .filter(item -> idSet.contains(item.getId()))
+                    .collect(Collectors.toList());
+        }
+        if (CollectionUtils.isEmpty(virtualFKs)) {
+            return new VirtualForeignKeyConsistencyResult(0, 0, Collections.emptyList());
+        }
+
+        MetaData metaData = Chat2DBContext.getMetaData();
+        Connection connection = Chat2DBContext.getConnection();
+        List<VirtualForeignKeyConsistencyItem> items = new ArrayList<>();
+        int validCount = 0;
+        for (VirtualForeignKeyDO virtualFK : virtualFKs) {
+            VirtualForeignKeyConsistencyItem item = validateVirtualForeignKey(
+                    metaData, connection, databaseName, schemaName, virtualFK);
+            if (item.isValid()) {
+                validCount++;
+            }
+            items.add(item);
+        }
+        return new VirtualForeignKeyConsistencyResult(virtualFKs.size(), validCount, items);
+    }
+
+    @Override
     public int cleanInvalidVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName, List<String> existingTableNames) {
         if (CollectionUtils.isEmpty(existingTableNames)) {
             return 0;
@@ -701,6 +739,116 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         return Optional.ofNullable(columns).orElse(Collections.emptyList()).stream()
                 .map(TableColumn::getName)
                 .anyMatch(name -> StringUtils.equalsIgnoreCase(name, columnName));
+    }
+
+    private VirtualForeignKeyConsistencyItem validateVirtualForeignKey(MetaData metaData,
+                                                                       Connection connection,
+                                                                       String databaseName,
+                                                                       String schemaName,
+                                                                       VirtualForeignKeyDO virtualFK) {
+        try {
+            String actualTableName = findActualTableName(
+                    metaData, connection, databaseName, schemaName, virtualFK.getTableName());
+            String actualReferencedTable = findActualTableName(
+                    metaData, connection, databaseName, schemaName, virtualFK.getReferencedTable());
+            if (StringUtils.isBlank(actualTableName) || StringUtils.isBlank(actualReferencedTable)) {
+                return buildConsistencyItem(virtualFK, 0, false, "虚拟外键关联表不存在");
+            }
+            String actualColumnName = findActualColumnName(
+                    metaData, connection, databaseName, schemaName, actualTableName, virtualFK.getColumnName());
+            String actualReferencedColumnName = findActualColumnName(
+                    metaData, connection, databaseName, schemaName, actualReferencedTable,
+                    virtualFK.getReferencedColumnName());
+            if (StringUtils.isBlank(actualColumnName) || StringUtils.isBlank(actualReferencedColumnName)) {
+                return buildConsistencyItem(virtualFK, 0, false, "虚拟外键关联字段不存在");
+            }
+
+            long orphanCount = countVirtualForeignKeyOrphans(
+                    connection,
+                    schemaName,
+                    actualTableName,
+                    actualColumnName,
+                    actualReferencedTable,
+                    actualReferencedColumnName);
+            return buildConsistencyItem(virtualFK, orphanCount, orphanCount == 0, null);
+        } catch (Exception e) {
+            log.warn("validate virtual foreign key consistency error, id={}", virtualFK.getId(), e);
+            return buildConsistencyItem(virtualFK, 0, false, e.getMessage());
+        }
+    }
+
+    private String findActualColumnName(MetaData metaData,
+                                        Connection connection,
+                                        String databaseName,
+                                        String schemaName,
+                                        String tableName,
+                                        String columnName) {
+        if (StringUtils.isAnyBlank(tableName, columnName)) {
+            return null;
+        }
+        List<TableColumn> columns = metaData.columns(connection, databaseName, schemaName, tableName);
+        return Optional.ofNullable(columns).orElse(Collections.emptyList()).stream()
+                .map(TableColumn::getName)
+                .filter(name -> StringUtils.equalsIgnoreCase(name, columnName))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private long countVirtualForeignKeyOrphans(Connection connection,
+                                               String schemaName,
+                                               String tableName,
+                                               String columnName,
+                                               String referencedTable,
+                                               String referencedColumnName) throws Exception {
+        String sourceTable = qualifyTableName(schemaName, tableName);
+        String targetTable = qualifyTableName(schemaName, referencedTable);
+        String sourceColumn = quoteIdentifier(columnName);
+        String targetColumn = quoteIdentifier(referencedColumnName);
+        String sql = "SELECT COUNT(1) FROM " + sourceTable + " c WHERE c." + sourceColumn + " IS NOT NULL "
+                + "AND NOT EXISTS (SELECT 1 FROM " + targetTable + " p WHERE p." + targetColumn
+                + " = c." + sourceColumn + ")";
+        try (Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(sql)) {
+            if (resultSet.next()) {
+                return resultSet.getLong(1);
+            }
+            return 0;
+        }
+    }
+
+    private String qualifyTableName(String schemaName, String tableName) {
+        if (StringUtils.isNotBlank(schemaName)) {
+            return quoteIdentifier(schemaName) + "." + quoteIdentifier(tableName);
+        }
+        return quoteIdentifier(tableName);
+    }
+
+    private String quoteIdentifier(String identifier) {
+        String dbType = Chat2DBContext.getConnectInfo() == null ? "" : Chat2DBContext.getConnectInfo().getDbType();
+        String normalizedDbType = StringUtils.defaultString(dbType).toUpperCase(Locale.ROOT);
+        if ("MYSQL".equals(normalizedDbType)
+                || "MARIADB".equals(normalizedDbType)
+                || "CLICKHOUSE".equals(normalizedDbType)) {
+            return "`" + StringUtils.defaultString(identifier).replace("`", "``") + "`";
+        }
+        if ("SQLSERVER".equals(normalizedDbType)) {
+            return "[" + StringUtils.defaultString(identifier).replace("]", "]]") + "]";
+        }
+        return "\"" + StringUtils.defaultString(identifier).replace("\"", "\"\"") + "\"";
+    }
+
+    private VirtualForeignKeyConsistencyItem buildConsistencyItem(VirtualForeignKeyDO virtualFK,
+                                                                  long orphanCount,
+                                                                  boolean valid,
+                                                                  String errorMessage) {
+        return new VirtualForeignKeyConsistencyItem(
+                virtualFK.getId(),
+                virtualFK.getTableName(),
+                virtualFK.getColumnName(),
+                virtualFK.getReferencedTable(),
+                virtualFK.getReferencedColumnName(),
+                orphanCount,
+                valid,
+                errorMessage);
     }
 
     private boolean existsVirtualForeignKey(Long excludeId,

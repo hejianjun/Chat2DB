@@ -16,6 +16,7 @@ export enum WorkspaceTabType {
   EditTableData = 'editTableData',
   ViewAllTable = 'viewAllTable',
   ViewERDiagram = 'viewERDiagram', // 添加查看 ER 图的类型
+  ViewTableRelation = 'viewTableRelation',
   SchemaDiff = 'schemaDiff',
   RedisData = 'redisData',
   RedisMonitor = 'redisMonitor',
@@ -55,6 +56,9 @@ export const workspaceTabConfig: {
     icon: '\ue611'
   },
   [WorkspaceTabType.ViewERDiagram]: {
+    icon: '\ue611'
+  },
+  [WorkspaceTabType.ViewTableRelation]: {
     icon: '\ue611'
   },
   [WorkspaceTabType.SchemaDiff]: {

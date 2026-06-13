@@ -1,4 +1,9 @@
 .tableRelationModal {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+
   .toolbar {
     display: flex;
     gap: 12px;
@@ -24,6 +29,36 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
   }
+}
+
+.consistencySummary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.consistencyTitle {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.consistencyMeta {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+}
+
+.consistencyProgress {
+  width: 240px;
+}
+
+.tableRelationPage {
+  background: var(--color-bg-container);
 }
 
 :global {

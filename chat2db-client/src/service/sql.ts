@@ -514,6 +514,29 @@ export interface IForeignKeySyncParams {
   tableName?: string;
 }
 
+export interface IVirtualFKValidateParams extends IForeignKeySyncParams {
+  relation?: 'SOURCE' | 'REFERENCED' | 'ANY';
+  ids?: number[];
+}
+
+export interface IVirtualFKConsistencyItem {
+  id?: number;
+  tableName: string;
+  columnName: string;
+  referencedTable: string;
+  referencedColumnName: string;
+  orphanCount: number;
+  valid: boolean;
+  errorMessage?: string;
+}
+
+export interface IVirtualFKConsistencyResult {
+  total: number;
+  validCount: number;
+  percentage: number;
+  items: IVirtualFKConsistencyItem[];
+}
+
 /** 外键同步结果 */
 export interface ISyncResult {
   added: number;
@@ -602,6 +625,10 @@ export interface IInferVirtualFkResult {
 }
 
 const syncForeignKeys = createRequest<IForeignKeySyncParams, ISyncResult>('/api/rdb/fk/sync', { method: 'post' });
+const validateVirtualForeignKeys = createRequest<IVirtualFKValidateParams, IVirtualFKConsistencyResult>(
+  '/api/rdb/fk/virtual/validate',
+  { method: 'post' },
+);
 const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>('/api/rdb/fk/list', { method: 'get' });
 const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', {
   method: 'post',
@@ -708,6 +735,7 @@ export default {
   deleteVirtualForeignKeysBatch,
   updateVirtualForeignKey,
   syncForeignKeys,
+  validateVirtualForeignKeys,
   batchOptimizeTables,
   batchAnalyzeTables,
   compareSchema,

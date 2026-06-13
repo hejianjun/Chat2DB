@@ -1,15 +1,16 @@
 import Iconfont from '@/components/Iconfont';
 import { TreeNodeType } from '@/constants';
 import i18n from '@/i18n';
-import sqlService, { IForeignKeyVO } from '@/service/sql';
+import sqlService, { IForeignKeyVO, IVirtualFKConsistencyResult } from '@/service/sql';
 import { ITreeNode } from '@/typings';
 import { DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
-import { Button, Form, Input, message, Modal, Select, Space, Table, Tag, Upload } from 'antd';
+import { Button, Form, Input, message, Modal, Progress, Select, Space, Table, Tag, Upload } from 'antd';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import styles from './index.less';
 
 interface IProps {
   treeNodeData: ITreeNode;
+  pageMode?: boolean;
 }
 
 interface IAddRelationForm {
@@ -32,7 +33,7 @@ const buildVirtualFkKey = (item: IVirtualFkImportItem) =>
   [item.tableName, item.columnName].map((value) => `${value || ''}`.trim().toLowerCase()).join('\u0001');
 
 const TableRelationModal = memo((props: IProps) => {
-  const { treeNodeData } = props;
+  const { treeNodeData, pageMode } = props;
   const { dataSourceId, databaseName, schemaName } = treeNodeData.extraParams || {};
   const isForeignKeyNode =
     treeNodeData.treeNodeType === TreeNodeType.KEY || treeNodeData.treeNodeType === TreeNodeType.V_KEY;
@@ -46,6 +47,8 @@ const TableRelationModal = memo((props: IProps) => {
   const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [deletingAllVirtual, setDeletingAllVirtual] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [consistencyResult, setConsistencyResult] = useState<IVirtualFKConsistencyResult | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<IForeignKeyVO | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -93,6 +96,16 @@ const TableRelationModal = memo((props: IProps) => {
     [filteredForeignKeys],
   );
 
+  const consistencyMap = useMemo(() => {
+    const nextMap = new Map<number, NonNullable<IVirtualFKConsistencyResult['items']>[number]>();
+    consistencyResult?.items?.forEach((item) => {
+      if (item.id) {
+        nextMap.set(item.id, item);
+      }
+    });
+    return nextMap;
+  }, [consistencyResult]);
+
   const getFields = useCallback(
     async (selectedTableName?: string) => {
       if (!selectedTableName || fieldMap[selectedTableName]) {
@@ -125,6 +138,7 @@ const TableRelationModal = memo((props: IProps) => {
         ? (list || []).filter((item) => item.tableName === tableName || item.referencedTable === tableName)
         : list || [];
       setForeignKeys(keyName ? tableForeignKeys.filter((item) => item.name === keyName) : tableForeignKeys);
+      setConsistencyResult(null);
     } catch {
       message.error(i18n('workspace.tableRelation.loadError'));
     } finally {
@@ -226,6 +240,31 @@ const TableRelationModal = memo((props: IProps) => {
         }
       },
     });
+  };
+
+  const handleValidateVirtualForeignKeys = async () => {
+    const ids = virtualForeignKeys.map((item) => item.id).filter(Boolean) as number[];
+    if (!ids.length) {
+      message.warning(i18n('workspace.tableRelation.noVirtualFk'));
+      return;
+    }
+    setValidating(true);
+    try {
+      const result = await sqlService.validateVirtualForeignKeys({
+        dataSourceId: dataSourceId!,
+        databaseName,
+        schemaName,
+        tableName,
+        relation: tableName ? 'ANY' : 'SOURCE',
+        ids,
+      });
+      setConsistencyResult(result);
+      message.success(i18n('workspace.tableRelation.validateSuccess'));
+    } catch {
+      message.error(i18n('workspace.tableRelation.validateError'));
+    } finally {
+      setValidating(false);
+    }
   };
 
   const openCreateForm = () => {
@@ -410,6 +449,27 @@ const TableRelationModal = memo((props: IProps) => {
       ellipsis: true,
     },
     {
+      title: i18n('workspace.tableRelation.consistency'),
+      width: 140,
+      render: (_: unknown, record: IForeignKeyVO) => {
+        if (record.sourceType !== 'VIRTUAL') {
+          return '-';
+        }
+        const result = record.id ? consistencyMap.get(record.id) : null;
+        if (!result) {
+          return <Tag>{i18n('workspace.tableRelation.notValidated')}</Tag>;
+        }
+        if (result.errorMessage) {
+          return <Tag color="red">{i18n('workspace.tableRelation.validateFailed')}</Tag>;
+        }
+        return result.valid ? (
+          <Tag color="green">{i18n('workspace.tableRelation.consistent')}</Tag>
+        ) : (
+          <Tag color="red">{i18n('workspace.tableRelation.inconsistent', result.orphanCount)}</Tag>
+        );
+      },
+    },
+    {
       title: i18n('workspace.tableRelation.operation'),
       width: 100,
       render: (_: unknown, record: IForeignKeyVO) => (
@@ -427,7 +487,7 @@ const TableRelationModal = memo((props: IProps) => {
     (fieldMap[selectedTableName || ''] || []).map((item) => ({ label: item.name, value: item.name }));
 
   return (
-    <div className={styles.tableRelationModal}>
+    <div className={`${styles.tableRelationModal} ${pageMode ? styles.tableRelationPage : ''}`}>
       <div className={styles.toolbar}>
         <Input.Search
           allowClear
@@ -456,11 +516,39 @@ const TableRelationModal = memo((props: IProps) => {
           <Button onClick={handleSync} loading={syncing}>
             {i18n('editTable.button.syncForeignKeys')}
           </Button>
+          <Button
+            loading={validating}
+            disabled={!virtualForeignKeys.length}
+            onClick={handleValidateVirtualForeignKeys}
+          >
+            {i18n('workspace.tableRelation.validateConsistency')}
+          </Button>
           <Button type="primary" onClick={showForm && !editingRecord ? closeForm : openCreateForm}>
             {i18n('editTable.button.addForeignKey')}
           </Button>
         </Space>
       </div>
+      {consistencyResult ? (
+        <div className={styles.consistencySummary}>
+          <div>
+            <div className={styles.consistencyTitle}>{i18n('workspace.tableRelation.consistencyResult')}</div>
+            <div className={styles.consistencyMeta}>
+              {i18n(
+                'workspace.tableRelation.consistencySummary',
+                consistencyResult.validCount,
+                consistencyResult.total,
+                consistencyResult.percentage.toFixed(2),
+              )}
+            </div>
+          </div>
+          <Progress
+            className={styles.consistencyProgress}
+            percent={Number(consistencyResult.percentage.toFixed(2))}
+            size="small"
+            status={consistencyResult.validCount === consistencyResult.total ? 'success' : 'exception'}
+          />
+        </div>
+      ) : null}
       {showForm ? (
         <Form
           className={styles.form}
@@ -529,7 +617,7 @@ const TableRelationModal = memo((props: IProps) => {
         columns={columns as any}
         dataSource={filteredForeignKeys}
         pagination={false}
-        scroll={{ x: 900, y: 420 }}
+        scroll={{ x: 1040, y: pageMode ? 'calc(100vh - 250px)' : 420 }}
       />
     </div>
   );

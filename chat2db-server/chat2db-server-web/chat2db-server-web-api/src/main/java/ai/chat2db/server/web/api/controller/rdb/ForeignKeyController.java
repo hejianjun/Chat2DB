@@ -15,6 +15,7 @@ import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeyListRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ForeignKeySyncRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.ImportVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.UpdateVirtualFKRequest;
+import ai.chat2db.server.web.api.controller.rdb.request.VirtualFKValidateRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.DeleteFKResult;
 import ai.chat2db.server.web.api.controller.rdb.vo.ForeignKeyVO;
 import ai.chat2db.server.web.api.controller.rdb.vo.SyncResult;
@@ -145,6 +146,19 @@ public class ForeignKeyController {
     @PostMapping("/virtual/delete_batch")
     public DataResult<Integer> deleteVirtualBatch(@Valid @RequestBody DeleteVirtualFKBatchRequest request) {
         return DataResult.of(foreignKeySyncService.deleteVirtualFKs(request.getIds()));
+    }
+
+    @PostMapping("/virtual/validate")
+    public DataResult<ForeignKeySyncService.VirtualForeignKeyConsistencyResult> validateVirtual(
+            @Valid @RequestBody VirtualFKValidateRequest request) {
+        return DataResult.of(foreignKeySyncService.validateVirtualForeignKeys(
+                request.getDataSourceId(),
+                request.getDatabaseName(),
+                request.getSchemaName(),
+                request.getTableName(),
+                request.getRelation(),
+                request.getIds()
+        ));
     }
 
     @PostMapping("/delete_by_name")

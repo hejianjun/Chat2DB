@@ -25,7 +25,6 @@ import { openFunction, openProcedure, openTrigger, openView } from '../functions
 import { handelPinTable } from '../functions/pinTable';
 import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecatedTable';
 import { viewDDL } from '../functions/viewDDL';
-import { openTableRelationModal } from '../components/TableRelationModal';
 
 // ----- utils -----
 import { compatibleDataBaseName } from '@/utils/database';
@@ -86,6 +85,34 @@ const REDIS_EXCLUDED_OPERATIONS = new Set<OperationColumn>([
   OperationColumn.RestoreTable,
   OperationColumn.GenerateData,
 ]);
+
+const getTableRelationTitle = (treeNodeData: ITreeNode) => {
+  const { databaseName, schemaName, tableName } = treeNodeData.extraParams || {};
+  const relationSourceName =
+    treeNodeData.treeNodeType === TreeNodeType.TABLE
+      ? treeNodeData.name
+      : tableName || schemaName || databaseName || treeNodeData.name;
+
+  return `${relationSourceName}-relation`;
+};
+
+const openTableRelationWorkspaceTab = (treeNodeData: ITreeNode) => {
+  addWorkspaceTab({
+    id: uuid(),
+    type: WorkspaceTabType.ViewTableRelation,
+    title: getTableRelationTitle(treeNodeData),
+    uniqueData: {
+      treeNodeData,
+      dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+      dataSourceName: treeNodeData.extraParams?.dataSourceName,
+      databaseType: treeNodeData.extraParams!.databaseType!,
+      databaseName: treeNodeData.extraParams?.databaseName,
+      schemaName: treeNodeData.extraParams?.schemaName,
+      tableName:
+        treeNodeData.treeNodeType === TreeNodeType.TABLE ? treeNodeData.name : treeNodeData.extraParams?.tableName,
+    },
+  });
+};
 
 const groupDataOperations = (list: IRightClickMenu[]): IRightClickMenu[] => {
   const dataOps = list.filter((m) => DATA_OPS.includes(m.type));
@@ -504,7 +531,7 @@ export const useGetRightClickMenu = (props: IProps) => {
             : i18n('workspace.menu.viewTableRelation'),
         icon: '\ue611',
         handle: () => {
-          openTableRelationModal(treeNodeData);
+          openTableRelationWorkspaceTab(treeNodeData);
         },
       },
 
@@ -1076,7 +1103,7 @@ export const getRightClickMenu = (props: IProps) => {
           : i18n('workspace.menu.viewTableRelation'),
       icon: '\ue611',
       handle: () => {
-        openTableRelationModal(treeNodeData);
+        openTableRelationWorkspaceTab(treeNodeData);
       },
     },
 
