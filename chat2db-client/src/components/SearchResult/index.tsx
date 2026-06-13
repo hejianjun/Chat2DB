@@ -24,6 +24,7 @@ import sqlServer, { IExecuteSqlParams, ICreateVirtualFKParams } from '@/service/
 import { v4 as uuidV4 } from 'uuid';
 import { Spin, Modal, message, Button } from 'antd';
 import { setPendingAiChat, setCurrentWorkspaceExtend } from '@/pages/main/workspace/store/common';
+import { DatabaseTypeCode } from '@/constants';
 
 interface IProps {
   className?: string;
@@ -41,6 +42,8 @@ const defaultResultConfig: IResultConfig = {
   total: 0,
   hasNextPage: true,
 };
+
+const getDefaultPageSize = (databaseType?: DatabaseTypeCode) => (databaseType === DatabaseTypeCode.DLC ? 10 : 200);
 
 export interface ISearchResultRef {
   handleExecuteSQL: (sql: string, options?: { scriptStartLine?: number }) => void;
@@ -116,7 +119,8 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
       tableName: executeSqlParams?.tableName,
       ...defaultResultConfig,
       ...executeSqlParams,
-      type: executeSqlParams.databaseType, // 兼容写法，希望后端可以统一把type改成databaseType
+      pageSize: executeSqlParams?.pageSize || getDefaultPageSize(executeSqlParams?.databaseType),
+      type: executeSqlParams?.databaseType, // 兼容写法，希望后端可以统一把type改成databaseType
     };
 
     controllerRef.current = new AbortController();

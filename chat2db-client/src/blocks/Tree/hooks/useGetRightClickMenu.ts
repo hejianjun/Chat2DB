@@ -86,6 +86,9 @@ const REDIS_EXCLUDED_OPERATIONS = new Set<OperationColumn>([
   OperationColumn.GenerateData,
 ]);
 
+const isDlcTableNode = (treeNodeData: ITreeNode) =>
+  treeNodeData.treeNodeType === TreeNodeType.TABLE && treeNodeData.extraParams?.databaseType === DatabaseTypeCode.DLC;
+
 const getTableRelationTitle = (treeNodeData: ITreeNode) => {
   const { databaseName, schemaName, tableName } = treeNodeData.extraParams || {};
   const relationSourceName =
@@ -431,7 +434,7 @@ export const useGetRightClickMenu = (props: IProps) => {
       [OperationColumn.OpenTable]: {
         text: i18n('workspace.menu.openTable'),
         icon: '\ue618',
-        doubleClickTrigger: true,
+        doubleClickTrigger: !isDlcTableNode(treeNodeData),
         handle: () => {
           const databaseName = compatibleDataBaseName(
             treeNodeData.name!,
@@ -958,7 +961,7 @@ export const getRightClickMenu = (props: IProps) => {
     [OperationColumn.OpenTable]: {
       text: i18n('workspace.menu.openTable'),
       icon: '\ue618',
-      doubleClickTrigger: true,
+      doubleClickTrigger: !isDlcTableNode(treeNodeData),
       handle: () => {
         const databaseName = compatibleDataBaseName(
           treeNodeData.name!,

@@ -112,6 +112,53 @@ export interface ITreeConfigItem {
   operationColumn?: OperationColumn[];
 }
 
+const DATABASE_LIST_CACHE_KEY_PREFIX = 'chat2db-database-list-cache';
+
+const getDatabaseListCacheKey = (dataSourceId: number) => `${DATABASE_LIST_CACHE_KEY_PREFIX}-${dataSourceId}`;
+
+const mapDatabaseListToTreeNodes = (list: any[], extraParams: any): ITreeNode[] => {
+  return (list || []).map((t: any) => {
+    return {
+      uuid: uuid(),
+      key: t.name,
+      name: t.name,
+      treeNodeType: TreeNodeType.DATABASE,
+      extraParams: {
+        ...extraParams,
+        databaseName: t.name,
+      },
+    };
+  });
+};
+
+const getDatabaseListCache = (dataSourceId: number): ITreeNode[] | null => {
+  try {
+    const cache = localStorage.getItem(getDatabaseListCacheKey(dataSourceId));
+    if (!cache) {
+      return null;
+    }
+    const cacheData = JSON.parse(cache);
+    return mapDatabaseListToTreeNodes(cacheData.list, cacheData.extraParams);
+  } catch {
+    return null;
+  }
+};
+
+const setDatabaseListCache = (dataSourceId: number, list: any[], extraParams: any) => {
+  try {
+    localStorage.setItem(
+      getDatabaseListCacheKey(dataSourceId),
+      JSON.stringify({
+        list,
+        extraParams,
+        updatedAt: Date.now(),
+      }),
+    );
+  } catch {
+    // localStorage may be unavailable or full; the live request result should still render normally.
+  }
+};
+
 export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   [TreeNodeType.DATA_SOURCES]: {
     getChildren: (_params, options) => {
@@ -149,22 +196,20 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
     getChildren: (params: { dataSourceId: number; dataSourceName: string; extraParams: any }, options) => {
       return new Promise((r, j) => {
         const _extraParams = params.extraParams;
+        const { dataSourceId, refresh } = params as any;
+        if (!refresh) {
+          const cacheData = getDatabaseListCache(dataSourceId);
+          if (cacheData) {
+            r(cacheData);
+            return;
+          }
+        }
         delete params.extraParams;
         connectionService
           .getDatabaseList(params, options)
           .then((res) => {
-            const data: ITreeNode[] = res.map((t: any) => {
-              return {
-                uuid: uuid(),
-                key: t.name,
-                name: t.name,
-                treeNodeType: TreeNodeType.DATABASE,
-                extraParams: {
-                  ..._extraParams,
-                  databaseName: t.name,
-                },
-              };
-            });
+            const data = mapDatabaseListToTreeNodes(res, _extraParams);
+            setDatabaseListCache(dataSourceId, res, _extraParams);
             r(data);
           })
           .catch((error) => {

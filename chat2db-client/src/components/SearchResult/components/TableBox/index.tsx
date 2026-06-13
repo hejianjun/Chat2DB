@@ -102,6 +102,8 @@ const defaultPaginationConfig: IResultConfig = {
   hasNextPage: true,
 };
 
+const getDefaultPageSize = (databaseType?: DatabaseTypeCode) => (databaseType === DatabaseTypeCode.DLC ? 10 : 200);
+
 export const TableContext = React.createContext({} as any);
 
 export default function TableBox(props: ITableProps) {
@@ -109,7 +111,10 @@ export default function TableBox(props: ITableProps) {
   const { className, outerQueryResultData, isActive, concealTabHeader } = props;
   const [viewTableCellData, setViewTableCellData] = useState<IViewTableCellData | null>(null);
   const [, contextHolder] = message.useMessage();
-  const [paginationConfig, setPaginationConfig] = useState<IResultConfig>(defaultPaginationConfig);
+  const [paginationConfig, setPaginationConfig] = useState<IResultConfig>({
+    ...defaultPaginationConfig,
+    pageSize: props.executeSqlParams?.pageSize || getDefaultPageSize(props.executeSqlParams?.databaseType),
+  });
   // sql查询结果
   const [queryResultData, setQueryResultData] = useState<IManageResultData>(outerQueryResultData);
   // tableData：带列标识的表数据 可以传给Table组件 进行渲染
