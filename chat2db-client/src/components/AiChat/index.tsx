@@ -19,7 +19,7 @@ import {
   isSimpleTaskPromptType,
 } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
-import { useAiChatStore, ChatStateType, IChatMessage, generateTitle } from '@/pages/main/workspace/store/aiChatStore';
+import { useAiChatStore, ChatStateType, IChatMessage } from '@/pages/main/workspace/store/aiChatStore';
 import { getConsoleEditor } from '@/pages/main/workspace/components/SQLExecute/consoleEditorRegistry';
 import { getSearchResult } from '@/pages/main/workspace/components/SQLExecute/searchResultRegistry';
 import ConversationSidebar from './ConversationSidebar';
@@ -285,6 +285,7 @@ export default memo<IProps>((props) => {
     setLastRequest,
     clearSession,
     resetCurrentContent,
+    renameSession,
     lastRequest,
   } = useAiChatStore();
 
@@ -506,7 +507,9 @@ export default memo<IProps>((props) => {
       const sessionId = shouldReuseConversation ? existingSessionId! : uuidv4();
       console.log('[AiChat] Using sessionId:', sessionId, 'reuse:', shouldReuseConversation, 'revision:', isRevision);
       sessionIdRef.current = sessionId;
-      const sessionTitle = existingSession?.title || generateTitle(messageText);
+      const shouldUsePromptTypeTitle =
+        !existingSession || (existingSession.messages.length === 0 && existingSession.title === '新对话');
+      const sessionTitle = shouldUsePromptTypeTitle ? promptType : existingSession?.title || promptType;
       if (!shouldReuseConversation) {
         createSession(sessionId, {
           dataSourceId: info.dataSourceId,
@@ -524,11 +527,14 @@ export default memo<IProps>((props) => {
               databaseName: info.databaseName,
               schemaName: info.schemaName,
               title: sessionTitle,
+              promptType,
             });
           } catch (error) {
             console.warn('[AiChat] Create conversation before chat failed, backend will retry:', error);
           }
         }
+      } else if (canUseEmptyConversation && existingSession?.title !== sessionTitle) {
+        await renameSession(sessionId, sessionTitle);
       }
 
       const userMessage: IChatMessage = {
@@ -743,6 +749,7 @@ export default memo<IProps>((props) => {
       setSelectedTables,
       setSchemaInfo,
       setError,
+      renameSession,
     ],
   );
 

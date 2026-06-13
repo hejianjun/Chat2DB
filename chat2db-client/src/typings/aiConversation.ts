@@ -32,6 +32,7 @@ export interface IAiConversationCreateRequest {
   databaseName?: string | null;
   schemaName?: string | null;
   title?: string | null;
+  promptType?: string | null;
   initialMessage?: string | null;
 }
 

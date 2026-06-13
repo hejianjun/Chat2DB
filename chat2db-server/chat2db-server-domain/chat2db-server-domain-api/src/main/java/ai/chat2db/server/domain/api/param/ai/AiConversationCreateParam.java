@@ -13,5 +13,6 @@ public class AiConversationCreateParam {
     private String databaseName;
     private String schemaName;
     private String title;
+    private String promptType;
     private Long userId;
 }

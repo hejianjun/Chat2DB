@@ -10,4 +10,5 @@ public class AiConversationCreateRequest {
     private String databaseName;
     private String schemaName;
     private String title;
+    private String promptType;
 }

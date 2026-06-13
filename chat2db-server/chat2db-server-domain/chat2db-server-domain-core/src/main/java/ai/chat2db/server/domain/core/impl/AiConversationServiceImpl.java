@@ -82,7 +82,7 @@ public class AiConversationServiceImpl implements AiConversationService {
         conversationDO.setGmtCreate(LocalDateTime.now());
         conversationDO.setGmtModified(LocalDateTime.now());
         if (StringUtils.isBlank(conversationDO.getTitle())) {
-            conversationDO.setTitle("新对话");
+            conversationDO.setTitle(StringUtils.defaultIfBlank(param.getPromptType(), "新对话"));
         }
         getConversationMapper().insert(conversationDO);
         return conversationId;
