@@ -12,7 +12,7 @@ interface ILexerConfig {
 }
 
 class Tokenizer {
-  // eslint-disable-next-line no-useless-constructor, @typescript-eslint/no-parameter-properties
+  // eslint-disable-next-line no-useless-constructor
   constructor(public lexerConfig: ILexerConfig[]) {
     //
   }
@@ -72,7 +72,6 @@ class Tokenizer {
     const matches = input.match(regex);
 
     if (matches) {
-      // eslint-disable-next-line @typescript-eslint/no-object-literal-type-assertion
       return { type, value: matches[1] } as IToken;
     }
   }

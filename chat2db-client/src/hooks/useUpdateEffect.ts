@@ -5,7 +5,7 @@ import { useRef, useEffect } from 'react';
  * @param fn 
  * @param arr 
  */
-export function useUpdateEffect(fn: Function, arr: any[]) {
+export function useUpdateEffect(fn: () => void, arr: any[]) {
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {

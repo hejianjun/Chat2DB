@@ -1,15 +1,14 @@
 import React, { memo } from 'react';
 import styles from './index.less';
 import classnames from 'classnames';
-import './index.less'
 
 interface IProps {
-  className?: any;
+  className?: string;
 }
 
 export default memo((props: IProps) => {
   const { className } = props;
-  return <div className={styles.box}>
+  return <div className={classnames(styles.box, className)}>
     <div className={styles.loading}>
       <span style={{ '--i': 1 } as any}  />
       <span style={{ '--i': 2 } as any}  />

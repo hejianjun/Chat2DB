@@ -13,7 +13,7 @@ const getDataSourceList = createRequest<IPageParams, IPageResponse<IDataSourceVO
 /**
  * 链接-创建链接
  */
-const createDataSource = createRequest<IConnectionDetails | {}, number>('/api/admin/data_source/create', {
+const createDataSource = createRequest<IConnectionDetails | Record<string, never>, number>('/api/admin/data_source/create', {
   method: 'post',
 });
 /**

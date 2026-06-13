@@ -223,7 +223,8 @@ const ExportDataModal = () => {
             marginBottom: '16px',
             fontFamily: 'monospace',
             fontSize: '12px',
-          }}>
+          }}
+          >
             {logs.map((log, index) => (
               <div key={index} style={{ marginBottom: '4px' }}>{log}</div>
             ))}

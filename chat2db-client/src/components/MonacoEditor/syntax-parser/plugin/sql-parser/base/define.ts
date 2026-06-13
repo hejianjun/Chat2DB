@@ -60,7 +60,7 @@ export type CursorType =
   | 'tableFieldAfterGroup'
   | 'joinTable';
 
-export type ICursorInfo<T = {}> = {
+export type ICursorInfo<T = Record<string, never>> = {
   token: IToken;
   type: CursorType;
 } & T;

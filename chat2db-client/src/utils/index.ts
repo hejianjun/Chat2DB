@@ -96,7 +96,7 @@ export function approximateTreeNode(treeData: ITreeNode[], target: string = '', 
 export function approximateList<T, K extends keyof T>(
   data: T[],
   target: string,
-  // @ts-ignore'
+  // @ts-expect-error default key is valid for name-based lists
   keyName: K = 'name',
   isDelete = true,
 ) {
@@ -107,11 +107,11 @@ export function approximateList<T, K extends keyof T>(
       // if(item.children?.length){
       //   item.children = approximateTreeNode(item.children, target,false);
       // }
-      // @ts-ignore'
+      // @ts-expect-error generic item key is runtime checked
       if (item[keyName]?.toUpperCase()?.indexOf(target?.toUpperCase()) == -1 && isDelete) {
         delete newData[index];
       } else {
-        // @ts-ignore'
+        // @ts-expect-error generic item value is runtime checked
         item[keyName] = item[keyName]?.replace(target, `<span style='color:red;'>${target}</span>`);
       }
     });

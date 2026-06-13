@@ -7,13 +7,13 @@ import * as _ from 'lodash';
 import { IParseResult } from '../..';
 import { DefaultOpts, IMonacoVersion, IParserType } from './default-opts';
 import { createParserWorker } from './worker-factory';
-import { mysqlParser } from '../sql-parser';
 import {
   ICompletionItem,
   ITableInfo,
   IJoinTableInfo,
   reader,
   ICursorInfo,
+  mysqlParser,
 } from '../sql-parser';
 
 const supportedMonacoEditorVersion = ['0.13.2', '0.15.6'];
@@ -237,7 +237,10 @@ export function monacoSqlAutocomplete(
           if (parseResult.error) {
             // Check if input only contains comments and whitespace
             // Handle both \n and \r\n line endings, and use [\s\S] to match all characters including \r
-            const textWithoutComments = editor.getValue().replace(/((?:#|--)[\s\S]*?(?:\r?\n|$)|\/\*[\s\S]*?(?:\*\/|$))/g, '').trim();
+            const textWithoutComments = editor
+              .getValue()
+              .replace(/((?:#|--)[\s\S]*?(?:\r?\n|$)|\/\*[\s\S]*?(?:\*\/|$))/g, '')
+              .trim();
             
             // Only show error if there's actual SQL content (not just comments)
             if (textWithoutComments.length > 0) {

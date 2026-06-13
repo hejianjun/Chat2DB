@@ -8,7 +8,7 @@ interface IProps {
   data: Array<{ value: number; name: string }>;
 }
 
-const PieChart = (props: IProps, ref: ForwardedRef<{ getEchartsInstance: Function }>) => {
+const PieChart = (props: IProps, ref: ForwardedRef<{ getEchartsInstance: () => any }>) => {
   const pieRef = useRef<any>(null);
 
   const option: EChartsOption = useMemo(

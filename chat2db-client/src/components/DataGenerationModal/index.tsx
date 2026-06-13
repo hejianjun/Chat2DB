@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal, Form, Button, Table, Select, Input, InputNumber, message, Progress, Spin } from 'antd';
 import { BulbFilled, ReloadOutlined } from '@ant-design/icons';
 import { setOpenDataGenerationModal } from '@/pages/main/workspace/store/modal';
-import { setPendingAiChat, setCurrentWorkspaceExtend } from '@/pages/main/workspace/store/common';
-import { IDataExpressionResult } from '@/pages/main/workspace/store/common';
+import { IDataExpressionResult, setCurrentWorkspaceExtend, setPendingAiChat } from '@/pages/main/workspace/store/common';
 import createRequest from '@/service/base';
 import taskService from '@/service/task';
 
@@ -231,7 +230,7 @@ const DataGenerationModal: React.FC = () => {
 
   useEffect(() => {
     if (open && templates.length === 0) {
-      loadGeneratorTemplates({})
+      loadGeneratorTemplates(undefined)
         .then((res) => {
           if (res) {
             setTemplates(res);
@@ -534,7 +533,8 @@ const DataGenerationModal: React.FC = () => {
           display: 'flex', 
           justifyContent: 'space-between',
           alignItems: 'center'
-        }}>
+        }}
+        >
           <h4 style={{ margin: 0 }}>列配置</h4>
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
@@ -609,7 +609,8 @@ const DataGenerationModal: React.FC = () => {
             marginBottom: '16px',
             fontFamily: 'monospace',
             fontSize: '12px'
-          }}>
+          }}
+          >
             {logs.map((log, index) => (
               <div key={index} style={{ marginBottom: '4px' }}>{log}</div>
             ))}

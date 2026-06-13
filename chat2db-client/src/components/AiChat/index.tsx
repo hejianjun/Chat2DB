@@ -19,6 +19,8 @@ import {
 } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { useAiChatStore, ChatStateType, IChatMessage, generateTitle } from '@/pages/main/workspace/store/aiChatStore';
+import { getConsoleEditor } from '@/pages/main/workspace/components/SQLExecute/consoleEditorRegistry';
+import { getSearchResult } from '@/pages/main/workspace/components/SQLExecute/searchResultRegistry';
 import ConversationSidebar from './ConversationSidebar';
 import styles from './index.less';
 
@@ -760,7 +762,6 @@ export default memo<IProps>((props) => {
   const handleExecuteSql = useCallback((sql: string) => {
     const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
     if (activeConsoleInfo) {
-      const { getSearchResult } = require('@/pages/main/workspace/components/SQLExecute/searchResultRegistry');
       const searchResultRef = getSearchResult(activeConsoleInfo.id);
       if (searchResultRef?.current) {
         searchResultRef.current.handleExecuteSQL(sql);
@@ -774,7 +775,6 @@ export default memo<IProps>((props) => {
   const handleSendToEditor = useCallback((sql: string) => {
     const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
     if (activeConsoleInfo) {
-      const { getConsoleEditor } = require('@/pages/main/workspace/components/SQLExecute/consoleEditorRegistry');
       const consoleRef = getConsoleEditor(activeConsoleInfo.id);
       if (consoleRef?.current?.editorRef) {
         consoleRef.current.editorRef.setValue(sql, 'cover');

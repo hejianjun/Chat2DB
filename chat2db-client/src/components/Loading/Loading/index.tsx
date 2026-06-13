@@ -1,10 +1,9 @@
 import React, { memo } from 'react';
 import styles from './index.less';
 import classnames from 'classnames';
-import './index.less'
 
 interface IProps {
-  className?: any;
+  className?: string;
 }
 
 // TODO： 首屏以及懒加载Loading效果

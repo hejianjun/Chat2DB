@@ -29,7 +29,7 @@ const checkTableContext = (text) => {
 };
 
 const handleInsertText = (keyword: string, tableName: string, databaseCode: DatabaseTypeCode) => {
-  if (/^[\"\`\[]/.test(keyword)) {
+  if (/^["`[]/.test(keyword)) {
     return tableName;
   }
 

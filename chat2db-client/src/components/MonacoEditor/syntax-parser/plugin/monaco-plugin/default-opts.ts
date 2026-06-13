@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-parameter-properties */
 /* eslint-disable no-useless-constructor */
 import * as _ from 'lodash';
 import { IMatching, IParseResult } from '../..';

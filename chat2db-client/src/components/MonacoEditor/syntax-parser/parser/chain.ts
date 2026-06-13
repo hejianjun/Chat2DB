@@ -164,7 +164,7 @@ function scannerAddCursorToken(scanner: Scanner, cursorIndex: number, options?: 
   return { scanner, finalCursorIndex };
 }
 
-export const createParser = <AST = {}>(root: ChainFunction, lexer: Lexer, options?: CreateParserOptions) => {
+export const createParser = <AST = Record<string, never>>(root: ChainFunction, lexer: Lexer, options?: CreateParserOptions) => {
   return (text: string, cursorIndex: number = null): IParseResult => {
     // eslint-disable-next-line no-param-reassign
     options = defaults(options || {}, new CreateParserOptions());

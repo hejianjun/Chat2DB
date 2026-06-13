@@ -28,7 +28,12 @@ module.exports = {
     ecmaVersion: 'latest',
     sourceType: 'module',
   },
-  ignorePatterns: ['src/main'],
+  settings: {
+    react: {
+      version: '18.2',
+    },
+  },
+  ignorePatterns: ['src/main', 'src/assets/font/iconfont.js'],
   rules: {
     'func-names': 0, // 函数表达式必须有名字
     'one-var': [1, 'never'], // 连续声明
@@ -77,8 +82,8 @@ module.exports = {
     //     ignoreStateless: true,
     //   },
     // ],
-    'react/jsx-uses-react': 2, // jsx 文件中禁止使用 React
-    'react/react-in-jsx-scope': 2, // jsx 文件中禁止使用 React
+    'react/jsx-uses-react': 0, // React 17+ JSX runtime 不需要显式使用 React
+    'react/react-in-jsx-scope': 0, // React 17+ JSX runtime 不需要显式引入 React
     'react/sort-comp': 1, // 组件内方法顺序
     'react/jsx-tag-spacing': 2, // jsx 中的属性禁止使用空格
     'react/jsx-no-bind': 0, // jsx 中禁止使用 bind
@@ -109,7 +114,6 @@ module.exports = {
     'import/no-extraneous-dependencies': 0, // 禁止使用无关的 package
     'import/no-unresolved': 0, // 禁止使用无关的 package
     '@typescript-eslint/explicit-member-accessibility': 0, // 类的成员之间是否需要空行
-    '@typescript-eslint/no-object-literal-type-assertion': 0, // 禁止使用 as Type
     'react/no-find-dom-node': 0, // 禁止使用 findDOMNode
     'no-param-reassign': [
       // 禁止对函数参数再赋值

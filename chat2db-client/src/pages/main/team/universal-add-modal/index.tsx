@@ -14,7 +14,7 @@ import i18n from '@/i18n';
 interface IProps {
   open: boolean;
   type?: SearchType;
-  onConfirm: (values: Object) => void;
+  onConfirm: (values: Record<string, unknown>) => void;
   onClose: () => void;
 }
 

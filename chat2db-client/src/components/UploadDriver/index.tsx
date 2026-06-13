@@ -1,16 +1,14 @@
-import React, { memo, useEffect, useState, useRef } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import i18n from '@/i18n'
 import styles from './index.less';
 import classnames from 'classnames';
-import { Button, message, Upload, Form, Input } from 'antd';
-import type { UploadProps } from 'antd';
-import connectionService from '@/service/connection';
+import { Button, Upload, Form, Input, type UploadProps } from 'antd';
 import { DatabaseTypeCode } from '@/constants'
 
 interface IProps {
   className?: string;
   databaseType: DatabaseTypeCode;
-  formChange: Function;
+  formChange: (formData: { dbType: DatabaseTypeCode; jdbcDriverClass?: string; jdbcDriver: any[] }) => void;
   jdbcDriverClass: string | undefined;
 }
 

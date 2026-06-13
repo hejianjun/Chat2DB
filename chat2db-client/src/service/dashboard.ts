@@ -2,7 +2,9 @@ import { IChartItem, IDashboardItem, IPageResponse } from '@/typings';
 import createRequest from './base';
 
 /** 获取报表列表 */
-const getDashboardList = createRequest<{}, IPageResponse<IDashboardItem>>('/api/dashboard/list', { method: 'get' });
+const getDashboardList = createRequest<Record<string, never>, IPageResponse<IDashboardItem>>('/api/dashboard/list', {
+  method: 'get',
+});
 const getDashboardById = createRequest<{ id: number }, IDashboardItem>('/api/dashboard/:id', { method: 'get' });
 /** 创建报表 */
 const createDashboard = createRequest<{ name: string; description: string; schema?: string; chartId?: number[] }, void>(

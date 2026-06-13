@@ -3,6 +3,7 @@
   "compilerOptions": {
     "moduleResolution": "node",
     "jsx": "react-jsx",
+    "strict": false,
     "noImplicitAny": false
   }
 }
