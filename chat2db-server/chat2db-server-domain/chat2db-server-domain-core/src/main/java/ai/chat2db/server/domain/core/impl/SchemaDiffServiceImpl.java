@@ -1048,7 +1048,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             TableColumn sourceCol = sourceMap.get(colName);
             if (sourceCol == null) {
                 diffs.add(ColumnDiff.builder()
-                        .changeType(EditStatus.ADD)
+                        .changeType(EditStatus.DELETE)
                         .targetColumn(targetCol)
                         .changedFields(Collections.singletonList(fieldDiff("targetOnly", null, targetCol.getName())))
                         .build());
@@ -1064,7 +1064,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         for (Map.Entry<String, TableColumn> entry : sourceMap.entrySet()) {
             if (!targetMap.containsKey(entry.getKey())) {
                 diffs.add(ColumnDiff.builder()
-                        .changeType(EditStatus.DELETE)
+                        .changeType(EditStatus.ADD)
                         .sourceColumn(entry.getValue())
                         .changedFields(Collections.singletonList(fieldDiff("sourceOnly", entry.getValue().getName(), null)))
                         .build());
@@ -1204,9 +1204,9 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
      *
      * <p>规则：
      * <ul>
-     *   <li>仅在目标库存在 → ADD；</li>
+     *   <li>仅在源库存在 → ADD（目标库需新增）；</li>
      *   <li>两边都存在但属性不同 → MODIFY；</li>
-     *   <li>仅在源库存在 → DELETE。</li>
+     *   <li>仅在目标库存在 → DELETE（目标库需删除）。</li>
      * </ul>
      *
      * @param caseSensitive 是否对索引名做大小写敏感匹配
@@ -1231,7 +1231,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             TableIndex sourceIdx = sourceMap.get(idxName);
             if (sourceIdx == null) {
                 diffs.add(IndexDiff.builder()
-                        .changeType(EditStatus.ADD)
+                        .changeType(EditStatus.DELETE)
                         .targetIndex(targetIdx)
                         .changedFields(Collections.singletonList(fieldDiff("targetOnly", null, targetIdx.getName())))
                         .build());
@@ -1247,7 +1247,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         for (Map.Entry<String, TableIndex> entry : sourceMap.entrySet()) {
             if (!targetMap.containsKey(entry.getKey())) {
                 diffs.add(IndexDiff.builder()
-                        .changeType(EditStatus.DELETE)
+                        .changeType(EditStatus.ADD)
                         .sourceIndex(entry.getValue())
                         .changedFields(Collections.singletonList(fieldDiff("sourceOnly", entry.getValue().getName(), null)))
                         .build());
@@ -1308,7 +1308,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             ForeignKey sourceFK = sourceMap.get(fkName);
             if (sourceFK == null) {
                 diffs.add(ForeignKeyDiff.builder()
-                        .changeType(EditStatus.ADD)
+                        .changeType(EditStatus.DELETE)
                         .targetForeignKey(targetFK)
                         .changedFields(Collections.singletonList(fieldDiff("targetOnly", null, targetFK.getName())))
                         .build());
@@ -1324,7 +1324,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
         for (Map.Entry<String, ForeignKey> entry : sourceMap.entrySet()) {
             if (!targetMap.containsKey(entry.getKey())) {
                 diffs.add(ForeignKeyDiff.builder()
-                        .changeType(EditStatus.DELETE)
+                        .changeType(EditStatus.ADD)
                         .sourceForeignKey(entry.getValue())
                         .changedFields(Collections.singletonList(fieldDiff("sourceOnly", entry.getValue().getName(), null)))
                         .build());
@@ -1424,8 +1424,8 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
      *
      * <p>这个虚拟表会传给目标库插件的 SqlBuilder，由它生成 ALTER TABLE 等 DDL：
      * <ul>
-     *   <li>差异中的 ADD（即只在目标库存在）→ 在虚拟表中标记为 DELETE，让 SqlBuilder 输出 DROP；</li>
-     *   <li>差异中的 DELETE（即只在源库存在）→ 在虚拟表中标记为 ADD，让 SqlBuilder 输出 ADD；</li>
+     *   <li>差异中的 ADD（即只在源库存在）→ 在虚拟表中标记为 ADD，让 SqlBuilder 输出 ADD；</li>
+     *   <li>差异中的 DELETE（即只在目标库存在）→ 在虚拟表中标记为 DELETE，让 SqlBuilder 输出 DROP；</li>
      *   <li>差异中的 MODIFY → 复制源对象并标 MODIFY，必要时记录 oldName 以支持改名。</li>
      * </ul>
      * 自增起始值是否沿用目标库由 {@link CompareOption#isIgnoreAutoIncrement} 决定。
@@ -1453,7 +1453,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             List<TableColumn> columns = new ArrayList<>();
             if (sourceTable.getColumnList() != null) {
                 Map<String, ColumnDiff> sourceDiffMap = columnDiffs.stream()
-                        .filter(d -> d.getChangeType() == EditStatus.DELETE || d.getChangeType() == EditStatus.MODIFY)
+                        .filter(d -> d.getChangeType() == EditStatus.ADD || d.getChangeType() == EditStatus.MODIFY)
                         .filter(d -> d.getSourceColumn() != null && d.getSourceColumn().getName() != null)
                         .collect(Collectors.toMap(d -> caseSensitive ? d.getSourceColumn().getName()
                                 : d.getSourceColumn().getName().toLowerCase(), d -> d, (a, b) -> a));
@@ -1463,8 +1463,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
                     String key = caseSensitive ? col.getName() : col.getName().toLowerCase();
                     ColumnDiff diff = sourceDiffMap.get(key);
                     if (diff != null) {
-                        col.setEditStatus(diff.getChangeType() == EditStatus.DELETE
-                                ? EditStatus.ADD.name() : EditStatus.MODIFY.name());
+                        col.setEditStatus(diff.getChangeType().name());
                         if (diff.getChangeType() == EditStatus.MODIFY && diff.getTargetColumn() != null
                                 && !Objects.equals(diff.getTargetColumn().getName(), col.getName())) {
                             col.setOldName(diff.getTargetColumn().getName());
@@ -1474,7 +1473,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
                 }
             }
             for (ColumnDiff diff : columnDiffs) {
-                if (diff.getChangeType() == EditStatus.ADD && diff.getTargetColumn() != null) {
+                if (diff.getChangeType() == EditStatus.DELETE && diff.getTargetColumn() != null) {
                     TableColumn deletedCol = copyColumn(diff.getTargetColumn());
                     deletedCol.setEditStatus(EditStatus.DELETE.name());
                     columns.add(deletedCol);
@@ -1489,7 +1488,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
             List<TableIndex> indexes = new ArrayList<>();
             if (sourceTable.getIndexList() != null) {
                 Map<String, IndexDiff> sourceDiffMap = indexDiffs.stream()
-                        .filter(d -> d.getChangeType() == EditStatus.DELETE || d.getChangeType() == EditStatus.MODIFY)
+                        .filter(d -> d.getChangeType() == EditStatus.ADD || d.getChangeType() == EditStatus.MODIFY)
                         .filter(d -> d.getSourceIndex() != null && d.getSourceIndex().getName() != null)
                         .collect(Collectors.toMap(d -> caseSensitive ? d.getSourceIndex().getName()
                                 : d.getSourceIndex().getName().toLowerCase(), d -> d, (a, b) -> a));
@@ -1498,8 +1497,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
                     String key = caseSensitive ? idx.getName() : idx.getName().toLowerCase();
                     IndexDiff diff = sourceDiffMap.get(key);
                     if (diff != null) {
-                        idx.setEditStatus(diff.getChangeType() == EditStatus.DELETE
-                                ? EditStatus.ADD.name() : EditStatus.MODIFY.name());
+                        idx.setEditStatus(diff.getChangeType().name());
                         if (diff.getChangeType() == EditStatus.MODIFY && diff.getTargetIndex() != null) {
                             idx.setOldName(diff.getTargetIndex().getName());
                         }
@@ -1508,7 +1506,7 @@ public class SchemaDiffServiceImpl implements SchemaDiffService {
                 }
             }
             for (IndexDiff diff : indexDiffs) {
-                if (diff.getChangeType() == EditStatus.ADD && diff.getTargetIndex() != null) {
+                if (diff.getChangeType() == EditStatus.DELETE && diff.getTargetIndex() != null) {
                     TableIndex deletedIdx = copyIndex(diff.getTargetIndex());
                     deletedIdx.setOldName(diff.getTargetIndex().getName());
                     deletedIdx.setEditStatus(EditStatus.DELETE.name());
