@@ -214,12 +214,13 @@ public class ChatController {
         String promptType = request.getPromptType();
 
         if (PromptType.TEXT_GENERATION.getCode().equals(promptType)
-                || PromptType.TITLE_GENERATION.getCode().equals(promptType)) {
+                || PromptType.TITLE_GENERATION.getCode().equals(promptType)
+                || PromptType.REDIS_KEYS_COMMENT.getCode().equals(promptType)) {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
 
         if (isRedisNl2Sql(request, promptType)) {
-            return ChatEvent.TABLES_NOT_NEEDED;
+            return ChatEvent.TABLES_PROVIDED;
         }
 
         if (isRedisPromptWithoutTables(request, promptType)) {

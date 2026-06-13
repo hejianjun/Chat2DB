@@ -1,10 +1,9 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
-import java.util.List;
-
 import ai.chat2db.server.domain.api.model.AiMessage;
 import ai.chat2db.server.domain.api.service.AiConversationService;
 import ai.chat2db.server.domain.api.service.DataSourceService;
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
@@ -25,6 +24,8 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 /**
  * 构建提示词动作
@@ -71,6 +72,8 @@ public class BuildPromptAction extends BaseChatAction {
             String sourceFields = extractSourceFields(request.getExt());
             String history = request.getHistory();
             String previousSql = request.getPreviousSql();
+            String dataSourceType = dataSourceService.queryDatabaseType(request.getDataSourceId());
+            String redisKeyPrefixContext = isRedisCommandPrompt(promptType, dataSourceType) ? schemaDdl : "暂无";
             if (PromptType.NL_2_SQL == promptType && Boolean.TRUE.equals(request.getIsRevision())) {
                 if (StringUtils.isBlank(history) && StringUtils.isNotBlank(request.getConversationId())) {
                     history = loadHistoryFromDb(request.getConversationId());
@@ -84,9 +87,10 @@ public class BuildPromptAction extends BaseChatAction {
                     .ext(request.getExt())
                     .schemaDdl(schemaDdl)
                     .explainPlan(chatContext.getExplainResult())
-                    .dataSourceType(dataSourceService.queryDatabaseType(request.getDataSourceId()))
+                    .dataSourceType(dataSourceType)
                     .targetSqlType(request.getDestSqlType())
                     .sourceFields(sourceFields)
+                    .redisKeyPrefixContext(redisKeyPrefixContext)
                     .conversationId(request.getConversationId())
                     .history(history)
                     .previousSql(previousSql)
@@ -112,6 +116,13 @@ public class BuildPromptAction extends BaseChatAction {
         } finally {
             removeContext();
         }
+    }
+
+    private boolean isRedisCommandPrompt(PromptType promptType, String dataSourceType) {
+        if (!DataSourceTypeEnum.REDIS.getCode().equalsIgnoreCase(StringUtils.defaultString(dataSourceType))) {
+            return false;
+        }
+        return PromptType.NL_2_SQL == promptType || PromptType.REDIS_NL_2_COMMAND == promptType;
     }
 
     private String loadHistoryFromDb(String conversationId) {

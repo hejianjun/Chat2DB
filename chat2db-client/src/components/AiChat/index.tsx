@@ -13,6 +13,7 @@ import {
   IAiChatPromptType,
   ITableCommentResult,
   IBatchTableCommentResult,
+  IRedisKeyPrefixCommentResult,
   IFieldMappingResult,
   IDataExpressionResult,
   isSimpleTaskPromptType,
@@ -142,6 +143,22 @@ function extractBatchJsonFromContent(content: string): IBatchTableCommentResult 
   return null;
 }
 
+function extractRedisKeyPrefixCommentFromContent(content: string): IRedisKeyPrefixCommentResult | null {
+  try {
+    const jsonMatch = content.match(/\{[\s\S]*"prefixes"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]) as IRedisKeyPrefixCommentResult;
+    }
+    const directJson = JSON.parse(content);
+    if (directJson.prefixes) {
+      return directJson as IRedisKeyPrefixCommentResult;
+    }
+  } catch (e) {
+    console.error('[extractRedisKeyPrefixCommentFromContent] Parse error:', e);
+  }
+  return null;
+}
+
 function extractFieldMappingFromContent(content: string): IFieldMappingResult | null {
   try {
     const jsonMatch = content.match(/\{[\s\S]*"mappings"[\s\S]*\}/);
@@ -243,6 +260,7 @@ export default memo<IProps>((props) => {
   const sessionIdRef = useRef<string>();
   const commentCallbackRef = useRef<(result: ITableCommentResult) => void>();
   const batchCommentCallbackRef = useRef<(result: IBatchTableCommentResult) => void>();
+  const redisKeyPrefixCommentCallbackRef = useRef<(result: IRedisKeyPrefixCommentResult) => void>();
   const mappingCallbackRef = useRef<(result: IFieldMappingResult) => void>();
   const expressionCallbackRef = useRef<(result: IDataExpressionResult) => void>();
   const sqlFixCallbackRef = useRef<(sql: string) => void>();
@@ -642,6 +660,21 @@ export default memo<IProps>((props) => {
               batchCommentCallbackRef.current = undefined;
             }
 
+            if (promptType === 'REDIS_KEYS_COMMENT' && redisKeyPrefixCommentCallbackRef.current) {
+              try {
+                const jsonContent = extractRedisKeyPrefixCommentFromContent(session.currentContent);
+                if (jsonContent) {
+                  console.log('[AiChat] Parsed Redis key prefix comment result:', jsonContent);
+                  redisKeyPrefixCommentCallbackRef.current(jsonContent);
+                  message.success('AI Redis key 注释已生成');
+                }
+              } catch (e) {
+                console.error('[AiChat] Failed to parse Redis key prefix comment JSON:', e);
+                message.warning('无法解析 AI 生成的 Redis key 注释，请手动查看');
+              }
+              redisKeyPrefixCommentCallbackRef.current = undefined;
+            }
+
             if (promptType === 'NL_2_FIELD_MAPPING' && mappingCallbackRef.current) {
               try {
                 const jsonContent = extractFieldMappingFromContent(session.currentContent);
@@ -733,6 +766,9 @@ export default memo<IProps>((props) => {
       }
       if (pendingAiChat.onBatchCommentGenerated) {
         batchCommentCallbackRef.current = pendingAiChat.onBatchCommentGenerated;
+      }
+      if (pendingAiChat.onRedisKeyPrefixCommentGenerated) {
+        redisKeyPrefixCommentCallbackRef.current = pendingAiChat.onRedisKeyPrefixCommentGenerated;
       }
       if (pendingAiChat.onMappingGenerated) {
         mappingCallbackRef.current = pendingAiChat.onMappingGenerated;

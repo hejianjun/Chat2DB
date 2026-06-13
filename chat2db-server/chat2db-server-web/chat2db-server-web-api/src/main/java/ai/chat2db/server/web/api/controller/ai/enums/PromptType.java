@@ -57,6 +57,11 @@ public enum PromptType implements BaseEnum<String> {
     NL_2_COMMENT_BATCH("批量猜测表注释"),
 
     /**
+     * 猜测 Redis key 前缀注释
+     */
+    REDIS_KEYS_COMMENT("猜测Redis key前缀注释"),
+
+    /**
      * 智能字段映射推荐
      */
     NL_2_FIELD_MAPPING("智能字段映射推荐"),
@@ -92,8 +97,8 @@ public enum PromptType implements BaseEnum<String> {
      */
     public boolean isSimpleTask() {
         return this == SELECT_TABLES || this == TITLE_GENERATION || this == NL_2_COMMENT_BATCH
-                || this == NL_2_COMMENT || this == NL_2_FIELD_MAPPING || this == NL_2_DATA_EXPRESSION
-                || this == SQL_COMPLETION;
+                || this == NL_2_COMMENT || this == REDIS_KEYS_COMMENT || this == NL_2_FIELD_MAPPING
+                || this == NL_2_DATA_EXPRESSION || this == SQL_COMPLETION;
     }
 
     PromptType(String description) {

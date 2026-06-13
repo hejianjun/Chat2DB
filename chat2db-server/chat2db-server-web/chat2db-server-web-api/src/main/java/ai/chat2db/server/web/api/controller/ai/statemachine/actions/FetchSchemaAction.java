@@ -1,22 +1,29 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
-import java.util.concurrent.CompletableFuture;
-
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
+import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
+import ai.chat2db.server.domain.api.param.RedisKeyPrefixQueryParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.DataSourceService;
+import ai.chat2db.server.domain.api.service.RedisKeyPrefixService;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
+import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 获取表结构动作
@@ -25,11 +32,16 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class FetchSchemaAction extends BaseChatAction {
 
+    private static final int MAX_REDIS_PREFIX_CONTEXT_SIZE = 80;
+
     @Autowired
     private DatabaseService databaseService;
 
     @Autowired
     private DataSourceService dataSourceService;
+
+    @Autowired
+    private RedisKeyPrefixService redisKeyPrefixService;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -74,6 +86,10 @@ public class FetchSchemaAction extends BaseChatAction {
     private String fetchSchemaDdl(ChatContext ctx) {
         ChatQueryRequest request = ctx.getRequest();
 
+        if (isRedisCommandPrompt(request)) {
+            return queryRedisKeyPrefixContext(request);
+        }
+
         if (isRedis(request)) {
             return "";
         }
@@ -115,5 +131,50 @@ public class FetchSchemaAction extends BaseChatAction {
                 request.getDatabaseName(),
                 request.getSchemaName()
         );
+    }
+
+    private boolean isRedisCommandPrompt(ChatQueryRequest request) {
+        String promptType = StringUtils.defaultIfBlank(request.getPromptType(), PromptType.NL_2_SQL.getCode());
+        return PromptType.NL_2_SQL.getCode().equals(promptType) && isRedis(request);
+    }
+
+    private String queryRedisKeyPrefixContext(ChatQueryRequest request) {
+        try {
+            RedisKeyPrefixQueryParam param = RedisKeyPrefixQueryParam.builder()
+                    .dataSourceId(request.getDataSourceId())
+                    .databaseName(request.getDatabaseName())
+                    .schemaName(request.getSchemaName())
+                    .searchKey("")
+                    .pageNo(1)
+                    .pageSize(MAX_REDIS_PREFIX_CONTEXT_SIZE)
+                    .build();
+            List<RedisKeyPrefix> prefixes = redisKeyPrefixService.search(param);
+            if (CollectionUtils.isEmpty(prefixes)) {
+                return "暂无";
+            }
+
+            String context = prefixes.stream()
+                    .map(prefix -> new RedisPrefixPromptItem(
+                            prefix.getName(),
+                            StringUtils.defaultIfBlank(prefix.getComment(), prefix.getAiComment()),
+                            prefix.getKeyCount()))
+                    .filter(item -> StringUtils.isNotBlank(item.prefix()) && StringUtils.isNotBlank(item.comment()))
+                    .sorted(Comparator.comparing(
+                            RedisPrefixPromptItem::keyCount,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(MAX_REDIS_PREFIX_CONTEXT_SIZE)
+                    .map(item -> "- " + item.prefix() + ": " + item.comment()
+                            + (item.keyCount() == null ? "" : " (" + item.keyCount() + " keys)"))
+                    .collect(Collectors.joining("\n"));
+
+            return StringUtils.defaultIfBlank(context, "暂无");
+        } catch (Exception e) {
+            log.warn("[FetchSchemaAction] Failed to query Redis key prefix context, dataSourceId: {}, error: {}",
+                    request.getDataSourceId(), e.getMessage());
+            return "暂无";
+        }
+    }
+
+    private record RedisPrefixPromptItem(String prefix, String comment, Long keyCount) {
     }
 }

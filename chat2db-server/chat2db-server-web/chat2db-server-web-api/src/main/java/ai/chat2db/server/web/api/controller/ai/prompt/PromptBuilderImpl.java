@@ -150,6 +150,7 @@ public class PromptBuilderImpl implements PromptBuilder {
                 .replace("{ext}", Objects.toString(context.getExt(), ""))
                 .replace("{db_type}", Objects.toString(context.getDataSourceType(), "MYSQL"))
                 .replace("{schema}", Objects.toString(context.getSchemaDdl(), ""))
+                .replace("{redis_key_prefixes}", Objects.toString(context.getRedisKeyPrefixContext(), "暂无"))
                 .replace("{explain_plan}", Objects.toString(context.getExplainPlan(), ""))
                 .replace("{message}", Objects.toString(context.getMessage(), ""))
                 .replace("{target_sql_type}", Objects.toString(context.getTargetSqlType(),

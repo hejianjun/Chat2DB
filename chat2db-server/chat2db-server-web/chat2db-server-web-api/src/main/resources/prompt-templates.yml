@@ -170,6 +170,42 @@ prompts:
       3. 注释应该准确反映表的业务含义
       4. 使用中文注释
 
+  # 猜测 Redis key 前缀注释
+  redis_keys_comment:
+    name: "redis_keys_comment"
+    description: "猜测 Redis key 前缀注释"
+    template: |
+      ### 任务：根据 Redis key 前缀和样例 key 生成合适的中文注释
+
+      **数据库类型**: {db_type}
+
+      **用户要求**:
+      {message}
+
+      **Redis key 前缀信息（JSON）**:
+      {ext}
+
+      请根据 prefix、keyCount 和 sampleKeys 推测每个 Redis key 前缀的业务含义，生成简洁的中文注释。
+
+      **输出格式要求（严格遵守 JSON 格式）：**
+
+      ```json
+      {
+        "prefixes": [
+          {
+            "prefix": "user:profile",
+            "comment": "用户资料缓存"
+          }
+        ]
+      }
+      ```
+
+      **注意事项：**
+      1. 只输出 JSON 内容，不要包含其他解释文字
+      2. prefix 必须来自输入的 prefix，不要新增、改名或省略冒号层级
+      3. 注释应该简洁明了，不超过 50 字
+      4. 使用中文注释
+
   # 智能字段映射推荐
   nl_2_field_mapping:
     name: "nl_2_field_mapping"
@@ -327,9 +363,13 @@ prompts:
       #
       ### 数据库类型: {db_type}
       #
+      ### 已知 Redis key 前缀及注释:
+      {redis_key_prefixes}
+      #
       ### Redis command input: {message}
       #
       ### 输出要求
       1. 只输出可执行的 Redis 命令，不要输出 SQL。
       2. 不要输出 Markdown、代码块、解释、标题或多余文本。
       3. 如果需要多条命令，每行输出一条 Redis 命令。
+      4. 当用户意图涉及已知业务对象时，优先使用“已知 Redis key 前缀及注释”中的前缀构造 key。

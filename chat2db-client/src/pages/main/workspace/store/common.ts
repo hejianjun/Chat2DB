@@ -10,6 +10,7 @@ export type IAiChatPromptType =
   | 'SELECT_TABLES'
   | 'NL_2_COMMENT'
   | 'NL_2_COMMENT_BATCH'
+  | 'REDIS_KEYS_COMMENT'
   | 'NL_2_FIELD_MAPPING'
   | 'NL_2_DATA_EXPRESSION'
   | 'SQL_FIX'
@@ -20,6 +21,7 @@ export const SIMPLE_TASK_PROMPT_TYPES = [
   'SELECT_TABLES',
   'NL_2_COMMENT',
   'NL_2_COMMENT_BATCH',
+  'REDIS_KEYS_COMMENT',
   'NL_2_FIELD_MAPPING',
   'NL_2_DATA_EXPRESSION',
   'SQL_COMPLETION',
@@ -46,6 +48,15 @@ export interface IBatchTableComment {
 
 export interface IBatchTableCommentResult {
   tables: IBatchTableComment[];
+}
+
+export interface IRedisKeyPrefixComment {
+  prefix: string;
+  comment: string;
+}
+
+export interface IRedisKeyPrefixCommentResult {
+  prefixes: IRedisKeyPrefixComment[];
 }
 
 export interface IFieldMappingResult {
@@ -80,6 +91,7 @@ export interface IPendingAiChat {
   promptType: IAiChatPromptType;
   onCommentGenerated?: (result: ITableCommentResult) => void;
   onBatchCommentGenerated?: (result: IBatchTableCommentResult) => void;
+  onRedisKeyPrefixCommentGenerated?: (result: IRedisKeyPrefixCommentResult) => void;
   onMappingGenerated?: (result: IFieldMappingResult) => void;
   onExpressionGenerated?: (result: IDataExpressionResult) => void;
   onSqlFixed?: (sql: string) => void;

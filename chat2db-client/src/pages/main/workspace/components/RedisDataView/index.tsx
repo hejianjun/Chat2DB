@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Empty, Input, InputNumber, Modal, Segmented, Select, Table, Tag, Tooltip, message } from 'antd';
 import {
+  BulbOutlined,
   CloseOutlined,
   DeleteOutlined,
   PlusOutlined,
@@ -13,6 +14,11 @@ import type { ColumnsType, SorterResult, TablePaginationConfig } from 'antd/es/t
 import { v4 as uuid } from 'uuid';
 
 import redisService, { IRedisKeyItem, IRedisKeyPrefixBuildStatus, IRedisKeyPrefixItem } from '@/service/redis';
+import {
+  IRedisKeyPrefixCommentResult,
+  setCurrentWorkspaceExtend,
+  setPendingAiChat,
+} from '@/pages/main/workspace/store/common';
 
 import styles from './index.less';
 
@@ -60,6 +66,7 @@ const RedisDataView = memo((props: IProps) => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [prefixSaving, setPrefixSaving] = useState(false);
+  const [prefixGuessing, setPrefixGuessing] = useState(false);
   const [prefixLoading, setPrefixLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedPrefix, setSelectedPrefix] = useState('');
@@ -225,6 +232,58 @@ const RedisDataView = memo((props: IProps) => {
       })
       .finally(() => setPrefixSaving(false));
   };
+
+  const saveGeneratedPrefixComments = useCallback(
+    async (result: IRedisKeyPrefixCommentResult) => {
+      const generated = (result.prefixes || []).filter((item) => item.prefix?.trim() && item.comment?.trim());
+      if (!generated.length || !uniqueData?.dataSourceId) {
+        message.warning('AI 未返回可保存的 Redis key 注释');
+        setPrefixGuessing(false);
+        return;
+      }
+
+      const nextComments = Object.fromEntries(
+        generated.map((item) => [item.prefix.trim(), item.comment.trim()]),
+      ) as Record<string, string>;
+
+      try {
+        await Promise.all(
+          Object.entries(nextComments).map(([prefix, comment]) =>
+            redisService.updateKeyPrefixComment({
+              dataSourceId: uniqueData.dataSourceId,
+              databaseName: uniqueData.databaseName,
+              prefix,
+              comment,
+            }),
+          ),
+        );
+
+        setPrefixComments((current) => {
+          const next = { ...current };
+          Object.entries(nextComments).forEach(([prefix, comment]) => {
+            next[prefix] = {
+              ...(next[prefix] || { name: prefix }),
+              name: prefix,
+              comment,
+            };
+          });
+          return next;
+        });
+        setPrefixSearchData((current) =>
+          current.map((item) => (nextComments[item.name] ? { ...item, comment: nextComments[item.name] } : item)),
+        );
+        if (selectedPrefix && nextComments[selectedPrefix]) {
+          setPrefixCommentDraft(nextComments[selectedPrefix]);
+        }
+        message.success(`已保存 ${Object.keys(nextComments).length} 条 Redis key 注释`);
+      } catch (error) {
+        message.error(String(error || 'Redis key 注释保存失败'));
+      } finally {
+        setPrefixGuessing(false);
+      }
+    },
+    [selectedPrefix, uniqueData?.dataSourceId, uniqueData?.databaseName],
+  );
 
   const loadKeysByPrefix = () => {
     if (!selectedPrefix) {
@@ -524,6 +583,44 @@ const RedisDataView = memo((props: IProps) => {
     return sortTree(tree, sortInfo.field, sortInfo.order);
   }, [data, prefixComments, prefixSearchData, searchMode, sortInfo]);
 
+  const openAiChatForPrefixComments = useCallback(
+    (onlySelected = false) => {
+      if (!uniqueData?.dataSourceId) {
+        message.warning('请先选择 Redis 连接');
+        return;
+      }
+
+      const targetPrefixes = onlySelected
+        ? flattenPrefixRows(tableData).filter((item) => item.name === selectedPrefix)
+        : flattenPrefixRows(tableData).filter((item) => !item.comment?.trim());
+
+      if (!targetPrefixes.length) {
+        message.warning(onlySelected ? '请先选择 Redis key 前缀' : '当前可见前缀都已有注释');
+        return;
+      }
+
+      const prefixes = targetPrefixes.slice(0, 30).map((item) => ({
+        prefix: item.name,
+        keyCount: item.keyCount || item.count || 0,
+        sampleKeys: collectSampleKeys(item).slice(0, 5),
+      }));
+
+      setPrefixGuessing(true);
+      setPendingAiChat({
+        dataSourceId: Number(uniqueData.dataSourceId),
+        databaseName: uniqueData.databaseName,
+        message: '请根据 Redis key 前缀和样例 key 生成合适的中文注释',
+        promptType: 'REDIS_KEYS_COMMENT',
+        ext: JSON.stringify({ prefixes }),
+        onRedisKeyPrefixCommentGenerated: saveGeneratedPrefixComments,
+      });
+      setCurrentWorkspaceExtend('ai');
+      setPrefixGuessing(false);
+      message.success('已切换到 AI 助手，请在 AI 聊天面板中查看推荐结果');
+    },
+    [saveGeneratedPrefixComments, selectedPrefix, tableData, uniqueData?.dataSourceId, uniqueData?.databaseName],
+  );
+
   const filteredHashFields = useMemo(() => {
     const keyword = hashFieldFilter.trim().toLowerCase();
     if (!keyword) {
@@ -762,6 +859,15 @@ const RedisDataView = memo((props: IProps) => {
           <Button loading={prefixLoading} size="small" type="text" onClick={refreshPrefixCache}>
             前缀缓存
           </Button>
+          <Button
+            icon={<BulbOutlined />}
+            loading={prefixGuessing}
+            size="small"
+            type="text"
+            onClick={() => openAiChatForPrefixComments(false)}
+          >
+            AI 猜注释
+          </Button>
           <span>{formatPrefixBuildStatus(prefixBuildStatus)}</span>
           <Button
             disabled={searchMode === SEARCH_MODE_PREFIX || !hasMore}
@@ -800,6 +906,14 @@ const RedisDataView = memo((props: IProps) => {
                 />
                 <Button icon={<SearchOutlined />} size="small" onClick={loadKeysByPrefix}>
                   加载 keys
+                </Button>
+                <Button
+                  icon={<BulbOutlined />}
+                  loading={prefixGuessing}
+                  size="small"
+                  onClick={() => openAiChatForPrefixComments(true)}
+                >
+                  AI 猜测
                 </Button>
                 <Button
                   icon={<SaveOutlined />}
@@ -1156,6 +1270,38 @@ function formatPrefixBuildStatus(status?: IRedisKeyPrefixBuildStatus | null) {
     return `${base} · 前缀 ${status.prefixCount}`;
   }
   return base;
+}
+
+function flattenPrefixRows(rows: IRedisKeyRow[]) {
+  const result: IRedisKeyRow[] = [];
+  const stack = [...rows];
+  while (stack.length) {
+    const item = stack.shift()!;
+    if (item.isGroup) {
+      result.push(item);
+    }
+    if (item.children?.length) {
+      stack.push(...item.children);
+    }
+  }
+  return result;
+}
+
+function collectSampleKeys(row: IRedisKeyRow) {
+  if (!row.isGroup) {
+    return [row.name];
+  }
+  const result: string[] = [];
+  const stack = [...(row.children || [])];
+  while (stack.length && result.length < 5) {
+    const item = stack.shift()!;
+    if (item.isGroup && item.children?.length) {
+      stack.push(...item.children);
+    } else if (item.name) {
+      result.push(item.name);
+    }
+  }
+  return result;
 }
 
 function getPrefixCount(prefix: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>, rows: IRedisKeyRow[]) {

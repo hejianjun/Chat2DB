@@ -56,6 +56,11 @@ public class PromptContext {
     private String sourceFields;
 
     /**
+     * Redis key 前缀与注释上下文
+     */
+    private String redisKeyPrefixContext;
+
+    /**
      * 前端会话 ID，用于同一 AI 面板内的连续对话
      */
     private String conversationId;
