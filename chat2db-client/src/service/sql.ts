@@ -525,7 +525,10 @@ export interface IVirtualFKConsistencyItem {
   columnName: string;
   referencedTable: string;
   referencedColumnName: string;
+  totalCount: number;
+  validCount: number;
   orphanCount: number;
+  percentage: number;
   valid: boolean;
   errorMessage?: string;
 }
@@ -534,6 +537,10 @@ export interface IVirtualFKConsistencyResult {
   total: number;
   validCount: number;
   percentage: number;
+  rowTotalCount: number;
+  rowValidCount: number;
+  rowOrphanCount: number;
+  rowPercentage: number;
   items: IVirtualFKConsistencyItem[];
 }
 

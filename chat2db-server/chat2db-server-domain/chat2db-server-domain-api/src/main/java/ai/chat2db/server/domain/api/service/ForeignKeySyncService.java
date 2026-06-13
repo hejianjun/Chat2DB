@@ -84,6 +84,10 @@ public interface ForeignKeySyncService {
         private int total;
         private int validCount;
         private double percentage;
+        private long rowTotalCount;
+        private long rowValidCount;
+        private long rowOrphanCount;
+        private double rowPercentage;
         private List<VirtualForeignKeyConsistencyItem> items;
 
         public VirtualForeignKeyConsistencyResult(int total, int validCount,
@@ -92,11 +96,19 @@ public interface ForeignKeySyncService {
             this.validCount = validCount;
             this.percentage = total == 0 ? 0 : validCount * 100.0 / total;
             this.items = items;
+            this.rowTotalCount = items.stream().mapToLong(VirtualForeignKeyConsistencyItem::getTotalCount).sum();
+            this.rowValidCount = items.stream().mapToLong(VirtualForeignKeyConsistencyItem::getValidCount).sum();
+            this.rowOrphanCount = items.stream().mapToLong(VirtualForeignKeyConsistencyItem::getOrphanCount).sum();
+            this.rowPercentage = rowTotalCount == 0 ? 0 : rowValidCount * 100.0 / rowTotalCount;
         }
 
         public int getTotal() { return total; }
         public int getValidCount() { return validCount; }
         public double getPercentage() { return percentage; }
+        public long getRowTotalCount() { return rowTotalCount; }
+        public long getRowValidCount() { return rowValidCount; }
+        public long getRowOrphanCount() { return rowOrphanCount; }
+        public double getRowPercentage() { return rowPercentage; }
         public List<VirtualForeignKeyConsistencyItem> getItems() { return items; }
     }
 
@@ -106,19 +118,26 @@ public interface ForeignKeySyncService {
         private String columnName;
         private String referencedTable;
         private String referencedColumnName;
+        private long totalCount;
+        private long validCount;
         private long orphanCount;
+        private double percentage;
         private boolean valid;
         private String errorMessage;
 
         public VirtualForeignKeyConsistencyItem(Long id, String tableName, String columnName,
                                                 String referencedTable, String referencedColumnName,
-                                                long orphanCount, boolean valid, String errorMessage) {
+                                                long totalCount, long validCount, long orphanCount,
+                                                boolean valid, String errorMessage) {
             this.id = id;
             this.tableName = tableName;
             this.columnName = columnName;
             this.referencedTable = referencedTable;
             this.referencedColumnName = referencedColumnName;
+            this.totalCount = totalCount;
+            this.validCount = validCount;
             this.orphanCount = orphanCount;
+            this.percentage = totalCount == 0 ? 0 : validCount * 100.0 / totalCount;
             this.valid = valid;
             this.errorMessage = errorMessage;
         }
@@ -128,7 +147,10 @@ public interface ForeignKeySyncService {
         public String getColumnName() { return columnName; }
         public String getReferencedTable() { return referencedTable; }
         public String getReferencedColumnName() { return referencedColumnName; }
+        public long getTotalCount() { return totalCount; }
+        public long getValidCount() { return validCount; }
         public long getOrphanCount() { return orphanCount; }
+        public double getPercentage() { return percentage; }
         public boolean isValid() { return valid; }
         public String getErrorMessage() { return errorMessage; }
     }

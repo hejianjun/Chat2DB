@@ -565,13 +565,11 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
             return new VirtualForeignKeyConsistencyResult(0, 0, Collections.emptyList());
         }
 
-        MetaData metaData = Chat2DBContext.getMetaData();
         Connection connection = Chat2DBContext.getConnection();
         List<VirtualForeignKeyConsistencyItem> items = new ArrayList<>();
         int validCount = 0;
         for (VirtualForeignKeyDO virtualFK : virtualFKs) {
-            VirtualForeignKeyConsistencyItem item = validateVirtualForeignKey(
-                    metaData, connection, databaseName, schemaName, virtualFK);
+            VirtualForeignKeyConsistencyItem item = validateVirtualForeignKey(connection, schemaName, virtualFK);
             if (item.isValid()) {
                 validCount++;
             }
@@ -741,77 +739,46 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 .anyMatch(name -> StringUtils.equalsIgnoreCase(name, columnName));
     }
 
-    private VirtualForeignKeyConsistencyItem validateVirtualForeignKey(MetaData metaData,
-                                                                       Connection connection,
-                                                                       String databaseName,
+    private VirtualForeignKeyConsistencyItem validateVirtualForeignKey(Connection connection,
                                                                        String schemaName,
                                                                        VirtualForeignKeyDO virtualFK) {
         try {
-            String actualTableName = findActualTableName(
-                    metaData, connection, databaseName, schemaName, virtualFK.getTableName());
-            String actualReferencedTable = findActualTableName(
-                    metaData, connection, databaseName, schemaName, virtualFK.getReferencedTable());
-            if (StringUtils.isBlank(actualTableName) || StringUtils.isBlank(actualReferencedTable)) {
-                return buildConsistencyItem(virtualFK, 0, false, "虚拟外键关联表不存在");
-            }
-            String actualColumnName = findActualColumnName(
-                    metaData, connection, databaseName, schemaName, actualTableName, virtualFK.getColumnName());
-            String actualReferencedColumnName = findActualColumnName(
-                    metaData, connection, databaseName, schemaName, actualReferencedTable,
-                    virtualFK.getReferencedColumnName());
-            if (StringUtils.isBlank(actualColumnName) || StringUtils.isBlank(actualReferencedColumnName)) {
-                return buildConsistencyItem(virtualFK, 0, false, "虚拟外键关联字段不存在");
-            }
-
-            long orphanCount = countVirtualForeignKeyOrphans(
+            VirtualForeignKeyConsistencyStats stats = countVirtualForeignKeyConsistencyStats(
                     connection,
                     schemaName,
-                    actualTableName,
-                    actualColumnName,
-                    actualReferencedTable,
-                    actualReferencedColumnName);
-            return buildConsistencyItem(virtualFK, orphanCount, orphanCount == 0, null);
+                    virtualFK.getTableName(),
+                    virtualFK.getColumnName(),
+                    virtualFK.getReferencedTable(),
+                    virtualFK.getReferencedColumnName());
+            return buildConsistencyItem(virtualFK, stats, stats.getOrphanCount() == 0, null);
         } catch (Exception e) {
             log.warn("validate virtual foreign key consistency error, id={}", virtualFK.getId(), e);
-            return buildConsistencyItem(virtualFK, 0, false, e.getMessage());
+            return buildConsistencyItem(virtualFK, VirtualForeignKeyConsistencyStats.empty(), false, e.getMessage());
         }
     }
 
-    private String findActualColumnName(MetaData metaData,
-                                        Connection connection,
-                                        String databaseName,
-                                        String schemaName,
-                                        String tableName,
-                                        String columnName) {
-        if (StringUtils.isAnyBlank(tableName, columnName)) {
-            return null;
-        }
-        List<TableColumn> columns = metaData.columns(connection, databaseName, schemaName, tableName);
-        return Optional.ofNullable(columns).orElse(Collections.emptyList()).stream()
-                .map(TableColumn::getName)
-                .filter(name -> StringUtils.equalsIgnoreCase(name, columnName))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private long countVirtualForeignKeyOrphans(Connection connection,
-                                               String schemaName,
-                                               String tableName,
-                                               String columnName,
-                                               String referencedTable,
-                                               String referencedColumnName) throws Exception {
+    private VirtualForeignKeyConsistencyStats countVirtualForeignKeyConsistencyStats(Connection connection,
+                                                                                     String schemaName,
+                                                                                     String tableName,
+                                                                                     String columnName,
+                                                                                     String referencedTable,
+                                                                                     String referencedColumnName)
+            throws Exception {
         String sourceTable = qualifyTableName(schemaName, tableName);
         String targetTable = qualifyTableName(schemaName, referencedTable);
         String sourceColumn = quoteIdentifier(columnName);
         String targetColumn = quoteIdentifier(referencedColumnName);
-        String sql = "SELECT COUNT(1) FROM " + sourceTable + " c WHERE c." + sourceColumn + " IS NOT NULL "
-                + "AND NOT EXISTS (SELECT 1 FROM " + targetTable + " p WHERE p." + targetColumn
-                + " = c." + sourceColumn + ")";
+        String sql = "SELECT COUNT(1), "
+                + "SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM " + targetTable + " p WHERE p." + targetColumn
+                + " = c." + sourceColumn + ") THEN 1 ELSE 0 END) "
+                + "FROM " + sourceTable + " c WHERE c." + sourceColumn + " IS NOT NULL";
         try (Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(sql)) {
             if (resultSet.next()) {
-                return resultSet.getLong(1);
+                long totalCount = resultSet.getLong(1);
+                long orphanCount = resultSet.getLong(2);
+                return new VirtualForeignKeyConsistencyStats(totalCount, totalCount - orphanCount, orphanCount);
             }
-            return 0;
+            return VirtualForeignKeyConsistencyStats.empty();
         }
     }
 
@@ -837,7 +804,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     }
 
     private VirtualForeignKeyConsistencyItem buildConsistencyItem(VirtualForeignKeyDO virtualFK,
-                                                                  long orphanCount,
+                                                                  VirtualForeignKeyConsistencyStats stats,
                                                                   boolean valid,
                                                                   String errorMessage) {
         return new VirtualForeignKeyConsistencyItem(
@@ -846,9 +813,39 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 virtualFK.getColumnName(),
                 virtualFK.getReferencedTable(),
                 virtualFK.getReferencedColumnName(),
-                orphanCount,
+                stats.getTotalCount(),
+                stats.getValidCount(),
+                stats.getOrphanCount(),
                 valid,
                 errorMessage);
+    }
+
+    private static class VirtualForeignKeyConsistencyStats {
+        private final long totalCount;
+        private final long validCount;
+        private final long orphanCount;
+
+        private VirtualForeignKeyConsistencyStats(long totalCount, long validCount, long orphanCount) {
+            this.totalCount = totalCount;
+            this.validCount = validCount;
+            this.orphanCount = orphanCount;
+        }
+
+        private static VirtualForeignKeyConsistencyStats empty() {
+            return new VirtualForeignKeyConsistencyStats(0, 0, 0);
+        }
+
+        private long getTotalCount() {
+            return totalCount;
+        }
+
+        private long getValidCount() {
+            return validCount;
+        }
+
+        private long getOrphanCount() {
+            return orphanCount;
+        }
     }
 
     private boolean existsVirtualForeignKey(Long excludeId,

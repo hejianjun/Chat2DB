@@ -243,7 +243,7 @@ const TableRelationModal = memo((props: IProps) => {
   };
 
   const handleValidateVirtualForeignKeys = async () => {
-    const ids = virtualForeignKeys.map((item) => item.id).filter(Boolean) as number[];
+    const ids = filteredVirtualForeignKeys.map((item) => item.id).filter(Boolean) as number[];
     if (!ids.length) {
       message.warning(i18n('workspace.tableRelation.noVirtualFk'));
       return;
@@ -450,7 +450,7 @@ const TableRelationModal = memo((props: IProps) => {
     },
     {
       title: i18n('workspace.tableRelation.consistency'),
-      width: 140,
+      width: 190,
       render: (_: unknown, record: IForeignKeyVO) => {
         if (record.sourceType !== 'VIRTUAL') {
           return '-';
@@ -463,9 +463,26 @@ const TableRelationModal = memo((props: IProps) => {
           return <Tag color="red">{i18n('workspace.tableRelation.validateFailed')}</Tag>;
         }
         return result.valid ? (
-          <Tag color="green">{i18n('workspace.tableRelation.consistent')}</Tag>
+          <Space direction="vertical" size={2}>
+            <Tag color="green">{i18n('workspace.tableRelation.consistent')}</Tag>
+            <span className={styles.consistencyRowMeta}>
+              {i18n('workspace.tableRelation.rowConsistencySummary', result.validCount, result.totalCount)}
+            </span>
+          </Space>
         ) : (
-          <Tag color="red">{i18n('workspace.tableRelation.inconsistent', result.orphanCount)}</Tag>
+          <Space direction="vertical" size={2}>
+            <Tag color="red">{i18n('workspace.tableRelation.inconsistent', result.orphanCount)}</Tag>
+            <span className={styles.consistencyRowMeta}>
+              {i18n('workspace.tableRelation.rowConsistencySummary', result.validCount, result.totalCount)}
+            </span>
+            <span className={styles.consistencyRowMeta}>
+              {i18n(
+                'workspace.tableRelation.rowConsistencyDetail',
+                result.orphanCount,
+                result.percentage.toFixed(2),
+              )}
+            </span>
+          </Space>
         );
       },
     },
@@ -518,7 +535,7 @@ const TableRelationModal = memo((props: IProps) => {
           </Button>
           <Button
             loading={validating}
-            disabled={!virtualForeignKeys.length}
+            disabled={!filteredVirtualForeignKeys.length}
             onClick={handleValidateVirtualForeignKeys}
           >
             {i18n('workspace.tableRelation.validateConsistency')}
@@ -538,6 +555,15 @@ const TableRelationModal = memo((props: IProps) => {
                 consistencyResult.validCount,
                 consistencyResult.total,
                 consistencyResult.percentage.toFixed(2),
+              )}
+            </div>
+            <div className={styles.consistencyMeta}>
+              {i18n(
+                'workspace.tableRelation.consistencyRowSummary',
+                consistencyResult.rowValidCount,
+                consistencyResult.rowTotalCount,
+                consistencyResult.rowOrphanCount,
+                consistencyResult.rowPercentage.toFixed(2),
               )}
             </div>
           </div>

@@ -116,8 +116,11 @@ export default {
   'workspace.tableRelation.validateFailed': 'Validation failed',
   'workspace.tableRelation.consistent': 'Valid',
   'workspace.tableRelation.inconsistent': '{1} orphan row(s)',
+  'workspace.tableRelation.rowConsistencySummary': 'Valid {1} / Total rows {2}',
+  'workspace.tableRelation.rowConsistencyDetail': '{1} orphan row(s), {2}%',
   'workspace.tableRelation.consistencyResult': 'Virtual FK Consistency',
-  'workspace.tableRelation.consistencySummary': 'Valid {1} / Total {2}, {3}%',
+  'workspace.tableRelation.consistencySummary': 'Valid relations {1} / Total relations {2}, {3}%',
+  'workspace.tableRelation.consistencyRowSummary': 'Valid rows {1} / Checked rows {2}, {3} orphan row(s), {4}%',
   'workspace.tips.affirmDeleteTable':
     'The table name you entered is not the same as the table name you want to delete, please confirm again',
   'workspace.table.total': 'Total',
