@@ -5,7 +5,6 @@ import ai.chat2db.server.mcp.tool.DangerousSqlTools;
 import ai.chat2db.server.mcp.tool.MetadataTools;
 import ai.chat2db.server.mcp.tool.QueryTools;
 import ai.chat2db.server.mcp.tool.SchemaInsightTools;
-import ai.chat2db.server.mcp.tool.SqlUtilTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,10 +19,9 @@ public class McpServerConfiguration {
 
     @Bean
     public ToolCallbackProvider chat2dbMcpTools(DataSourceTools dataSourceTools, MetadataTools metadataTools,
-        QueryTools queryTools, SchemaInsightTools schemaInsightTools, DangerousSqlTools dangerousSqlTools,
-        SqlUtilTools sqlUtilTools) {
+        QueryTools queryTools, SchemaInsightTools schemaInsightTools, DangerousSqlTools dangerousSqlTools) {
         return MethodToolCallbackProvider.builder()
-            .toolObjects(dataSourceTools, metadataTools, queryTools, schemaInsightTools, dangerousSqlTools, sqlUtilTools)
+            .toolObjects(dataSourceTools, metadataTools, queryTools, schemaInsightTools, dangerousSqlTools)
             .build();
     }
 }

@@ -1,7 +1,5 @@
 package ai.chat2db.server.mcp.tool;
 
-import java.util.List;
-
 import ai.chat2db.server.domain.api.param.ErDiagramQueryParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.ErDiagramService;
@@ -83,6 +81,6 @@ public class SchemaInsightTools {
         @ToolParam(description = "Schema name, optional", required = false) String schemaName,
         @ToolParam(description = "Search keyword") String keyword) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
-            () -> databaseService.buildTableColumn(dataSourceId, databaseName, schemaName, List.of(keyword)));
+            () -> databaseService.searchTableColumns(dataSourceId, databaseName, schemaName, keyword));
     }
 }

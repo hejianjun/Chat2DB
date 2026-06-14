@@ -110,6 +110,17 @@ public interface DatabaseService {
     String buildTableColumn(Long dataSourceId, String databaseName, String schemaName, java.util.List<String> tableNames);
 
     /**
+     * 按关键词搜索表并返回表结构信息
+     *
+     * @param dataSourceId 数据源 ID
+     * @param databaseName 数据库名称
+     * @param schemaName Schema 名称
+     * @param keyword 搜索关键词
+     * @return 匹配表的结构信息
+     */
+    String searchTableColumns(Long dataSourceId, String databaseName, String schemaName, String keyword);
+
+    /**
      * 查询数据库所有表信息（用于自动选表场景）
      *
      * @param dataSourceId 数据源 ID

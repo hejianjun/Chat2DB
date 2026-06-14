@@ -263,6 +263,37 @@ public class DatabaseServiceImpl implements DatabaseService {
     }
 
     @Override
+    public String searchTableColumns(Long dataSourceId, String databaseName, String schemaName, String keyword) {
+        if (StringUtils.isBlank(keyword)) {
+            return "";
+        }
+        try {
+            TablePageQueryParam queryParam = new TablePageQueryParam();
+            queryParam.setDataSourceId(dataSourceId);
+            queryParam.setDatabaseName(databaseName);
+            queryParam.setSchemaName(schemaName);
+            queryParam.setSearchKey(keyword);
+            queryParam.setPageSize(20);
+
+            TableSelector tableSelector = TableSelector.builder()
+                    .indexList(false)
+                    .columnList(true)
+                    .foreignKey(false)
+                    .build();
+
+            List<Table> tables = tableService.pageQuery(queryParam, tableSelector);
+            SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
+            return tables.stream()
+                    .map(sqlBuilder::buildCreateTableSql)
+                    .filter(StringUtils::isNotBlank)
+                    .collect(Collectors.joining("\n"));
+        } catch (Exception e) {
+            log.error("search table columns error, keyword:{}", keyword, e);
+        }
+        return "";
+    }
+
+    @Override
     public String queryDatabaseTables(Long dataSourceId, String databaseName, String schemaName) {
         try {
             TablePageQueryParam queryParam = new TablePageQueryParam();
