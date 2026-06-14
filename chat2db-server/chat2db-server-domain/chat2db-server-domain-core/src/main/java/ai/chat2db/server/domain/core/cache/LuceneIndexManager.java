@@ -348,9 +348,8 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             source.setVersion(1L);
         }
 
-        // 3. 注释继承逻辑（新数据为空时从旧数据获取）
-        handleCommentInheritance(source, sourceMap);
-        handleAiCommentInheritance(source, sourceMap);
+        // 3. 字段继承逻辑（新数据为空时从旧文档快照获取）
+        handleFieldInheritance(source, sourceMap);
 
         // 4. 使用注解自动构建字段（替代 instanceof 判断）
         Document autoDoc = documentBuilder.buildDocument(source);
@@ -380,35 +379,48 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         return oldData != null ? oldData.getLong("version") : null;
     }
 
-    // 辅助方法：处理AI注释继承
-    private void handleAiCommentInheritance(T source, Map<String, JSONObject> sourceMap) {
+    private void handleFieldInheritance(T source, Map<String, JSONObject> sourceMap) {
         String nameValue = source.getName();
-        if (nameValue == null) {
+        if (nameValue == null || sourceMap == null) {
             return;
         }
 
-        String aiComment = source.getAiComment();
-        if (aiComment == null && sourceMap != null) {
-            JSONObject oldData = sourceMap.get(nameValue);
-            if (oldData != null) {
-                source.setAiComment(oldData.getString("aiComment"));
+        JSONObject oldData = sourceMap.get(nameValue);
+        if (oldData == null) {
+            return;
+        }
+
+        List<AnnotationBasedDocumentBuilder.AnnotatedFieldInfo> inheritableFields =
+                documentBuilder.getInheritableFields(source.getClass());
+        for (AnnotationBasedDocumentBuilder.AnnotatedFieldInfo info : inheritableFields) {
+            if (info.getValue(source) != null) {
+                continue;
+            }
+            Object oldValue = getInheritedValue(oldData, info.annotation.name(), info.fieldType);
+            if (oldValue != null) {
+                info.setValue(source, oldValue);
             }
         }
     }
 
-    private void handleCommentInheritance(T source, Map<String, JSONObject> sourceMap) {
-        String nameValue = source.getName();
-        if (nameValue == null) {
-            return;
+    private Object getInheritedValue(JSONObject oldData, String fieldName, Class<?> fieldType) {
+        if (!oldData.containsKey(fieldName)) {
+            return null;
         }
 
-        String comment = source.getComment();
-        if (comment == null && sourceMap != null) {
-            JSONObject oldData = sourceMap.get(nameValue);
-            if (oldData != null) {
-                source.setComment(oldData.getString("comment"));
-            }
+        if (fieldType == String.class) {
+            return oldData.getString(fieldName);
         }
+        if (fieldType == Long.class || fieldType == Long.TYPE) {
+            return oldData.getLong(fieldName);
+        }
+        if (fieldType == Integer.class || fieldType == Integer.TYPE) {
+            return oldData.getInteger(fieldName);
+        }
+        if (fieldType == Double.class || fieldType == Double.TYPE) {
+            return oldData.getDouble(fieldName);
+        }
+        return oldData.get(fieldName);
     }
 
     @SneakyThrows
@@ -556,6 +568,8 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             return new Sort(new SortField("name", SortField.Type.STRING, reverse));
         } else if ("rowCount".equals(sortField)) {
             return new Sort(new SortField("rowCount", SortField.Type.LONG, reverse));
+        } else if ("keyCount".equals(sortField)) {
+            return new Sort(new SortField("keyCount", SortField.Type.LONG, reverse));
         }
         return null;
     }

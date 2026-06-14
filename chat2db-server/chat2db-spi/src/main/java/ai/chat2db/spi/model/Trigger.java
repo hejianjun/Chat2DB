@@ -25,10 +25,10 @@ public class Trigger implements IndexModel {
     @LuceneField(name = "name", type = LuceneFieldType.TEXT, sort = true)
     private String name;
 
-    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT, inherit = true)
     private String comment;
 
-    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
 
     private Long version;

@@ -70,7 +70,7 @@ public class ForeignKey implements IndexModel {
 
     // 备注（可选）
     @JsonAlias({"COMMENT"})
-    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT, inherit = true)
     private String comment;
 
 
@@ -79,7 +79,7 @@ public class ForeignKey implements IndexModel {
     /**
      * AI生成的注释
      */
-    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
 
     /**

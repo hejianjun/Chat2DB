@@ -30,4 +30,9 @@ public @interface LuceneField {
      * 是否存储原始值（Field.Store.YES）
      */
     boolean store() default false;
+
+    /**
+     * 新数据为空时是否从旧文档快照继承字段值
+     */
+    boolean inherit() default false;
 }

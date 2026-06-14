@@ -36,13 +36,13 @@ public class RedisKeyPrefix implements IndexModel {
     /**
      * 用户手动维护的前缀备注。
      */
-    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT, inherit = true)
     private String comment;
 
     /**
      * AI 生成的前缀说明。
      */
-    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
 
     /**
@@ -72,6 +72,7 @@ public class RedisKeyPrefix implements IndexModel {
     /**
      * 当前前缀下聚合到的 Redis key 数量。
      */
+    @LuceneField(name = "keyCount", type = LuceneFieldType.LONG, sort = true, inherit = true)
     private Long keyCount;
 
     /**

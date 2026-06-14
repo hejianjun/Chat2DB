@@ -67,7 +67,7 @@ public class TableColumn implements IndexModel {
     /**
      * 注释
      */
-    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT, inherit = true)
     private String comment;
 
     /**
@@ -187,7 +187,7 @@ public class TableColumn implements IndexModel {
     /**
      * AI生成的注释
      */
-    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
 
     /**

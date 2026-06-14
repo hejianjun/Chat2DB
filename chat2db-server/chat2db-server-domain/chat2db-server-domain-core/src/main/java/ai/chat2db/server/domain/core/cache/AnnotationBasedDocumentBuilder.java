@@ -37,12 +37,16 @@ public class AnnotationBasedDocumentBuilder {
      */
     static class AnnotatedFieldInfo {
         final MethodHandle getter;
+        final MethodHandle setter;
         final LuceneField annotation;
+        final Class<?> fieldType;
 
         AnnotatedFieldInfo(Field field, LuceneField annotation) {
             this.annotation = annotation;
+            this.fieldType = field.getType();
             try {
                 this.getter = LOOKUP.unreflectGetter(field);
+                this.setter = LOOKUP.unreflectSetter(field);
             } catch (IllegalAccessException e) {
                 throw new RuntimeException("Failed to create MethodHandle for field: " + field.getName(), e);
             }
@@ -53,6 +57,14 @@ public class AnnotationBasedDocumentBuilder {
                 return getter.invoke(source);
             } catch (Throwable e) {
                 throw new RuntimeException("Failed to get field value", e);
+            }
+        }
+
+        void setValue(Object source, Object value) {
+            try {
+                setter.invoke(source, value);
+            } catch (Throwable e) {
+                throw new RuntimeException("Failed to set field value", e);
             }
         }
     }
@@ -68,11 +80,23 @@ public class AnnotationBasedDocumentBuilder {
     private final Map<String, List<AnnotatedFieldInfo>> stringFieldCache = new ConcurrentHashMap<>();
 
     /**
+     * 缓存需要从旧文档快照继承的字段，key 为类名，value 为带注解的字段列表
+     */
+    private final Map<String, List<AnnotatedFieldInfo>> inheritableFieldCache = new ConcurrentHashMap<>();
+
+    /**
      * 获取 STRING 类型的字段列表（用于构建查询过滤）
      * STRING 类型字段自动用于精确匹配过滤
      */
     public List<AnnotatedFieldInfo> getStringFields(Class<?> clazz) {
         return stringFieldCache.computeIfAbsent(clazz.getName(), k -> collectStringFields(clazz));
+    }
+
+    /**
+     * 获取配置了继承行为的字段列表
+     */
+    public List<AnnotatedFieldInfo> getInheritableFields(Class<?> clazz) {
+        return inheritableFieldCache.computeIfAbsent(clazz.getName(), k -> collectInheritableFields(clazz));
     }
 
     /**
@@ -82,6 +106,15 @@ public class AnnotationBasedDocumentBuilder {
         List<AnnotatedFieldInfo> stringFields = new ArrayList<>();
         collectStringFieldsRecursive(clazz, stringFields);
         return stringFields;
+    }
+
+    /**
+     * 收集配置了继承行为的字段
+     */
+    private List<AnnotatedFieldInfo> collectInheritableFields(Class<?> clazz) {
+        List<AnnotatedFieldInfo> inheritableFields = new ArrayList<>();
+        collectInheritableFieldsRecursive(clazz, inheritableFields);
+        return inheritableFields;
     }
 
     /**
@@ -99,6 +132,25 @@ public class AnnotationBasedDocumentBuilder {
             if (annotation != null && annotation.type() == LuceneFieldType.STRING) {
                 ReflectionUtils.makeAccessible(field);
                 stringFields.add(new AnnotatedFieldInfo(field, annotation));
+            }
+        });
+    }
+
+    /**
+     * 递归收集配置了继承行为的字段
+     */
+    private void collectInheritableFieldsRecursive(Class<?> clazz, List<AnnotatedFieldInfo> inheritableFields) {
+        if (clazz == null || clazz == Object.class) {
+            return;
+        }
+
+        collectInheritableFieldsRecursive(clazz.getSuperclass(), inheritableFields);
+
+        ReflectionUtils.doWithLocalFields(clazz, field -> {
+            LuceneField annotation = AnnotatedElementUtils.findMergedAnnotation(field, LuceneField.class);
+            if (annotation != null && annotation.inherit()) {
+                ReflectionUtils.makeAccessible(field);
+                inheritableFields.add(new AnnotatedFieldInfo(field, annotation));
             }
         });
     }

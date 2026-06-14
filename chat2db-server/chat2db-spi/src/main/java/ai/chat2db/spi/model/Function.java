@@ -40,10 +40,10 @@ public class Function implements IndexModel {
     private String name;
 
     @JsonAlias({"REMARKS"})
-    @LuceneField(name = "comment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "comment", type = LuceneFieldType.TEXT, inherit = true)
     private String comment;
 
-    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT)
+    @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
 
     private Long version;
