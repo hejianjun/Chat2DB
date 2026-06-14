@@ -216,9 +216,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
             flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
-            // 删除同一数据库下 refreshVersion 不是本轮版本的旧前缀，避免展示已不存在的 key 前缀。
-            deleteStalePrefixes(luceneMgr, databaseName, refreshVersion);
-
             // 扫描和索引写入全部完成后，标记任务成功。
             status.setStatus(STATUS_DONE);
             // 当前扫描接口未暴露游标恢复能力，完成后统一重置为初始游标。
@@ -323,22 +320,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 dataSourceId, databaseName, refreshVersion, prefixes.size());
     }
 
-    /**
-     * 删除本轮刷新没有覆盖到的历史前缀文档。
-     *
-     * <p>刷新开始时会生成一个 refreshVersion，所有本轮扫描到的前缀都会写入该版本。
-     * 扫描结束后，当前数据库中 refreshVersion 不等于本轮版本的文档即视为旧数据，需要清理。</p>
-     */
-    private void deleteStalePrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, String databaseName,
-                                      Long refreshVersion) {
-        if (refreshVersion == null) {
-            return;
-        }
-        RedisKeyPrefix queryModel = RedisKeyPrefix.builder()
-                .databaseName(databaseName)
-                .build();
-        luceneMgr.deleteByDatabaseAndSchemaExceptLongField(queryModel, "refreshVersion", refreshVersion);
-    }
 
     /**
      * 构建刷新状态缓存 key。

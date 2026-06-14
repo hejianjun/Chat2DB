@@ -483,23 +483,6 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         }
     }
 
-    @SneakyThrows
-    public <E extends BaseModel<?>> void deleteByDatabaseAndSchemaExceptLongField(E queryModel, String fieldName,
-                                                                                  long fieldValue) {
-        if (queryModel == null || StringUtils.isBlank(queryModel.getDatabaseName())) {
-            return;
-        }
-        lock.writeLock().lock();
-        try {
-            BooleanQuery query = buildBooleanQuery(queryModel)
-                    .add(LongPoint.newExactQuery(fieldName, fieldValue), BooleanClause.Occur.MUST_NOT)
-                    .build();
-            writer.deleteDocuments(query);
-            reload();
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
 
     @SneakyThrows
     public <E extends BaseModel<?>> void deleteByDatabaseAndSchema(E queryModel) {
