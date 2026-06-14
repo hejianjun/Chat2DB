@@ -177,40 +177,74 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * 确保索引中只保留最新扫描结果。</p>
      */
     private void doRefresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo, String statusKey) {
+        // 根据 refresh 方法提前写入的 statusKey，取出本轮异步刷新任务的状态对象。
         RedisKeyPrefixBuildStatus status = statusMap.get(statusKey);
+
+        // 前缀计数表：key 是提取出的 Redis 前缀，value 是该前缀下匹配到的 key 数量。
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
+
+        // 已扫描的 Redis key 总数，用 AtomicLong 便于在流式回调中安全累加。
         AtomicLong scannedCount = new AtomicLong();
+
+        // 上一次写入 Lucene 时的扫描数量，用于判断是否达到下一次批量写入阈值。
         AtomicLong lastFlushScannedCount = new AtomicLong();
+
+        // 本轮刷新版本号，所有本次扫描写入的 Lucene 文档都会带上该版本。
         Long refreshVersion = status.getRefreshVersion();
         try {
+            // 异步线程没有调用线程的 ThreadLocal 上下文，需要先放入连接信息。
             Chat2DBContext.putContext(connectInfo);
+
+            // 从上下文中的数据源元信息获取 Redis key 浏览器，用于流式扫描 key。
             RedisKeyBrowser browser = getRedisKeyBrowser();
+
+            // 获取当前数据源对应的 RedisKeyPrefix Lucene 索引管理器。
             LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
+
             // 流式遍历 Redis key，按分隔符提取前缀并统计出现次数。
             browser.streamKeyNames(databaseName, null, "0", -1, keys -> {
+                // 对当前批次返回的每个 key 提取前缀，并累计到 prefixCountMap。
                 keys.forEach(key -> collectPrefixes(key, prefixCountMap));
+
+                // 累加本批次 key 数量，得到当前任务已经扫描的 key 总数。
                 long scanned = scannedCount.addAndGet(keys.size());
+
+                // 更新任务进度，供前端轮询展示刷新进度。
                 status.setScannedCount(scanned);
+                // 前缀数量取当前 map 的大小，表示已经发现多少个不同前缀。
                 status.setPrefixCount((long) prefixCountMap.size());
+                // 每处理一个批次都刷新更新时间，便于判断任务是否仍在推进。
                 status.setUpdatedAt(now());
-                // 达到阈值时，批量把当前累积的前缀写入 Lucene，避免内存占用持续增长。
+
+                // 达到阈值时，先把当前前缀统计快照写入 Lucene，避免长时间扫描期间索引一直没有中间结果。
+                // 这里不能清空 prefixCountMap，因为 keyCount 需要保留从扫描开始到当前为止的累计值。
                 if (scanned - lastFlushScannedCount.get() >= FLUSH_KEY_THRESHOLD) {
+                    // 将当前统计结果写入索引；同名前缀会被更新为最新 keyCount 和 refreshVersion。
                     flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
+                    // 记录本次写入发生时的扫描数量，下一轮从该位置继续计算阈值。
                     lastFlushScannedCount.set(scanned);
                 }
             }).join();
+
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
             flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
+            // 删除同一数据库下 refreshVersion 不是本轮版本的旧前缀，避免展示已不存在的 key 前缀。
             deleteStalePrefixes(luceneMgr, databaseName, refreshVersion);
+
+            // 扫描和索引写入全部完成后，标记任务成功。
             status.setStatus(STATUS_DONE);
+            // 当前扫描接口未暴露游标恢复能力，完成后统一重置为初始游标。
             status.setCursor("0");
+            // 最终前缀数量以完整扫描后的聚合结果为准。
             status.setPrefixCount((long) prefixCountMap.size());
+            // 记录任务完成时间。
             status.setUpdatedAt(now());
         } catch (Exception e) {
             log.error("Refresh redis key prefix cache failed, dataSourceId={}, databaseName={}",
                     dataSourceId, databaseName, e);
             status.setStatus(STATUS_FAILED);
             status.setErrorMessage(e.getMessage());
+            // 记录失败时间。
             status.setUpdatedAt(now());
         } finally {
             Chat2DBContext.removeContext();
