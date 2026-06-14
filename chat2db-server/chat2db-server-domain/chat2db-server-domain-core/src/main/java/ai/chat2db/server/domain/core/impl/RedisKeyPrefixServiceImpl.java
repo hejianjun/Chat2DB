@@ -216,14 +216,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 // 每处理一个批次都刷新更新时间，便于判断任务是否仍在推进。
                 status.setUpdatedAt(now());
 
-                // 达到阈值时，先把当前前缀统计快照写入 Lucene，避免长时间扫描期间索引一直没有中间结果。
-                // 这里不能清空 prefixCountMap，因为 keyCount 需要保留从扫描开始到当前为止的累计值。
-                if (scanned - lastFlushScannedCount.get() >= FLUSH_KEY_THRESHOLD) {
-                    // 将当前统计结果写入索引；同名前缀会被更新为最新 keyCount 和 refreshVersion。
-                    flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
-                    // 记录本次写入发生时的扫描数量，下一轮从该位置继续计算阈值。
-                    lastFlushScannedCount.set(scanned);
-                }
             }).join();
 
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
@@ -321,13 +313,8 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                         .refreshVersion(refreshVersion)
                         .build())
                 .toList();
-        for (int i = 0; i < prefixes.size(); i += FLUSH_DOCUMENT_BATCH_SIZE) {
-            int toIndex = Math.min(i + FLUSH_DOCUMENT_BATCH_SIZE, prefixes.size());
-            log.debug("Flushing redis key prefix batch, dataSourceId={}, databaseName={}, refreshVersion={}, "
-                            + "fromIndex={}, toIndex={}, batchSize={}, totalSize={}",
-                    dataSourceId, databaseName, refreshVersion, i, toIndex, toIndex - i, prefixes.size());
-            luceneMgr.updateDocuments(prefixes.subList(i, toIndex), null, false);
-        }
+        luceneMgr.updateDocuments(prefixes, null, true);
+        
         log.debug("Finished flushing redis key prefixes, dataSourceId={}, databaseName={}, refreshVersion={}, "
                         + "prefixCount={}",
                 dataSourceId, databaseName, refreshVersion, prefixes.size());
