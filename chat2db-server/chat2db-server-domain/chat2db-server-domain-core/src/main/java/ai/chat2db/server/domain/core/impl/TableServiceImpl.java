@@ -568,7 +568,7 @@ public class TableServiceImpl implements TableService {
             table.setSchemaName(schemaName);
             table.setName(tableName);
             table.setAiComment(aiComment);
-            manager.updateDocument(table);
+            manager.updateDocuments(List.of(table), null, false);
             return;
         }
         LuceneIndexManager<TableColumn> manager = managerFactory.getManager(dataSourceId);

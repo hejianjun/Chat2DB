@@ -228,7 +228,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
             Map<String, JSONObject> sourceMap = buildSourceMap(query, 1000);
             List<Document> docs = sources.stream()
                     .peek(source -> source.setVersion(version))
-                    .map(source -> createDocument(source, sourceMap))
+                    .map(source -> createDocument(source, sourceMap, all))
                     .collect(Collectors.toList());
 
             writer.updateDocuments(query, docs);
@@ -259,7 +259,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                     .add(termQuery, BooleanClause.Occur.FILTER)
                     .build();
             Map<String, JSONObject> sourceMap = buildSourceMap(query, 1);
-            Document document = createDocument(source, sourceMap);
+            Document document = createDocument(source, sourceMap, true);
             long seqNo = writer.updateDocuments(query, Collections.singletonList(document));
             reload();
             return seqNo;
@@ -321,7 +321,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * @param sourceMap 旧数据映射表（用于字段继承）
      * @return 构建完成的Lucene文档
      */
-    private Document createDocument(T source, Map<String, JSONObject> sourceMap) {
+    private Document createDocument(T source, Map<String, JSONObject> sourceMap, boolean all) {
         Document doc = new Document();
 
         // 1. 添加类型标识字段
@@ -362,7 +362,12 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 .ifPresent(name -> addStringField(doc, StringUtils.uncapitalize(typeName + "Name"), name));
 
         // 6. 存储原始数据快照
-        doc.add(new StoredField("source", buildSourceSnapshot(source, sourceMap).toJSONString()));
+        if(all){
+            doc.add(new StoredField("source", JSONObject.toJSONString(source)));
+        }else{
+            doc.add(new StoredField("source", buildSourceSnapshot(source, sourceMap).toJSONString()));
+        }
+
         return doc;
     }
 
