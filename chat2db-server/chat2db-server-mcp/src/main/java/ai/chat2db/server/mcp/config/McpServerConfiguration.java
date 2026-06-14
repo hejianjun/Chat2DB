@@ -2,6 +2,7 @@ package ai.chat2db.server.mcp.config;
 
 import ai.chat2db.server.mcp.tool.DataSourceTools;
 import ai.chat2db.server.mcp.tool.DangerousSqlTools;
+import ai.chat2db.server.mcp.tool.ForeignKeyTools;
 import ai.chat2db.server.mcp.tool.MetadataTools;
 import ai.chat2db.server.mcp.tool.QueryTools;
 import ai.chat2db.server.mcp.tool.SchemaInsightTools;
@@ -19,9 +20,11 @@ public class McpServerConfiguration {
 
     @Bean
     public ToolCallbackProvider chat2dbMcpTools(DataSourceTools dataSourceTools, MetadataTools metadataTools,
-        QueryTools queryTools, SchemaInsightTools schemaInsightTools, DangerousSqlTools dangerousSqlTools) {
+        QueryTools queryTools, SchemaInsightTools schemaInsightTools, ForeignKeyTools foreignKeyTools,
+        DangerousSqlTools dangerousSqlTools) {
         return MethodToolCallbackProvider.builder()
-            .toolObjects(dataSourceTools, metadataTools, queryTools, schemaInsightTools, dangerousSqlTools)
+            .toolObjects(dataSourceTools, metadataTools, queryTools, schemaInsightTools, foreignKeyTools,
+                dangerousSqlTools)
             .build();
     }
 }
