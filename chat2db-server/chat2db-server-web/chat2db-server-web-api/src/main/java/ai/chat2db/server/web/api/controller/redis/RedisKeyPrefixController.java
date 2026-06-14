@@ -49,10 +49,10 @@ public class RedisKeyPrefixController {
     }
 
     @PostMapping("/refresh")
-    public DataResult<Long> refresh(@Valid @RequestBody DataSourceBaseRequest request) {
-        long refreshVersion = redisKeyPrefixService.refresh(request.getDataSourceId(), request.getDatabaseName(),
+    public DataResult<String> refresh(@Valid @RequestBody DataSourceBaseRequest request) {
+        String statusKey = redisKeyPrefixService.refresh(request.getDataSourceId(), request.getDatabaseName(),
                 Chat2DBContext.getConnectInfo());
-        return DataResult.of(refreshVersion);
+        return DataResult.of(statusKey);
     }
 
     @PostMapping("/comment")

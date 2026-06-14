@@ -11,7 +11,7 @@ public interface RedisKeyPrefixService {
 
     List<RedisKeyPrefix> search(RedisKeyPrefixQueryParam param);
 
-    long refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo);
+    String refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo);
 
     long updateComment(Long dataSourceId, String databaseName, String prefix, String comment);
 
