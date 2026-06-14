@@ -41,9 +41,30 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: true
+  ai:
+    mcp:
+      server:
+        name: chat2db-mcp
+        version: 1.0.0
+        type: SYNC
+        instructions: Chat2DB database MCP server
+        capabilities:
+          tool: true
+        sse-endpoint: /api/mcp/sse
+        sse-message-endpoint: /api/mcp/message
+        keep-alive-interval: 30s
 
 chat2db:
   version: 1.0.0
+  mcp:
+    enabled: true
+    sql:
+      read-only: true
+      allow-write: false
+      allow-ddl: false
+      require-confirm-param: true
+      default-page-size: 100
+      max-rows: 1000
 
 # flywaydb 输出执行sql的日志
 logging:

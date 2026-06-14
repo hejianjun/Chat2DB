@@ -33,8 +33,9 @@
     <modules>
         <module>chat2db-server-domain</module>
         <module>chat2db-server-start</module>
-        <module>chat2db-server-test</module>
-        <module>chat2db-server-tools</module>
+		<module>chat2db-server-test</module>
+		<module>chat2db-server-mcp</module>
+		<module>chat2db-server-tools</module>
         <module>chat2db-server-web</module>
         <module>chat2db-spi</module>
         <module>chat2db-plugins</module>
@@ -84,6 +85,11 @@
             <dependency>
                 <groupId>ai.chat2db</groupId>
                 <artifactId>chat2db-server-domain-core</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>ai.chat2db</groupId>
+                <artifactId>chat2db-server-mcp</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>

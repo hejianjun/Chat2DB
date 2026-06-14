@@ -29,12 +29,16 @@
             <artifactId>chat2db-server-web-api</artifactId>
         </dependency>
         <!-- 需要加载的服务 -->
-        <dependency>
-            <groupId>ai.chat2db</groupId>
-            <artifactId>chat2db-server-domain-core</artifactId>
-        </dependency>
+		<dependency>
+			<groupId>ai.chat2db</groupId>
+			<artifactId>chat2db-server-domain-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>ai.chat2db</groupId>
+			<artifactId>chat2db-server-mcp</artifactId>
+		</dependency>
 
-        <!-- 日志用logback -->
+		<!-- 日志用logback -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>jcl-over-slf4j</artifactId>
