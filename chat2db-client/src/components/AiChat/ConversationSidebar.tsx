@@ -12,10 +12,12 @@ import {
 } from '@ant-design/icons';
 import i18n from '@/i18n';
 import { useAiChatStore, AiChatSession } from '@/pages/main/workspace/store/aiChatStore';
-import connectToEventSource from '@/utils/eventSource';
+import connectToEventSource, { createChatPayload } from '@/utils/eventSource';
 import { formatParams } from '@/utils/url';
 import { v4 as uuidv4 } from 'uuid';
 import styles from './index.less';
+
+const MAX_DIRECT_SSE_URL_LENGTH = 1800;
 
 interface IConversationItemProps {
   session: AiChatSession;
@@ -171,7 +173,7 @@ export default memo((props: {
     renameSession(conversationId, title).catch(() => message.error('重命名失败'));
   };
 
-  const handleGenerateTitle = (session: AiChatSession) => {
+  const handleGenerateTitle = async (session: AiChatSession) => {
     if (generatingTitleId) {
       return;
     }
@@ -187,14 +189,32 @@ export default memo((props: {
     setGeneratingTitleId(session.sessionId);
     let generatedTitle = '';
     const transientConversationId = uuidv4();
-    const params = formatParams({
+    const requestParams = {
       conversationId: transientConversationId,
       message: messageContent,
       promptType: 'TITLE_GENERATION',
       dataSourceId: session.dataSourceId,
       databaseName: session.databaseName,
       schemaName: session.schemaName,
-    });
+    };
+
+    let params = formatParams(requestParams);
+    if (`/api/ai/chat?${params}`.length > MAX_DIRECT_SSE_URL_LENGTH) {
+      try {
+        const payloadId = await createChatPayload(requestParams);
+        params = formatParams({
+          payloadId,
+          dataSourceId: session.dataSourceId,
+          databaseName: session.databaseName,
+          schemaName: session.schemaName,
+        });
+      } catch (error) {
+        console.error('[ConversationSidebar] Failed to create title payload:', error);
+        setGeneratingTitleId(null);
+        message.error(i18n('workspace.tips.generateTitleFailed'));
+        return;
+      }
+    }
 
     closeEventSourceRef.current = connectToEventSource({
       url: `/api/ai/chat?${params}`,

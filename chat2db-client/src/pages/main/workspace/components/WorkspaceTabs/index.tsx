@@ -38,11 +38,13 @@ import historyService from '@/service/history';
 import sqlService from '@/service/sql';
 
 import indexedDB from '@/indexedDB';
-import connectToEventSource from '@/utils/eventSource';
+import connectToEventSource, { createChatPayload } from '@/utils/eventSource';
 import { formatParams } from '@/utils/url';
 import { getCookie } from '@/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { getConsoleEditor } from '../SQLExecute/consoleEditorRegistry';
+
+const MAX_DIRECT_SSE_URL_LENGTH = 1800;
 
 const WorkspaceTabs = memo(() => {
   const { activeConsoleId, consoleList, workspaceTabList } = useWorkspaceStore((state) => {
@@ -253,14 +255,32 @@ const WorkspaceTabs = memo(() => {
     const uid = uuidv4();
     let generatedTitle = '';
 
-    const params = formatParams({
+    const requestParams = {
       conversationId: uid,
       message: sqlContent,
       promptType: 'TITLE_GENERATION',
       dataSourceId: tabData.uniqueData?.dataSourceId,
       databaseName: tabData.uniqueData?.databaseName,
       schemaName: tabData.uniqueData?.schemaName,
-    });
+    };
+
+    let params = formatParams(requestParams);
+    if (`/api/ai/chat?${params}`.length > MAX_DIRECT_SSE_URL_LENGTH) {
+      try {
+        const payloadId = await createChatPayload(requestParams);
+        params = formatParams({
+          payloadId,
+          dataSourceId: tabData.uniqueData?.dataSourceId,
+          databaseName: tabData.uniqueData?.databaseName,
+          schemaName: tabData.uniqueData?.schemaName,
+        });
+      } catch (error) {
+        console.error('[WorkspaceTabs] Failed to create title payload:', error);
+        message.error(i18n('workspace.tips.generateTitleFailed'));
+        setGeneratingTitleKey(null);
+        return;
+      }
+    }
 
     const handleMessage = (content?: string) => {
       if (content) {
