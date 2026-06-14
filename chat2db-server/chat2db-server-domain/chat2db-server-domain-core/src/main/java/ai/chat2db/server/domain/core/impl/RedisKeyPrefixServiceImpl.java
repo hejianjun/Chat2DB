@@ -56,6 +56,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
     @Override
     public void refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo) {
+        // 仅在当前数据源/库的刷新任务未运行时，才启动新的异步刷新任务。
         String statusKey = buildStatusKey(dataSourceId, databaseName);
         RedisKeyPrefixBuildStatus currentStatus = statusMap.get(statusKey);
         if (currentStatus != null && STATUS_RUNNING.equals(currentStatus.getStatus())) {
@@ -115,6 +116,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                         .build());
     }
 
+    // 异步刷新 Redis 前缀缓存：流式扫描 key、统计前缀数量，并写入 Lucene 索引。
     private void doRefresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo, String statusKey) {
         RedisKeyPrefixBuildStatus status = statusMap.get(statusKey);
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
@@ -125,17 +127,20 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             Chat2DBContext.putContext(connectInfo);
             RedisKeyBrowser browser = getRedisKeyBrowser();
             LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
+            // 流式遍历 Redis key，按分隔符提取前缀并统计出现次数。
             browser.streamKeyNames(databaseName, null, "0", -1, keys -> {
                 keys.forEach(key -> collectPrefixes(key, prefixCountMap));
                 long scanned = scannedCount.addAndGet(keys.size());
                 status.setScannedCount(scanned);
                 status.setPrefixCount((long) prefixCountMap.size());
                 status.setUpdatedAt(now());
+                // 达到阈值时，批量把当前累积的前缀写入 Lucene，避免内存占用持续增长。
                 if (scanned - lastFlushScannedCount.get() >= FLUSH_KEY_THRESHOLD) {
                     flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
                     lastFlushScannedCount.set(scanned);
                 }
             }).join();
+            // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
             flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
             deleteStalePrefixes(luceneMgr, databaseName, refreshVersion);
             status.setStatus(STATUS_DONE);
