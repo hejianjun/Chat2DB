@@ -30,9 +30,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
+    /** 当前数据源/库尚未启动刷新任务 */
     private static final String STATUS_IDLE = "IDLE";
+    /** 正在执行 Redis 前缀缓存刷新 */
     private static final String STATUS_RUNNING = "RUNNING";
+    /** 本轮刷新已完成 */
     private static final String STATUS_DONE = "DONE";
+    /** 本轮刷新失败 */
     private static final String STATUS_FAILED = "FAILED";
     private static final long FLUSH_KEY_THRESHOLD = 50000L;
     private static final int FLUSH_DOCUMENT_BATCH_SIZE = 500;

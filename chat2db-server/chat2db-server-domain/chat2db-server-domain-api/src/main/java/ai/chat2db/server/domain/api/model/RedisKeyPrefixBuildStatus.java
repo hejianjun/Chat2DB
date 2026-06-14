@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RedisKeyPrefixBuildStatus {
 
-    /** 构建状态：running / completed / failed */
+    /** 构建状态：IDLE / RUNNING / DONE / FAILED */
     private String status;
 
     /** 游标，用于继续扫描的进度标识 */
