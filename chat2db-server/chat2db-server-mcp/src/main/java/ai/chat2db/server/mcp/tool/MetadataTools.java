@@ -1,13 +1,9 @@
 package ai.chat2db.server.mcp.tool;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import ai.chat2db.server.domain.api.param.SchemaQueryParam;
-import ai.chat2db.server.domain.api.param.ShowCreateTableParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
-import ai.chat2db.server.domain.api.param.TableQueryParam;
 import ai.chat2db.server.domain.api.param.datasource.DatabaseQueryAllParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.TableService;
@@ -15,8 +11,6 @@ import ai.chat2db.server.mcp.support.ConnectionScope;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.SimpleTable;
-import ai.chat2db.spi.model.TableColumn;
-import ai.chat2db.spi.model.TableIndex;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
@@ -69,45 +63,5 @@ public class MetadataTools {
             param.setPageSize(1000);
             return tableService.queryTables(param);
         });
-    }
-
-    @Tool(description = "Describe a table with columns and indexes. Read-only metadata operation.")
-    public Map<String, Object> describeTable(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Table name") String tableName) {
-        return connectionScope.run(dataSourceId, databaseName, schemaName, () -> {
-            TableQueryParam param = tableQueryParam(dataSourceId, databaseName, schemaName, tableName);
-            List<TableColumn> columns = tableService.queryColumns(param);
-            List<TableIndex> indexes = tableService.queryIndexes(param);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("columns", columns);
-            result.put("indexes", indexes);
-            return result;
-        });
-    }
-
-    @Tool(description = "Show CREATE TABLE DDL for a table. Read-only metadata operation.")
-    public String showCreateTable(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Table name") String tableName) {
-        return connectionScope.run(dataSourceId, databaseName, schemaName, () -> {
-            ShowCreateTableParam param = new ShowCreateTableParam();
-            param.setDataSourceId(dataSourceId);
-            param.setDatabaseName(databaseName);
-            param.setSchemaName(schemaName);
-            param.setTableName(tableName);
-            return tableService.showCreateTable(param);
-        });
-    }
-
-    private TableQueryParam tableQueryParam(Long dataSourceId, String databaseName, String schemaName, String tableName) {
-        TableQueryParam param = new TableQueryParam();
-        param.setDataSourceId(dataSourceId);
-        param.setDatabaseName(databaseName);
-        param.setSchemaName(schemaName);
-        param.setTableName(tableName);
-        return param;
     }
 }
