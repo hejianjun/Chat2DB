@@ -298,7 +298,19 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
                                Long refreshVersion, Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
+            log.debug("Skip flushing redis key prefixes because prefixCountMap is empty, dataSourceId={}, "
+                            + "databaseName={}, refreshVersion={}",
+                    dataSourceId, databaseName, refreshVersion);
             return;
+        }
+        if (log.isDebugEnabled()) {
+            List<String> samples = prefixCountMap.entrySet().stream()
+                    .limit(10)
+                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                    .toList();
+            log.debug("Start flushing redis key prefixes, dataSourceId={}, databaseName={}, refreshVersion={}, "
+                            + "prefixCount={}, samplePrefixes={}",
+                    dataSourceId, databaseName, refreshVersion, prefixCountMap.size(), samples);
         }
         List<RedisKeyPrefix> prefixes = prefixCountMap.entrySet().stream()
                 .map(entry -> RedisKeyPrefix.builder()
@@ -311,8 +323,14 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .toList();
         for (int i = 0; i < prefixes.size(); i += FLUSH_DOCUMENT_BATCH_SIZE) {
             int toIndex = Math.min(i + FLUSH_DOCUMENT_BATCH_SIZE, prefixes.size());
+            log.debug("Flushing redis key prefix batch, dataSourceId={}, databaseName={}, refreshVersion={}, "
+                            + "fromIndex={}, toIndex={}, batchSize={}, totalSize={}",
+                    dataSourceId, databaseName, refreshVersion, i, toIndex, toIndex - i, prefixes.size());
             luceneMgr.updateDocuments(prefixes.subList(i, toIndex), null, false);
         }
+        log.debug("Finished flushing redis key prefixes, dataSourceId={}, databaseName={}, refreshVersion={}, "
+                        + "prefixCount={}",
+                dataSourceId, databaseName, refreshVersion, prefixes.size());
     }
 
     /**
