@@ -123,12 +123,15 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     @Override
     public long updateComment(Long dataSourceId, String databaseName, String prefix, String comment) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
-        RedisKeyPrefix source = RedisKeyPrefix.builder()
-                .dataSourceId(dataSourceId)
-                .databaseName(databaseName)
-                .name(prefix)
-                .comment(comment)
-                .build();
+        RedisKeyPrefix source = findExistingPrefix(luceneMgr, dataSourceId, databaseName, prefix);
+        if (source == null) {
+            source = RedisKeyPrefix.builder()
+                    .dataSourceId(dataSourceId)
+                    .databaseName(databaseName)
+                    .name(prefix)
+                    .build();
+        }
+        source.setComment(comment);
         return luceneMgr.updateDocument(source);
     }
 
@@ -280,7 +283,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * <p>这里使用 updateDocuments 而不是简单追加，保证同名数据源/库/前缀的文档会被更新。
      */
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
-                                Map<String, Long> prefixCountMap) {
+                                 Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
             log.info("Skip flushing redis key prefixes because prefixCountMap is empty, dataSourceId={}, "
                             + "databaseName={}",
@@ -307,6 +310,22 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         log.info("Finished flushing redis key prefixes, dataSourceId={}, databaseName={}, "
                         + "prefixCount={}",
                 dataSourceId, databaseName, prefixes.size());
+    }
+
+    /**
+     * 查询已有前缀文档，避免只更新备注时把 keyCount 等快照字段覆盖为空。
+     */
+    private RedisKeyPrefix findExistingPrefix(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId,
+                                              String databaseName, String prefix) {
+        RedisKeyPrefixQueryParam param = RedisKeyPrefixQueryParam.builder()
+                .dataSourceId(dataSourceId)
+                .databaseName(databaseName)
+                .searchKey(prefix)
+                .build();
+        return luceneMgr.search(param, null, QueryParser.escape(prefix)).stream()
+                .filter(item -> StringUtils.equals(item.getName(), prefix))
+                .findFirst()
+                .orElse(null);
     }
 
 
