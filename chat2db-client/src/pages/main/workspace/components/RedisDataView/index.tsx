@@ -755,7 +755,7 @@ const RedisDataView = memo((props: IProps) => {
       sorter: SorterResult<IRedisKeyRow> | SorterResult<IRedisKeyRow>[],
     ) => {
       const s = Array.isArray(sorter) ? sorter[0] : sorter;
-      if (s && s.field) {
+      if (s?.field && s.order) {
         setSortInfo((prev) => {
           if (prev?.field === s.field && prev?.order === s.order) {
             return null;
@@ -1156,7 +1156,7 @@ function getClosestPrefixComment(keyName: string, prefixCommentMap: Record<strin
 
 // 获取叶子节点的排序值
 function getLeafValue(node: IRedisKeyRow, field: string): number | string {
-  if (field === 'name') {
+  if (field === 'name' || field === 'displayName') {
     return node.displayName || '';
   }
   if (field === 'type') {
@@ -1173,7 +1173,7 @@ function getLeafValue(node: IRedisKeyRow, field: string): number | string {
 
 // 获取分组节点的聚合排序值（size 取子节点总和，TTL 取最小值）
 function getGroupAggValue(node: IRedisKeyRow, field: string): number | string {
-  if (field === 'name' || field === 'type') {
+  if (field === 'name' || field === 'displayName' || field === 'type') {
     return node.displayName || '';
   }
   if (field === 'size') {
