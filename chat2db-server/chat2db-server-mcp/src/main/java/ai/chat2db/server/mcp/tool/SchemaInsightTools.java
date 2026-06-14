@@ -32,14 +32,6 @@ public class SchemaInsightTools {
         this.connectionScope = connectionScope;
     }
 
-    @Tool(description = "Return a compact overview of database tables, columns, comments and foreign keys for LLM reasoning. Read-only operation.")
-    public String getDatabaseOverview(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName) {
-        return connectionScope.run(dataSourceId, databaseName, schemaName,
-            () -> databaseService.queryDatabaseTables(dataSourceId, databaseName, schemaName));
-    }
-
     @Tool(description = "Return ER diagram data for a database/schema. Read-only operation.")
     public ErDiagram getErDiagram(@ToolParam(description = "Datasource id") Long dataSourceId,
         @ToolParam(description = "Database name") String databaseName,
