@@ -13,7 +13,7 @@ public interface RedisKeyPrefixService {
 
     long refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo);
 
-    void updateComment(Long dataSourceId, String databaseName, String prefix, String comment);
+    long updateComment(Long dataSourceId, String databaseName, String prefix, String comment);
 
     void delete(Long dataSourceId, String databaseName, String prefix);
 

@@ -124,7 +124,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * 不会因为版本字段缺失而在下一次清理旧索引数据时被误删。</p>
      */
     @Override
-    public void updateComment(Long dataSourceId, String databaseName, String prefix, String comment) {
+    public long updateComment(Long dataSourceId, String databaseName, String prefix, String comment) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
         RedisKeyPrefix source = RedisKeyPrefix.builder()
                 .dataSourceId(dataSourceId)
@@ -137,6 +137,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             source.setRefreshVersion(storedPrefix.getRefreshVersion());
         }
         luceneMgr.updateDocument(source);
+        return source.getRefreshVersion() != null ? source.getRefreshVersion() : 0L;
     }
 
     /**

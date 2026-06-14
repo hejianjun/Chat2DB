@@ -56,10 +56,10 @@ public class RedisKeyPrefixController {
     }
 
     @PostMapping("/comment")
-    public DataResult<Boolean> comment(@Valid @RequestBody KeyPrefixCommentRequest request) {
-        redisKeyPrefixService.updateComment(request.getDataSourceId(), request.getDatabaseName(),
+    public DataResult<Long> comment(@Valid @RequestBody KeyPrefixCommentRequest request) {
+        long refreshVersion = redisKeyPrefixService.updateComment(request.getDataSourceId(), request.getDatabaseName(),
                 request.getPrefix(), request.getComment());
-        return DataResult.of(true);
+        return DataResult.of(refreshVersion);
     }
 
     @PostMapping("/delete")
