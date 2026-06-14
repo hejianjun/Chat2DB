@@ -92,12 +92,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * 调用线程后续变更的上下文数据。</p>
      */
     @Override
-    public void refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo) {
+    public long refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo) {
         // 仅在当前数据源/库的刷新任务未运行时，才启动新的异步刷新任务。
         String statusKey = buildStatusKey(dataSourceId, databaseName);
         RedisKeyPrefixBuildStatus currentStatus = statusMap.get(statusKey);
         if (currentStatus != null && STATUS_RUNNING.equals(currentStatus.getStatus())) {
-            return;
+            return currentStatus.getRefreshVersion();
         }
 
         Long refreshVersion = System.currentTimeMillis();
@@ -114,6 +114,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         statusMap.put(statusKey, status);
 
         CompletableFuture.runAsync(() -> doRefresh(dataSourceId, databaseName, asyncConnectInfo, statusKey));
+        return refreshVersion;
     }
 
     /**

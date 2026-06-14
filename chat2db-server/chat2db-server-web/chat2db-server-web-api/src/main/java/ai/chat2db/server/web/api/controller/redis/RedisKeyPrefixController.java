@@ -49,23 +49,23 @@ public class RedisKeyPrefixController {
     }
 
     @PostMapping("/refresh")
-    public ActionResult refresh(@Valid @RequestBody DataSourceBaseRequest request) {
-        redisKeyPrefixService.refresh(request.getDataSourceId(), request.getDatabaseName(),
+    public DataResult<Long> refresh(@Valid @RequestBody DataSourceBaseRequest request) {
+        long refreshVersion = redisKeyPrefixService.refresh(request.getDataSourceId(), request.getDatabaseName(),
                 Chat2DBContext.getConnectInfo());
-        return ActionResult.isSuccess();
+        return DataResult.of(refreshVersion);
     }
 
     @PostMapping("/comment")
-    public ActionResult comment(@Valid @RequestBody KeyPrefixCommentRequest request) {
+    public DataResult<Boolean> comment(@Valid @RequestBody KeyPrefixCommentRequest request) {
         redisKeyPrefixService.updateComment(request.getDataSourceId(), request.getDatabaseName(),
                 request.getPrefix(), request.getComment());
-        return ActionResult.isSuccess();
+        return DataResult.of(true);
     }
 
     @PostMapping("/delete")
-    public ActionResult delete(@Valid @RequestBody KeyPrefixDeleteRequest request) {
+    public DataResult<Boolean> delete(@Valid @RequestBody KeyPrefixDeleteRequest request) {
         redisKeyPrefixService.delete(request.getDataSourceId(), request.getDatabaseName(), request.getPrefix());
-        return ActionResult.isSuccess();
+        return DataResult.of(true);
     }
 
     @GetMapping("/status")

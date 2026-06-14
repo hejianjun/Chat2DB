@@ -247,7 +247,7 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
      * 4. 创建新文档并更新
      */
     @SneakyThrows
-    public void updateDocument(T source) {
+    public long updateDocument(T source) {
         if (source == null) {
             throw new IllegalArgumentException("Source must not be null");
         }
@@ -260,8 +260,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                     .build();
             Map<String, JSONObject> sourceMap = buildSourceMap(query, 1);
             Document document = createDocument(source, sourceMap);
-            writer.updateDocuments(query, Collections.singletonList(document));
+            long seqNo = writer.updateDocuments(query, Collections.singletonList(document));
             reload();
+            return seqNo;
         } finally {
             lock.writeLock().unlock();
         }
