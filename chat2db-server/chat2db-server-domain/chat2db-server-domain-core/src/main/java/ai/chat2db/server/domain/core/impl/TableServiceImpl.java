@@ -419,11 +419,13 @@ public class TableServiceImpl implements TableService {
         for (Table table : search) {
             SimpleTable t = new SimpleTable();
             t.setName(table.getName());
-            t.setComment(table.getComment());
+            t.setComment(StringUtils.defaultIfBlank(table.getComment(), table.getAiComment()));
             tables.add(t);
         }
         return tables;
     }
+
+
 
     private boolean needRefreshCache(TablePageQueryParam param, Long version) {
         return param.isRefresh() || version == null;

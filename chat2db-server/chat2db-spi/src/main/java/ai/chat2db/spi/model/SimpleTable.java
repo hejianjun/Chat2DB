@@ -21,6 +21,5 @@ public class SimpleTable {
      * 描述
      */
     @JsonAlias({"REMARKS"})
-
     private String comment;
 }
