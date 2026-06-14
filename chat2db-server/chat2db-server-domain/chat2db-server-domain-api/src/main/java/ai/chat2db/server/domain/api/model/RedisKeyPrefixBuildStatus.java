@@ -23,9 +23,6 @@ public class RedisKeyPrefixBuildStatus {
     /** 已生成的前缀数量 */
     private Long prefixCount;
 
-    /** 刷新版本号 */
-    private Long refreshVersion;
-
     /** 开始时间 */
     private String startedAt;
 

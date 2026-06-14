@@ -82,15 +82,6 @@ public class RedisKeyPrefix implements IndexModel {
     private Boolean building;
 
     /**
-     * 刷新版本号。
-     *
-     * <p>每次刷新开始时生成一个版本号，本轮扫描写入的所有前缀文档都会带上该版本。
-     * 刷新结束后，服务层会删除同一数据库下版本号不是本轮版本的旧文档。</p>
-     */
-    @LuceneField(name = "refreshVersion", type = LuceneFieldType.LONG)
-    private Long refreshVersion;
-
-    /**
      * 客户端侧使用的数据版本。
      */
     private Long version;

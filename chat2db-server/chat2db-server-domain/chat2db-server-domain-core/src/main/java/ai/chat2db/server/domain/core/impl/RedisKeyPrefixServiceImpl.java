@@ -99,15 +99,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         if (currentStatus != null && STATUS_RUNNING.equals(currentStatus.getStatus())) {
             return statusKey;
         }
-
-        Long refreshVersion = System.currentTimeMillis();
         ConnectInfo asyncConnectInfo = connectInfo.copy();
         RedisKeyPrefixBuildStatus status = RedisKeyPrefixBuildStatus.builder()
                 .status(STATUS_RUNNING)
                 .cursor("0")
                 .scannedCount(0L)
                 .prefixCount(0L)
-                .refreshVersion(refreshVersion)
                 .startedAt(now())
                 .updatedAt(now())
                 .build();
@@ -120,7 +117,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /**
      * 更新指定 Redis key 前缀的备注。
      *
-     * <p>更新前会先读取索引中已存在的文档，并保留其 refreshVersion。这样用户维护的备注
+     * <p>更新前会先读取索引中已存在的文档。这样用户维护的备注
      * 不会因为版本字段缺失而在下一次清理旧索引数据时被误删。</p>
      */
     @Override
@@ -132,10 +129,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .name(prefix)
                 .comment(comment)
                 .build();
-        RedisKeyPrefix storedPrefix = luceneMgr.findDocument(source);
-        if (storedPrefix != null) {
-            source.setRefreshVersion(storedPrefix.getRefreshVersion());
-        }
         return luceneMgr.updateDocument(source);
     }
 
@@ -172,7 +165,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * 异步刷新 Redis 前缀缓存：流式扫描 key、统计前缀数量，并写入 Lucene 索引。
      *
      * <p>扫描过程中会持续更新 {@link #statusMap} 中的进度信息，包括已扫描 key 数量、
-     * 当前前缀数量和最后更新时间。扫描完成后，会使用本轮 refreshVersion 清理旧版本文档，
+     * 当前前缀数量和最后更新时间。
      * 确保索引中只保留最新扫描结果。</p>
      */
     private void doRefresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo, String statusKey) {
@@ -185,8 +178,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         // 已扫描的 Redis key 总数，用 AtomicLong 便于在流式回调中安全累加。
         AtomicLong scannedCount = new AtomicLong();
 
-        // 本轮刷新版本号，所有本次扫描写入的 Lucene 文档都会带上该版本。
-        Long refreshVersion = status.getRefreshVersion();
         try {
             // 异步线程没有调用线程的 ThreadLocal 上下文，需要先放入连接信息。
             Chat2DBContext.putContext(connectInfo);
@@ -215,7 +206,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             }).join();
 
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
-            flushPrefixes(luceneMgr, dataSourceId, databaseName, refreshVersion, prefixCountMap);
+            flushPrefixes(luceneMgr, dataSourceId, databaseName, prefixCountMap);
             // 扫描和索引写入全部完成后，标记任务成功。
             status.setStatus(STATUS_DONE);
             // 当前扫描接口未暴露游标恢复能力，完成后统一重置为初始游标。
@@ -287,37 +278,35 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * 将当前内存中的前缀聚合结果分批写入 Lucene 索引。
      *
      * <p>这里使用 updateDocuments 而不是简单追加，保证同名数据源/库/前缀的文档会被更新。
-     * 每个文档都带上本轮 refreshVersion，后续可据此区分本轮扫描结果和历史残留结果。</p>
      */
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
-                               Long refreshVersion, Map<String, Long> prefixCountMap) {
+                                Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
             log.info("Skip flushing redis key prefixes because prefixCountMap is empty, dataSourceId={}, "
-                            + "databaseName={}, refreshVersion={}",
-                    dataSourceId, databaseName, refreshVersion);
+                            + "databaseName={}",
+                    dataSourceId, databaseName);
             return;
         }
         List<String> samples = prefixCountMap.entrySet().stream()
                 .limit(10)
                 .map(entry -> entry.getKey() + "=" + entry.getValue())
                 .toList();
-        log.info("Start flushing redis key prefixes, dataSourceId={}, databaseName={}, refreshVersion={}, "
+        log.info("Start flushing redis key prefixes, dataSourceId={}, databaseName={},"
                         + "prefixCount={}, samplePrefixes={}",
-                dataSourceId, databaseName, refreshVersion, prefixCountMap.size(), samples);
+                dataSourceId, databaseName, prefixCountMap.size(), samples);
         List<RedisKeyPrefix> prefixes = prefixCountMap.entrySet().stream()
                 .map(entry -> RedisKeyPrefix.builder()
                         .dataSourceId(dataSourceId)
                         .databaseName(databaseName)
                         .name(entry.getKey())
                         .keyCount(entry.getValue())
-                        .refreshVersion(refreshVersion)
                         .build())
                 .toList();
         luceneMgr.updateDocuments(prefixes, null, true);
         
-        log.info("Finished flushing redis key prefixes, dataSourceId={}, databaseName={}, refreshVersion={}, "
+        log.info("Finished flushing redis key prefixes, dataSourceId={}, databaseName={}, "
                         + "prefixCount={}",
-                dataSourceId, databaseName, refreshVersion, prefixes.size());
+                dataSourceId, databaseName, prefixes.size());
     }
 
 
