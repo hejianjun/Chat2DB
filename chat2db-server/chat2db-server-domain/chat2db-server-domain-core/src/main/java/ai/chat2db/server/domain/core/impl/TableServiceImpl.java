@@ -556,6 +556,32 @@ public class TableServiceImpl implements TableService {
     }
 
     @Override
+    public void saveAiComment(Long dataSourceId, String databaseName, String schemaName, String tableName,
+                              String columnName, String aiComment) {
+        if (StringUtils.isBlank(tableName) || StringUtils.isBlank(aiComment)) {
+            return;
+        }
+        if (StringUtils.isBlank(columnName)) {
+            LuceneIndexManager<Table> manager = managerFactory.getManager(dataSourceId);
+            Table table = new Table();
+            table.setDatabaseName(databaseName);
+            table.setSchemaName(schemaName);
+            table.setName(tableName);
+            table.setAiComment(aiComment);
+            manager.updateDocument(table);
+            return;
+        }
+        LuceneIndexManager<TableColumn> manager = managerFactory.getManager(dataSourceId);
+        TableColumn column = new TableColumn();
+        column.setDatabaseName(databaseName);
+        column.setSchemaName(schemaName);
+        column.setTableName(tableName);
+        column.setName(columnName);
+        column.setAiComment(aiComment);
+        manager.updateDocuments(List.of(column), null, false);
+    }
+
+    @Override
     public List<TableColumn> queryColumns(TableQueryParam param) {
         LuceneIndexManager<TableColumn> luceneIndexManager = managerFactory.getManager(param.getDataSourceId());
         param.setClassType(TableColumn.class);

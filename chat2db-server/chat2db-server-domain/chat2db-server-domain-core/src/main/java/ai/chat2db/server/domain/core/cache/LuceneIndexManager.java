@@ -362,8 +362,42 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
                 .ifPresent(name -> addStringField(doc, StringUtils.uncapitalize(typeName + "Name"), name));
 
         // 6. 存储原始数据快照
-        doc.add(new StoredField("source", JSONObject.toJSONString(source)));
+        doc.add(new StoredField("source", buildSourceSnapshot(source, sourceMap).toJSONString()));
         return doc;
+    }
+
+    private JSONObject buildSourceSnapshot(T source, Map<String, JSONObject> sourceMap) {
+        JSONObject sourceJson = JSONObject.from(source);
+        String nameValue = source.getName();
+        if (nameValue == null || sourceMap == null) {
+            return sourceJson;
+        }
+        JSONObject oldData = sourceMap.get(nameValue);
+        if (oldData == null) {
+            return sourceJson;
+        }
+        oldData.forEach((key, value) -> {
+            if (isEmptyValue(sourceJson.get(key)) && !isEmptyValue(value)) {
+                sourceJson.put(key, value);
+            }
+        });
+        return sourceJson;
+    }
+
+    private boolean isEmptyValue(Object value) {
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof CharSequence charSequence) {
+            return StringUtils.isBlank(charSequence);
+        }
+        if (value instanceof java.util.Collection<?> collection) {
+            return collection.isEmpty();
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map.isEmpty();
+        }
+        return false;
     }
 
     /**

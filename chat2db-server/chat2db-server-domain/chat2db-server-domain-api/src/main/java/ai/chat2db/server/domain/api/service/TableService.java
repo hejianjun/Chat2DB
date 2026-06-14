@@ -180,6 +180,19 @@ public interface TableService {
     List<String> queryDeprecatedTables(DeprecatedTableParam param);
 
     /**
+     * Save table or column AI comment.
+     *
+     * @param dataSourceId datasource id
+     * @param databaseName database name
+     * @param schemaName schema name
+     * @param tableName table name
+     * @param columnName column name, null for table comment
+     * @param aiComment AI comment
+     */
+    void saveAiComment(Long dataSourceId, String databaseName, String schemaName, String tableName, String columnName,
+                       String aiComment);
+
+    /**
      * Batch optimize tables
      * @param tableNames
      * @param databaseName
