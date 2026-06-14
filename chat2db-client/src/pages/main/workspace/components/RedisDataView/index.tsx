@@ -47,6 +47,8 @@ const KEY_TYPES = ['string', 'hash', 'list', 'set', 'zset'];
 const SEARCH_MODE_KEY = 'key';
 const SEARCH_MODE_PREFIX = 'prefix';
 const RUNNING_STATUS = 'RUNNING';
+const DONE_STATUS = 'DONE';
+const PREFIX_STATUS_POLL_INTERVAL = 3000;
 
 interface IHashFieldRow {
   id: string;
@@ -86,6 +88,7 @@ const RedisDataView = memo((props: IProps) => {
   const [creating, setCreating] = useState(false);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const streamIdRef = useRef('');
+  const prefixRefreshRequestRef = useRef('');
   const detailRequestRef = useRef('');
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const [tableScrollY, setTableScrollY] = useState(240);
@@ -123,29 +126,29 @@ const RedisDataView = memo((props: IProps) => {
     setTextValue(value === undefined || value === null ? '' : String(value));
   };
 
-  const loadPrefixBuildStatus = () => {
+  const loadPrefixBuildStatus = async () => {
     if (!uniqueData?.dataSourceId) {
-      return;
+      return null;
     }
-    redisService
-      .getKeyPrefixBuildStatus({
+    try {
+      const status = await redisService.getKeyPrefixBuildStatus({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
       })
-      .then((status) => {
-        setPrefixBuildStatus(status || null);
-      })
-      .catch(() => {
-        setPrefixBuildStatus(null);
-      });
+      setPrefixBuildStatus(status || null);
+      return status || null;
+    } catch {
+      setPrefixBuildStatus(null);
+      return null;
+    }
   };
 
   const loadPrefixComments = (keyword = '', refresh = false, syncSearchResult = false) => {
     if (!uniqueData?.dataSourceId) {
-      return;
+      return Promise.resolve();
     }
     setPrefixLoading(true);
-    redisService
+    return redisService
       .searchKeyPrefixes({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
@@ -168,28 +171,51 @@ const RedisDataView = memo((props: IProps) => {
   };
 
   const searchPrefixes = (keyword = searchKey, refresh = false) => {
-    loadPrefixComments(keyword, refresh, true);
+    const searchRequest = loadPrefixComments(keyword, refresh, true);
     loadPrefixBuildStatus();
+    return searchRequest;
   };
 
-  const refreshPrefixCache = () => {
+  const waitPrefixBuildDone = async (requestId: string) => {
+    while (prefixRefreshRequestRef.current === requestId) {
+      const status = await loadPrefixBuildStatus();
+      if (prefixRefreshRequestRef.current !== requestId || status?.status !== RUNNING_STATUS) {
+        return status;
+      }
+      await delay(PREFIX_STATUS_POLL_INTERVAL);
+    }
+    return null;
+  };
+
+  const refreshPrefixCache = async () => {
     if (!uniqueData?.dataSourceId) {
       return;
     }
+    const requestId = uuid();
+    prefixRefreshRequestRef.current = requestId;
     setPrefixLoading(true);
-    redisService
-      .refreshKeyPrefixCache({
+    try {
+      await redisService.refreshKeyPrefixCache({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
       })
-      .then(() => {
-        message.success('Redis key 前缀缓存已开始刷新');
-        searchPrefixes(searchMode === SEARCH_MODE_PREFIX ? searchKey : '', false);
-      })
-      .catch((error) => {
-        message.error(String(error || 'Redis key 前缀缓存刷新失败'));
-      })
-      .finally(() => setPrefixLoading(false));
+      message.success('Redis key 前缀缓存已开始刷新');
+      const status = await waitPrefixBuildDone(requestId);
+      if (prefixRefreshRequestRef.current !== requestId) {
+        return;
+      }
+      if (status?.status === DONE_STATUS) {
+        await searchPrefixes(searchMode === SEARCH_MODE_PREFIX ? searchKey : '', false);
+        return;
+      }
+      message.error(status?.errorMessage || 'Redis key 前缀缓存刷新失败');
+    } catch (error) {
+      message.error(String(error || 'Redis key 前缀缓存刷新失败'));
+    } finally {
+      if (prefixRefreshRequestRef.current === requestId) {
+        setPrefixLoading(false);
+      }
+    }
   };
 
   const openPrefixEditor = (record: IRedisKeyRow) => {
@@ -543,7 +569,6 @@ const RedisDataView = memo((props: IProps) => {
     }
     const timer = window.setInterval(() => {
       loadPrefixBuildStatus();
-      loadPrefixComments(searchMode === SEARCH_MODE_PREFIX ? searchKey : '', false, searchMode === SEARCH_MODE_PREFIX);
     }, 3000);
     return () => window.clearInterval(timer);
   }, [prefixBuildStatus?.status, searchMode, searchKey, uniqueData?.dataSourceId, uniqueData?.databaseName]);
@@ -1336,6 +1361,10 @@ function getTypeColor(type: string) {
 
 function normalizeType(type?: string) {
   return (type || '').toLowerCase();
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function isEditableType(type?: string) {
