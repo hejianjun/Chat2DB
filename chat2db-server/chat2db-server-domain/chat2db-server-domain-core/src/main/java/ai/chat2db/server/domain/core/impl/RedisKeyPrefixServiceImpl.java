@@ -26,6 +26,16 @@ import org.apache.lucene.queryparser.classic.QueryParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/**
+ * Redis key 前缀索引服务实现。
+ *
+ * <p>该服务用于把 Redis 中数量可能非常大的 key 按业务前缀聚合后写入 Lucene 索引，
+ * 便于前端分页搜索、展示 key 数量以及维护前缀备注。刷新过程采用异步执行，避免扫描
+ * Redis 时阻塞调用线程。</p>
+ *
+ * <p>前缀提取规则：仅处理包含冒号分隔符的 key，并把最后一段之前的内容作为前缀。
+ * 例如 {@code user:1001:profile} 会聚合到 {@code user:1001}。</p>
+ */
 @Slf4j
 @Service
 public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
@@ -38,14 +48,30 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     private static final String STATUS_DONE = "DONE";
     /** 本轮刷新失败 */
     private static final String STATUS_FAILED = "FAILED";
+
+    /** 每扫描到指定数量的 key 后，将当前聚合结果刷新到 Lucene，控制长时间扫描时的内存增长。 */
     private static final long FLUSH_KEY_THRESHOLD = 50000L;
+
+    /** 单次写入 Lucene 的文档数量，避免一次性提交过多文档导致索引写入压力过大。 */
     private static final int FLUSH_DOCUMENT_BATCH_SIZE = 500;
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
 
+    /**
+     * 刷新任务状态缓存。
+     *
+     * <p>key 由数据源 ID 和 Redis 数据库名组成，同一个数据源的不同 Redis 数据库互不影响。</p>
+     */
     private final Map<String, RedisKeyPrefixBuildStatus> statusMap = new ConcurrentHashMap<>();
 
+    /**
+     * 从 Lucene 索引中分页搜索 Redis key 前缀。
+     *
+     * <p>搜索关键字会先经过 {@link QueryParser#escape(String)} 转义，避免用户输入 Lucene
+     * 查询语法中的特殊字符时破坏查询表达式。返回结果会附带当前数据源/库是否正在构建，
+     * 前端可据此展示刷新中的提示。</p>
+     */
     @Override
     public List<RedisKeyPrefix> search(RedisKeyPrefixQueryParam param) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(param.getDataSourceId());
@@ -58,6 +84,13 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         return prefixes;
     }
 
+    /**
+     * 启动 Redis key 前缀缓存刷新。
+     *
+     * <p>同一数据源/库同时只允许一个刷新任务运行。如果已有任务处于 RUNNING 状态，
+     * 本次调用会直接返回。刷新任务在独立线程中执行，并复制连接信息，避免异步线程读取到
+     * 调用线程后续变更的上下文数据。</p>
+     */
     @Override
     public void refresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo) {
         // 仅在当前数据源/库的刷新任务未运行时，才启动新的异步刷新任务。
@@ -83,6 +116,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         CompletableFuture.runAsync(() -> doRefresh(dataSourceId, databaseName, asyncConnectInfo, statusKey));
     }
 
+    /**
+     * 更新指定 Redis key 前缀的备注。
+     *
+     * <p>更新前会先读取索引中已存在的文档，并保留其 refreshVersion。这样用户维护的备注
+     * 不会因为版本字段缺失而在下一次清理旧索引数据时被误删。</p>
+     */
     @Override
     public void updateComment(Long dataSourceId, String databaseName, String prefix, String comment) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
@@ -99,6 +138,9 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         luceneMgr.updateDocument(source);
     }
 
+    /**
+     * 从 Lucene 索引中删除指定 Redis key 前缀。
+     */
     @Override
     public void delete(Long dataSourceId, String databaseName, String prefix) {
         RedisKeyPrefix source = RedisKeyPrefix.builder()
@@ -109,6 +151,11 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         managerFactory.<RedisKeyPrefix>getManager(dataSourceId).deleteDocument(source);
     }
 
+    /**
+     * 查询指定数据源/库的刷新任务状态。
+     *
+     * <p>如果当前进程内没有该数据源/库的刷新记录，则返回 IDLE 状态，表示尚未启动过刷新任务。</p>
+     */
     @Override
     public RedisKeyPrefixBuildStatus getStatus(Long dataSourceId, String databaseName) {
         return statusMap.getOrDefault(buildStatusKey(dataSourceId, databaseName),
@@ -120,7 +167,13 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                         .build());
     }
 
-    // 异步刷新 Redis 前缀缓存：流式扫描 key、统计前缀数量，并写入 Lucene 索引。
+    /**
+     * 异步刷新 Redis 前缀缓存：流式扫描 key、统计前缀数量，并写入 Lucene 索引。
+     *
+     * <p>扫描过程中会持续更新 {@link #statusMap} 中的进度信息，包括已扫描 key 数量、
+     * 当前前缀数量和最后更新时间。扫描完成后，会使用本轮 refreshVersion 清理旧版本文档，
+     * 确保索引中只保留最新扫描结果。</p>
+     */
     private void doRefresh(Long dataSourceId, String databaseName, ConnectInfo connectInfo, String statusKey) {
         RedisKeyPrefixBuildStatus status = statusMap.get(statusKey);
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
@@ -162,6 +215,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         }
     }
 
+    /**
+     * 从当前 Chat2DB 上下文中获取 Redis key 浏览能力。
+     *
+     * <p>该服务只适用于 Redis 数据源。如果当前数据源元信息不支持 {@link RedisKeyBrowser}，
+     * 说明调用方传入了非 Redis 连接，此时直接抛出业务异常。</p>
+     */
     private RedisKeyBrowser getRedisKeyBrowser() {
         MetaData metaData = Chat2DBContext.getMetaData();
         if (metaData instanceof RedisKeyBrowser browser) {
@@ -170,6 +229,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         throw new BusinessException("当前数据源不是 Redis");
     }
 
+    /**
+     * 从单个 Redis key 中提取前缀并累计出现次数。
+     *
+     * <p>只处理包含 {@code :} 的 key；空片段会被忽略，最后一个片段通常代表具体业务对象
+     * 或字段，不计入前缀。例如 {@code order::2024:1001} 会被规整为 {@code order:2024}。</p>
+     */
     private void collectPrefixes(String key, Map<String, Long> prefixCountMap) {
         if (StringUtils.isBlank(key) || !key.contains(":")) {
             return;
@@ -188,6 +253,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         prefixCountMap.merge(joiner.toString(), 1L, Long::sum);
     }
 
+    /**
+     * 将当前内存中的前缀聚合结果分批写入 Lucene 索引。
+     *
+     * <p>这里使用 updateDocuments 而不是简单追加，保证同名数据源/库/前缀的文档会被更新。
+     * 每个文档都带上本轮 refreshVersion，后续可据此区分本轮扫描结果和历史残留结果。</p>
+     */
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
                                Long refreshVersion, Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
@@ -208,8 +279,14 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         }
     }
 
+    /**
+     * 删除本轮刷新没有覆盖到的历史前缀文档。
+     *
+     * <p>刷新开始时会生成一个 refreshVersion，所有本轮扫描到的前缀都会写入该版本。
+     * 扫描结束后，当前数据库中 refreshVersion 不等于本轮版本的文档即视为旧数据，需要清理。</p>
+     */
     private void deleteStalePrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, String databaseName,
-                                     Long refreshVersion) {
+                                      Long refreshVersion) {
         if (refreshVersion == null) {
             return;
         }
@@ -219,10 +296,18 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         luceneMgr.deleteByDatabaseAndSchemaExceptLongField(queryModel, "refreshVersion", refreshVersion);
     }
 
+    /**
+     * 构建刷新状态缓存 key。
+     *
+     * <p>状态按数据源和 Redis 数据库隔离，避免同一数据源下不同数据库的刷新状态互相覆盖。</p>
+     */
     private String buildStatusKey(Long dataSourceId, String databaseName) {
         return dataSourceId + ":" + StringUtils.defaultString(databaseName);
     }
 
+    /**
+     * 生成状态时间戳字符串。
+     */
     private String now() {
         return LocalDateTime.now().toString();
     }
