@@ -12,6 +12,9 @@ import ai.chat2db.spi.sql.ConnectInfo;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+/**
+ * Creates and clears the Chat2DB connection context required by existing database services.
+ */
 @Component
 public class ConnectionScope {
 
@@ -26,11 +29,15 @@ public class ConnectionScope {
         try {
             return supplier.get();
         } finally {
+            // MCP calls share server threads, so both context holders must be cleared after each tool call.
             ContextUtils.removeContext();
             Chat2DBContext.removeContext();
         }
     }
 
+    /**
+     * Converts a persisted datasource into the SPI connection object expected by database plugins.
+     */
     private ConnectInfo toInfo(Long dataSourceId, String databaseName, String schemaName) {
         DataSource dataSource = dataSourceService.queryById(dataSourceId);
         if (dataSource == null) {

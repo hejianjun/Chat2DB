@@ -11,6 +11,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * Protects MCP endpoints with an optional bearer token.
+ */
 @Component
 @ConditionalOnProperty(prefix = "chat2db.mcp", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class McpAuthFilter extends OncePerRequestFilter {
@@ -26,6 +29,7 @@ public class McpAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
+        // Leave non-MCP routes untouched and allow tokenless local setups when no token is configured.
         return !path.startsWith("/api/mcp/") || StringUtils.isBlank(properties.getToken());
     }
 

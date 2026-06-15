@@ -10,6 +10,9 @@ import ai.chat2db.server.mcp.config.McpProperties;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+/**
+ * Centralizes MCP SQL safety checks before any tool reaches the execution service.
+ */
 @Component
 public class SqlGuard {
 
@@ -28,6 +31,7 @@ public class SqlGuard {
     }
 
     public void requireWriteAllowed(Long dataSourceId, Boolean confirm) {
+        // Production datasources remain protected even if write tools are enabled in configuration.
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 write operations are disabled for Release/production datasources.");
         }
@@ -38,6 +42,7 @@ public class SqlGuard {
     }
 
     public void requireDdlAllowed(Long dataSourceId, Boolean confirm) {
+        // DDL is guarded separately from DML because schema changes are higher risk.
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 DDL operations are disabled for Release/production datasources.");
         }
@@ -52,6 +57,9 @@ public class SqlGuard {
         return Math.min(value, properties.getSql().getMaxRows());
     }
 
+    /**
+     * Returns the first SQL keyword after trimming leading whitespace and one leading block comment.
+     */
     public String firstKeyword(String sql) {
         String cleaned = StringUtils.trimToEmpty(sql).replaceFirst("(?s)^/\\*.*?\\*/", "").trim();
         int index = cleaned.indexOf(' ');
@@ -67,6 +75,7 @@ public class SqlGuard {
     public boolean isReleaseDatasource(Long dataSourceId) {
         DataSource dataSource = dataSourceService.queryExistent(dataSourceId,
             DataSourceSelector.builder().environment(true).build());
+        // Prefer the typed environment code, then fall back to free-text fields used by older records.
         if (dataSource.getEnvironmentId() != null && EnvironmentEnum.RELEASE.getCode().equals(dataSource.getEnvironmentId())) {
             return true;
         }

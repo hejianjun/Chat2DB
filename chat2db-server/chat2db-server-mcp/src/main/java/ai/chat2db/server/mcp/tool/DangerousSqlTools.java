@@ -9,6 +9,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for intentionally dangerous SQL paths that require explicit server opt-in and confirmation.
+ */
 @Service
 public class DangerousSqlTools {
 
@@ -48,6 +51,7 @@ public class DangerousSqlTools {
     }
 
     private DlExecuteParam executeParam(Long dataSourceId, String databaseName, String schemaName, String sql) {
+        // Dangerous operations do not need pagination, but DlExecuteParam still requires these defaults.
         DlExecuteParam param = new DlExecuteParam();
         param.setDataSourceId(dataSourceId);
         param.setDatabaseName(databaseName);

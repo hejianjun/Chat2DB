@@ -18,6 +18,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for table, schema and metadata preference operations.
+ */
 @Service
 public class MetadataTools {
 
@@ -124,6 +127,7 @@ public class MetadataTools {
 
     private DeprecatedTableParam deprecatedTableParam(Long dataSourceId, String databaseName, String schemaName,
         String tableName) {
+        // Both deprecate and restore operations use the same table identity payload.
         DeprecatedTableParam param = new DeprecatedTableParam();
         param.setDataSourceId(dataSourceId);
         param.setDatabaseName(databaseName);

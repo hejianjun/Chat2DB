@@ -9,6 +9,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for safe read-only SQL execution.
+ */
 @Service
 public class QueryTools {
 
@@ -39,6 +42,7 @@ public class QueryTools {
 
     DlExecuteParam executeParam(Long dataSourceId, String databaseName, String schemaName, String sql, Integer pageNo,
         Integer pageSize) {
+        // Reuse the existing DL execution service while enforcing MCP-specific paging limits.
         DlExecuteParam param = new DlExecuteParam();
         param.setDataSourceId(dataSourceId);
         param.setDatabaseName(databaseName);

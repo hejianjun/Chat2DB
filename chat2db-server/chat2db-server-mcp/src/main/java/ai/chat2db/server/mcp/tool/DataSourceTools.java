@@ -12,6 +12,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for discovering Chat2DB datasource connections before running database-specific tools.
+ */
 @Service
 public class DataSourceTools {
 

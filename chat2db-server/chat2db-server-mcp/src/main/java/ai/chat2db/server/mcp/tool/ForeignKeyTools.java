@@ -12,6 +12,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for real database foreign keys and Chat2DB virtual foreign-key metadata.
+ */
 @Service
 public class ForeignKeyTools {
 
@@ -112,6 +115,7 @@ public class ForeignKeyTools {
     }
 
     private ForeignKeySyncService.ForeignKeyRelation parseRelation(String relation) {
+        // SOURCE matches the historical UI default: keys declared on the current table.
         if (relation == null || relation.isBlank()) {
             return ForeignKeySyncService.ForeignKeyRelation.SOURCE;
         }

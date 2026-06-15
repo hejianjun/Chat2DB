@@ -8,9 +8,13 @@ import ai.chat2db.spi.model.Header;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+/**
+ * Formats SPI execution results into compact Markdown text for MCP clients and LLM consumption.
+ */
 @Component
 public class ResultFormatter {
 
+    /** Keeps individual cells short enough for chat-oriented transports. */
     private static final int MAX_CELL_LENGTH = 200;
 
     public String format(List<ExecuteResult> results) {
@@ -36,6 +40,7 @@ public class ResultFormatter {
             return builder.toString();
         }
         builder.append('\n');
+        // Markdown tables are easy for MCP clients and LLMs to render or summarize.
         List<String> headers = result.getHeaderList().stream().map(Header::getName).collect(Collectors.toList());
         builder.append('|').append(String.join("|", headers)).append('|').append('\n');
         builder.append('|').append(headers.stream().map(header -> "---").collect(Collectors.joining("|"))).append('|').append('\n');
@@ -51,6 +56,7 @@ public class ResultFormatter {
     }
 
     private String cell(String value) {
+        // Escape table delimiters and flatten line breaks before applying the cell-length cap.
         String normalized = StringUtils.defaultString(value).replace("|", "\\|").replace("\n", " ");
         return StringUtils.abbreviate(normalized, MAX_CELL_LENGTH);
     }

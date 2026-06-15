@@ -13,11 +13,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Registers Chat2DB service methods as Spring AI tool callbacks for the MCP server.
+ */
 @Configuration
 @EnableConfigurationProperties(McpProperties.class)
 @ConditionalOnProperty(prefix = "chat2db.mcp", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class McpServerConfiguration {
 
+    /**
+     * Exposes all MCP tool groups through a single callback provider consumed by Spring AI MCP.
+     */
     @Bean
     public ToolCallbackProvider chat2dbMcpTools(DataSourceTools dataSourceTools, MetadataTools metadataTools,
         QueryTools queryTools, SchemaInsightTools schemaInsightTools, ForeignKeyTools foreignKeyTools,

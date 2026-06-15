@@ -9,6 +9,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
 
+/**
+ * MCP tools for higher-level schema discovery such as views, functions, procedures and table search.
+ */
 @Service
 public class SchemaInsightTools {
 
