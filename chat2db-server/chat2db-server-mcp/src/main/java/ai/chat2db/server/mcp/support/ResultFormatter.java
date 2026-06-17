@@ -24,6 +24,32 @@ public class ResultFormatter {
         return results.stream().map(this::format).collect(Collectors.joining("\n\n"));
     }
 
+    public String formatCsv(List<ExecuteResult> results) {
+        if (results == null || results.isEmpty()) {
+            return "No result.";
+        }
+        if (results.size() > 1) {
+            return results.stream().map(this::formatCsv).collect(Collectors.joining("\n\n"));
+        }
+        return formatCsv(results.get(0));
+    }
+
+    public String formatCsv(ExecuteResult result) {
+        if (result == null || !Boolean.TRUE.equals(result.getSuccess())
+            || result.getHeaderList() == null || result.getHeaderList().isEmpty()) {
+            return format(result);
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append(result.getHeaderList().stream().map(Header::getName).map(this::csvCell)
+            .collect(Collectors.joining(","))).append('\n');
+        if (result.getDataList() != null) {
+            for (List<String> row : result.getDataList()) {
+                builder.append(row.stream().map(this::csvCell).collect(Collectors.joining(","))).append('\n');
+            }
+        }
+        return builder.toString();
+    }
+
     public String format(ExecuteResult result) {
         if (result == null) {
             return "No result.";
@@ -59,5 +85,13 @@ public class ResultFormatter {
         // Escape table delimiters and flatten line breaks before applying the cell-length cap.
         String normalized = StringUtils.defaultString(value).replace("|", "\\|").replace("\n", " ");
         return StringUtils.abbreviate(normalized, MAX_CELL_LENGTH);
+    }
+
+    private String csvCell(String value) {
+        String normalized = StringUtils.defaultString(value);
+        if (!StringUtils.containsAny(normalized, ',', '"', '\n', '\r')) {
+            return normalized;
+        }
+        return "\"" + normalized.replace("\"", "\"\"") + "\"";
     }
 }

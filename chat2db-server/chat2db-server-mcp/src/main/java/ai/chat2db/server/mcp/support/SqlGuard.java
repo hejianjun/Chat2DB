@@ -1,5 +1,6 @@
 package ai.chat2db.server.mcp.support;
 
+import java.util.List;
 import java.util.Locale;
 
 import ai.chat2db.server.domain.api.enums.EnvironmentEnum;
@@ -7,6 +8,11 @@ import ai.chat2db.server.domain.api.model.DataSource;
 import ai.chat2db.server.domain.api.param.datasource.DataSourceSelector;
 import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.mcp.config.McpProperties;
+import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.spi.util.JdbcUtils;
+import ai.chat2db.spi.util.SqlUtils;
+import com.alibaba.druid.DbType;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -26,7 +32,30 @@ public class SqlGuard {
 
     public void requireReadOnlySql(String sql) {
         if (!isReadOnlySql(sql)) {
-            throw new IllegalArgumentException("Only SELECT/SHOW/DESC/DESCRIBE/EXPLAIN SQL is allowed by this tool.");
+            throw new IllegalArgumentException("Only SELECT/SHOW/DESC/DESCRIBE/EXPLAIN/WITH SQL is allowed by this tool.");
+        }
+    }
+
+    public void requireSingleReadOnlySql(String sql) {
+        List<String> sqlList = parseSql(sql);
+        if (sqlList.size() != 1) {
+            throw new IllegalArgumentException("This MCP query tool accepts exactly one read-only SQL statement.");
+        }
+        requireReadOnlySql(sqlList.get(0));
+    }
+
+    public void requireWriteSqlList(List<String> sqlList) {
+        if (CollectionUtils.isEmpty(sqlList)) {
+            throw new IllegalArgumentException("sqlList must not be empty.");
+        }
+        for (String sql : sqlList) {
+            List<String> parsedSqlList = parseSql(sql);
+            if (parsedSqlList.size() != 1) {
+                throw new IllegalArgumentException("Each sqlList item must contain exactly one SQL statement.");
+            }
+            if (!isWriteSql(parsedSqlList.get(0))) {
+                throw new IllegalArgumentException("Only INSERT/UPDATE/DELETE SQL is allowed by this tool.");
+            }
         }
     }
 
@@ -72,6 +101,11 @@ public class SqlGuard {
             || "describe".equals(keyword) || "explain".equals(keyword) || "with".equals(keyword);
     }
 
+    public boolean isWriteSql(String sql) {
+        String keyword = firstKeyword(sql);
+        return "insert".equals(keyword) || "update".equals(keyword) || "delete".equals(keyword);
+    }
+
     public boolean isReleaseDatasource(Long dataSourceId) {
         DataSource dataSource = dataSourceService.queryExistent(dataSourceId,
             DataSourceSelector.builder().environment(true).build());
@@ -95,5 +129,13 @@ public class SqlGuard {
         if (properties.getSql().isRequireConfirmParam() && !Boolean.TRUE.equals(confirm)) {
             throw new IllegalArgumentException("This P2 operation requires user confirmation. Call again with confirm=true after the MCP client confirmation dialog.");
         }
+    }
+
+    private List<String> parseSql(String sql) {
+        if (StringUtils.isBlank(sql)) {
+            throw new IllegalArgumentException("SQL must not be blank.");
+        }
+        DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
+        return SqlUtils.parse(sql, dbType);
     }
 }

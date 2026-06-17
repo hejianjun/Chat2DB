@@ -2,6 +2,7 @@ package ai.chat2db.server.domain.api.service;
 
 import java.util.List;
 
+import ai.chat2db.server.domain.api.param.DlBatchUpdateParam;
 import ai.chat2db.server.domain.api.param.DlCountParam;
 import ai.chat2db.server.domain.api.param.DlExecuteParam;
 import ai.chat2db.server.domain.api.param.OrderByParam;
@@ -34,6 +35,14 @@ public interface DlTemplateService {
      * @return
      */
     ExecuteResult executeUpdate(DlExecuteParam param);
+
+    /**
+     * Execute multiple update statements in one transaction.
+     *
+     * @param param batch update parameters
+     * @return per-statement execution results
+     */
+    List<ExecuteResult> executeBatchUpdate(DlBatchUpdateParam param);
 
     /**
      * 执行统计sql

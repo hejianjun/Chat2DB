@@ -171,7 +171,10 @@ public class SQLExecutor implements CommandExecutor {
         // connection.setAutoCommit(false);
         ExecuteResult executeResult = ExecuteResult.builder().sql(sql).success(Boolean.TRUE).build();
         try (Statement stmt = connection.createStatement()) {
+            TimeInterval timeInterval = new TimeInterval();
             int affectedRows = stmt.executeUpdate(sql);
+            executeResult.setDuration(timeInterval.interval());
+            executeResult.setUpdateCount(affectedRows);
             if (affectedRows != n) {
                 executeResult.setSuccess(false);
                 executeResult.setMessage("Update error " + sql + " update affectedRows = " + affectedRows

@@ -47,7 +47,7 @@ public class SchemaInsightTools {
     }
 
     @Tool(description = "Search tables by keyword. Currently searches table names via list_tables metadata cache. Read-only operation.")
-    public Object searchTables(@ToolParam(description = "Datasource id") Long dataSourceId,
+    public String searchTables(@ToolParam(description = "Datasource id") Long dataSourceId,
         @ToolParam(description = "Database name") String databaseName,
         @ToolParam(description = "Schema name, optional", required = false) String schemaName,
         @ToolParam(description = "Search keyword") String keyword) {

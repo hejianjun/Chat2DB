@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,64 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             result.setMessage(e.getMessage());
         }
         return result;
+    }
+
+    @Override
+    public List<ExecuteResult> executeBatchUpdate(DlBatchUpdateParam param) {
+        validateBatchUpdateParam(param);
+        CommandExecutor executor = Chat2DBContext.getMetaData().getCommandExecutor();
+        Connection connection = Chat2DBContext.getConnection();
+        List<ExecuteResult> results = new ArrayList<>();
+        boolean originalAutoCommit = true;
+        boolean rollback = false;
+        String rollbackMessage = null;
+        try {
+            originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            for (int i = 0; i < param.getSqlList().size(); i++) {
+                String sql = param.getSqlList().get(i);
+                Integer expectedUpdateCount = param.getExpectedUpdateCounts().get(i);
+                ExecuteResult executeResult = executor.executeUpdate(sql, connection, expectedUpdateCount);
+                executeResult.setStatementIndex(i + 1);
+                executeResult.setOriginalSql(sql);
+                results.add(executeResult);
+                if (!Boolean.TRUE.equals(executeResult.getSuccess())) {
+                    rollback = true;
+                    rollbackMessage = buildRollbackMessage(sql, expectedUpdateCount, executeResult);
+                    executeResult.setMessage(rollbackMessage);
+                    break;
+                }
+            }
+            if (rollback) {
+                connection.rollback();
+            } else {
+                connection.commit();
+            }
+        } catch (Exception e) {
+            log.error("executeBatchUpdate error", e);
+            rollback = true;
+            rollbackMessage = "Batch update failed and rolled back: " + e.getMessage();
+            rollbackQuietly(connection);
+            if (results.isEmpty() || Boolean.TRUE.equals(results.get(results.size() - 1).getSuccess())) {
+                ExecuteResult executeResult = ExecuteResult.builder()
+                        .success(Boolean.FALSE)
+                        .message(rollbackMessage)
+                        .sql(results.size() < param.getSqlList().size() ? param.getSqlList().get(results.size()) : null)
+                        .statementIndex(results.size() + 1)
+                        .build();
+                results.add(executeResult);
+            } else {
+                results.get(results.size() - 1).setMessage(rollbackMessage);
+            }
+        } finally {
+            restoreAutoCommit(connection, originalAutoCommit);
+        }
+        if (rollback) {
+            markRolledBackAndLog(results, rollbackMessage);
+        } else {
+            results.forEach(this::addOperationLog);
+        }
+        return results;
     }
 
 
@@ -205,7 +264,60 @@ public class DlTemplateServiceImpl implements DlTemplateService {
     }
 
 
+    private void validateBatchUpdateParam(DlBatchUpdateParam param) {
+        if (param == null || CollectionUtils.isEmpty(param.getSqlList())
+                || CollectionUtils.isEmpty(param.getExpectedUpdateCounts())) {
+            throw new IllegalArgumentException("sqlList and expectedUpdateCounts must not be empty.");
+        }
+        if (param.getSqlList().size() != param.getExpectedUpdateCounts().size()) {
+            throw new IllegalArgumentException("sqlList and expectedUpdateCounts must have the same size.");
+        }
+        for (int i = 0; i < param.getSqlList().size(); i++) {
+            if (StringUtils.isBlank(param.getSqlList().get(i))) {
+                throw new IllegalArgumentException("sqlList[" + i + "] must not be blank.");
+            }
+            if (param.getExpectedUpdateCounts().get(i) == null) {
+                throw new IllegalArgumentException("expectedUpdateCounts[" + i + "] must not be null.");
+            }
+        }
+    }
+
+    private String buildRollbackMessage(String sql, Integer expectedUpdateCount, ExecuteResult executeResult) {
+        return "Batch update rolled back. SQL: " + sql + ", expectedUpdateCount: " + expectedUpdateCount
+                + ", actualUpdateCount: " + executeResult.getUpdateCount() + ". " + executeResult.getMessage();
+    }
+
+    private void rollbackQuietly(Connection connection) {
+        try {
+            connection.rollback();
+        } catch (Exception rollbackException) {
+            log.error("executeBatchUpdate rollback error", rollbackException);
+        }
+    }
+
+    private void restoreAutoCommit(Connection connection, boolean originalAutoCommit) {
+        try {
+            connection.setAutoCommit(originalAutoCommit);
+        } catch (Exception e) {
+            log.error("executeBatchUpdate restore autoCommit error", e);
+        }
+    }
+
+    private void markRolledBackAndLog(List<ExecuteResult> results, String rollbackMessage) {
+        for (ExecuteResult executeResult : results) {
+            executeResult.setSuccess(Boolean.FALSE);
+            if (StringUtils.isBlank(executeResult.getMessage())) {
+                executeResult.setMessage("Rolled back by MCP batch update: " + rollbackMessage);
+            }
+            addOperationLog(executeResult, "fail", "rolled back by MCP batch update");
+        }
+    }
+
     private void addOperationLog(ExecuteResult executeResult) {
+        addOperationLog(executeResult, null, null);
+    }
+
+    private void addOperationLog(ExecuteResult executeResult, String status, String extendInfo) {
         if (executeResult == null) {
             return;
         }
@@ -216,7 +328,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             }
             OperationLogCreateParam createParam = new OperationLogCreateParam();
             createParam.setDdl(executeResult.getSql());
-            createParam.setStatus(executeResult.getSuccess() ? "success" : "fail");
+            createParam.setStatus(StringUtils.defaultIfBlank(status, executeResult.getSuccess() ? "success" : "fail"));
             createParam.setDatabaseName(connectInfo.getDatabaseName());
             createParam.setDataSourceId(connectInfo.getDataSourceId());
             createParam.setSchemaName(connectInfo.getSchemaName());
@@ -224,6 +336,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             createParam.setType(connectInfo.getDbType());
             createParam.setOperationRows(
                     executeResult.getUpdateCount() != null ? Long.valueOf(executeResult.getUpdateCount()) : null);
+            createParam.setExtendInfo(extendInfo);
             operationLogService.create(createParam);
         } catch (Exception e) {
             log.error("addOperationLog error:", e);

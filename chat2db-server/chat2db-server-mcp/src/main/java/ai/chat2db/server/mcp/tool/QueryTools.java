@@ -35,9 +35,12 @@ public class QueryTools {
         @ToolParam(description = "Read-only SQL") String sql,
         @ToolParam(description = "Page number, default 1", required = false) Integer pageNo,
         @ToolParam(description = "Page size, default 100, capped by server config", required = false) Integer pageSize) {
-        sqlGuard.requireReadOnlySql(sql);
         return connectionScope.run(dataSourceId, databaseName, schemaName,
-            () -> resultFormatter.format(dlTemplateService.execute(executeParam(dataSourceId, databaseName, schemaName, sql, pageNo, pageSize))));
+            () -> {
+                sqlGuard.requireSingleReadOnlySql(sql);
+                return resultFormatter.formatCsv(dlTemplateService.execute(
+                    executeParam(dataSourceId, databaseName, schemaName, sql, pageNo, pageSize)));
+            });
     }
 
     DlExecuteParam executeParam(Long dataSourceId, String databaseName, String schemaName, String sql, Integer pageNo,
