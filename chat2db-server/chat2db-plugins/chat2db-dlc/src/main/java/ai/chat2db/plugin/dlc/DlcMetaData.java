@@ -104,6 +104,9 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
 
     @Override
     public List<TableColumn> columns(Connection connection, String databaseName, String schemaName, String tableName) {
+        if (StringUtils.isBlank(tableName)) {
+            return Collections.emptyList();
+        }
         try {
             String sql = "DESCRIBE TABLE " + tableName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
@@ -111,11 +114,17 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
                 int ordinalPosition = 1;
                 while (resultSet.next()) {
                     String colName = resultSet.getString("col_name");
+                    if (isDescribeMetadataSection(colName)) {
+                        break;
+                    }
                     if (StringUtils.isBlank(colName) || "# col_name".equals(colName)
                             || "---".equals(colName) || "data_type".equals(colName)) {
                         continue;
                     }
                     String dataType = resultSet.getString("data_type");
+                    if (StringUtils.isBlank(dataType)) {
+                        continue;
+                    }
                     String comment = resultSet.getString("comment");
 
                     TableColumn column = new TableColumn();
@@ -136,6 +145,55 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
             });
         } catch (Exception e) {
             return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public boolean supportBatchQueryColumns() {
+        return false;
+    }
+
+    @Override
+    public void enrichTable(Connection connection, String databaseName, String schemaName, Table table) {
+        if (table == null || StringUtils.isBlank(table.getName()) || StringUtils.isNotBlank(table.getPartition())) {
+            return;
+        }
+        String partition = queryPartition(connection, table.getName());
+        if (StringUtils.isNotBlank(partition)) {
+            table.setPartition(partition);
+        }
+    }
+
+    private boolean isDescribeMetadataSection(String colName) {
+        return StringUtils.startsWith(colName, "#")
+                && !"# col_name".equals(colName);
+    }
+
+    private String queryPartition(Connection connection, String tableName) {
+        try {
+            String sql = "DESCRIBE TABLE " + tableName;
+            return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
+                List<String> partitions = new ArrayList<>();
+                boolean partitionSection = false;
+                while (resultSet.next()) {
+                    String colName = resultSet.getString("col_name");
+                    if (isDescribeMetadataSection(colName)) {
+                        partitionSection = "# Partitioning".equalsIgnoreCase(colName);
+                        continue;
+                    }
+                    if (!partitionSection) {
+                        continue;
+                    }
+                    String dataType = resultSet.getString("data_type");
+                    if (StringUtils.isNotBlank(dataType)) {
+                        partitions.add(dataType);
+                    }
+                }
+                return String.join(", ", partitions);
+            });
+        } catch (Exception e) {
+            log.warn("DLC query partition failed, tableName:{}", tableName, e);
+            return null;
         }
     }
 

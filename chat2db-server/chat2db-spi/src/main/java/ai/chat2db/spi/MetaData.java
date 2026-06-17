@@ -117,6 +117,26 @@ public interface MetaData {
                               @NotEmpty String tableName);
 
     /**
+     * Whether columns can be queried without specifying a table name.
+     *
+     * @return true if columns(connection, databaseName, schemaName, null) is supported
+     */
+    default boolean supportBatchQueryColumns() {
+        return true;
+    }
+
+    /**
+     * Enrich table metadata that is not returned by the table list API.
+     *
+     * @param connection database connection
+     * @param databaseName database name
+     * @param schemaName schema name
+     * @param table table to enrich
+     */
+    default void enrichTable(Connection connection, String databaseName, String schemaName, Table table) {
+    }
+
+    /**
      * Querying all columns under a table.
      *
      * @param connection

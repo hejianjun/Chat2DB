@@ -328,7 +328,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                                         foreignKey.getReferencedColumn())
                                 .collect(Collectors.joining(","));
 
-                        sb.append("foreignKeys:").append(foreignKeysString);
+                        sb.append(foreignKeysString);
                     }
                     if (!virtualForeignKeys.isEmpty()) {
                         if (StringUtils.isNotEmpty(comment) || !foreignKeys.isEmpty()) {
@@ -339,7 +339,7 @@ public class DatabaseServiceImpl implements DatabaseService {
                                         virtualForeignKey.getReferencedTable() + ":" +
                                         virtualForeignKey.getReferencedColumn())
                                 .collect(Collectors.joining(","));
-                        sb.append("virtualForeignKeys:").append(virtualForeignKeysString);
+                        sb.append(virtualForeignKeysString);
                     }
                     sb.append(")");
                 }

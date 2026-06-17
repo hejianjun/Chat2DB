@@ -36,8 +36,10 @@ public class AiConversationTitleTask {
             return;
         }
 
-        String title = generateTitle(conversationId, firstUserMessage);
-        persistTitle(conversationId, title);
+        Dbutils.runWithSession(() -> {
+            String title = generateTitle(conversationId, firstUserMessage);
+            persistTitle(conversationId, title);
+        });
     }
 
     /**
@@ -68,12 +70,9 @@ public class AiConversationTitleTask {
      */
     private void persistTitle(String conversationId, String title) {
         try {
-            Dbutils.setSession();
             aiConversationService.updateTitle(conversationId, title);
         } catch (Exception e) {
             log.error("[AiConversationTitleTask] Failed to persist title for {}", conversationId, e);
-        } finally {
-            Dbutils.removeSession();
         }
     }
 

@@ -257,6 +257,7 @@ interface IProps {
 export default memo<IProps>((props) => {
   const [inputValue, setInputValue] = useState('');
   const closeEventSource = useRef<() => void>();
+  const closeTitleEventSource = useRef<() => void>();
   const sessionIdRef = useRef<string>();
   const commentCallbackRef = useRef<(result: ITableCommentResult) => void>();
   const batchCommentCallbackRef = useRef<(result: IBatchTableCommentResult) => void>();
@@ -328,6 +329,77 @@ export default memo<IProps>((props) => {
       setSidebarCollapsed(true);
     }
   }, [currentSession?.transient]);
+
+  const generateConversationTitle = useCallback(
+    async (
+      sessionId: string,
+      titleSource: string,
+      info: {
+        dataSourceId?: number;
+        databaseName?: string;
+        schemaName?: string | null;
+      },
+    ) => {
+      if (!titleSource?.trim()) {
+        return;
+      }
+
+      closeTitleEventSource.current?.();
+      const transientConversationId = uuidv4();
+      let generatedTitle = '';
+      const requestParams = {
+        conversationId: transientConversationId,
+        message: titleSource,
+        promptType: 'TITLE_GENERATION',
+        dataSourceId: info.dataSourceId,
+        databaseName: info.databaseName,
+        schemaName: info.schemaName,
+      };
+
+      let params = formatParams(requestParams);
+      if (`/api/ai/chat?${params}`.length > MAX_DIRECT_SSE_URL_LENGTH) {
+        try {
+          const payloadId = await createChatPayload(requestParams);
+          params = formatParams({
+            payloadId,
+            dataSourceId: info.dataSourceId,
+            databaseName: info.databaseName,
+            schemaName: info.schemaName,
+          });
+        } catch (error) {
+          console.warn('[AiChat] Create title payload failed:', error);
+          return;
+        }
+      }
+
+      closeTitleEventSource.current = connectToEventSource({
+        url: `/api/ai/chat?${params}`,
+        uid: transientConversationId,
+        onMessage: (content?: string) => {
+          if (content) {
+            generatedTitle += content;
+          }
+        },
+        onDone: () => {
+          closeTitleEventSource.current = undefined;
+          const cleanTitle = generatedTitle
+            .replace(/^["'`]+|["'`]+$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (cleanTitle) {
+            renameSession(sessionId, cleanTitle).catch((error) => {
+              console.warn('[AiChat] Rename generated title failed:', error);
+            });
+          }
+        },
+        onError: (error) => {
+          closeTitleEventSource.current = undefined;
+          console.warn('[AiChat] Generate title failed:', error);
+        },
+      });
+    },
+    [renameSession],
+  );
 
   const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', tableNames?: string[] | null, ext?: string) => {
     const infoWithTables = {
@@ -629,12 +701,21 @@ export default memo<IProps>((props) => {
           const session = currentSessions[sessionId];
           console.log('[AiChat] session in onDone:', session);
           if (session?.currentContent) {
+            const shouldGenerateTitle =
+              promptType === 'NL_2_SQL' &&
+              !isRevision &&
+              session.messages.filter((item) => item.role === 'user').length === 1 &&
+              (!session.title || session.title === '新对话' || session.title === 'NL_2_SQL');
             addMessage(sessionId, {
               id: uuidv4(),
               role: 'assistant',
               content: session.currentContent,
               thinking: session.currentThinking || undefined,
             });
+            if (shouldGenerateTitle) {
+              const firstUserMessage = session.messages.find((item) => item.role === 'user')?.content;
+              void generateConversationTitle(sessionId, firstUserMessage || messageText, info);
+            }
 
             if (promptType === 'NL_2_COMMENT' && commentCallbackRef.current) {
               try {
@@ -750,6 +831,7 @@ export default memo<IProps>((props) => {
       setSchemaInfo,
       setError,
       renameSession,
+      generateConversationTitle,
     ],
   );
 
@@ -801,6 +883,12 @@ export default memo<IProps>((props) => {
       clearSession(sessionIdRef.current);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      closeTitleEventSource.current?.();
+    };
+  }, []);
 
   const handleExecuteSql = useCallback((sql: string) => {
     const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);

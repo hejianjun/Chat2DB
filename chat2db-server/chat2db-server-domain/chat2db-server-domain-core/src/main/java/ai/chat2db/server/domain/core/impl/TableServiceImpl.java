@@ -128,6 +128,7 @@ public class TableServiceImpl implements TableService {
             table.setColumnList(
                     metaSchema.columns(connection, param.getDatabaseName(), param.getSchemaName(),
                             param.getTableName()));
+            metaSchema.enrichTable(connection, param.getDatabaseName(), param.getSchemaName(), table);
             table.setForeignKeyList(
                     metaSchema.foreignKeys(connection, param.getDatabaseName(),
                             param.getSchemaName(), param.getTableName()));
@@ -371,13 +372,15 @@ public class TableServiceImpl implements TableService {
         if (Boolean.TRUE.equals(selector.getColumnList())) {
             tableColumnMap = getTableColumns((LuceneIndexManager) luceneMgr, param, tables);
         }
+        MetaData metaSchema = Chat2DBContext.getMetaData();
+        Connection connection = Chat2DBContext.getConnection();
         for (Table table : tables) {
             if (Boolean.TRUE.equals(selector.getColumnList())) {
                 table.setColumnList(tableColumnMap.getOrDefault(table.getName(), Collections.emptyList()));
+                metaSchema.enrichTable(connection, table.getDatabaseName(), table.getSchemaName(), table);
             }
             if (Boolean.TRUE.equals(selector.getIndexList())) {
-                MetaData metaSchema = Chat2DBContext.getMetaData();
-                List<TableIndex> indexList = metaSchema.indexes(Chat2DBContext.getConnection(),
+                List<TableIndex> indexList = metaSchema.indexes(connection,
                         table.getDatabaseName(), table.getSchemaName(), table.getName());
                 table.setIndexList(indexList);
             }
@@ -629,15 +632,19 @@ public class TableServiceImpl implements TableService {
                 return cachedColumns;
             }
         }
-        return groupTableColumns(loadAndCacheTableColumns(mgr, queryParam, version), tables);
+        return groupTableColumns(loadAndCacheTableColumns(mgr, queryParam, version, tables), tables);
     }
 
     private List<TableColumn> loadAndCacheTableColumns(LuceneIndexManager<TableColumn> mgr,
                                                        TableQueryParam param,
-                                                       Long version) {
+                                                       Long version,
+                                                       List<Table> tables) {
         MetaData metaSchema = Chat2DBContext.getMetaData();
         mgr.getLock().writeLock().lock();
         try {
+            if (!metaSchema.supportBatchQueryColumns()) {
+                return loadAndCacheTableColumnsIndividually(mgr, metaSchema, param, version, tables);
+            }
             List<TableColumn> columns = metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(),
                     param.getSchemaName(), null);
             if (CollectionUtils.isNotEmpty(columns)) {
@@ -655,6 +662,30 @@ public class TableServiceImpl implements TableService {
             mgr.getLock().writeLock().unlock();
         }
         return Collections.emptyList();
+    }
+
+    private List<TableColumn> loadAndCacheTableColumnsIndividually(LuceneIndexManager<TableColumn> mgr,
+                                                                   MetaData metaSchema,
+                                                                   TableQueryParam param,
+                                                                   Long version,
+                                                                   List<Table> tables) {
+        List<TableColumn> columns = new ArrayList<>();
+        for (Table table : tables) {
+            if (table == null || StringUtils.isBlank(table.getName())) {
+                continue;
+            }
+            List<TableColumn> tableColumns = metaSchema.columns(
+                    Chat2DBContext.getConnection(),
+                    StringUtils.defaultIfBlank(table.getDatabaseName(), param.getDatabaseName()),
+                    StringUtils.defaultIfBlank(table.getSchemaName(), param.getSchemaName()),
+                    table.getName());
+            if (CollectionUtils.isEmpty(tableColumns)) {
+                continue;
+            }
+            mgr.updateDocuments(tableColumns, version);
+            columns.addAll(tableColumns);
+        }
+        return columns;
     }
 
     private Map<String, List<TableColumn>> groupTableColumns(List<TableColumn> columns, List<Table> tables) {

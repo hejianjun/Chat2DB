@@ -41,7 +41,6 @@ import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
-import ai.chat2db.server.web.api.controller.ai.task.AiConversationTitleTask;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.util.StrUtil;
@@ -62,9 +61,6 @@ public class ChatController {
 
     @Autowired
     private AiConversationService aiConversationService;
-
-    @Autowired
-    private AiConversationTitleTask aiConversationTitleTask;
 
     @Autowired
     private DataSourceService dataSourceService;
@@ -151,14 +147,6 @@ public class ChatController {
         stateMachine.sendEvent(
                 Mono.just(MessageBuilder.withPayload(initialEvent).build())
         ).subscribe();
-
-        if (firstTurn) {
-            try {
-                aiConversationTitleTask.generateTitleAsync(queryRequest.getConversationId(), queryRequest.getMessage());
-            } catch (Exception e) {
-                log.warn("[ChatController] Failed to dispatch title task for {}: {}", queryRequest.getConversationId(), e.getMessage());
-            }
-        }
 
         return sseEmitter;
     }
