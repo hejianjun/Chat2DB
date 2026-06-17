@@ -3,6 +3,8 @@ package ai.chat2db.server.mcp.support;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import ai.chat2db.server.domain.api.model.DataSource;
+import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Header;
 import org.apache.commons.lang3.StringUtils;
@@ -46,6 +48,41 @@ public class ResultFormatter {
             for (List<String> row : result.getDataList()) {
                 builder.append(row.stream().map(this::csvCell).collect(Collectors.joining(","))).append('\n');
             }
+        }
+        return builder.toString();
+    }
+
+    public String formatDatasourcesCsv(List<DataSource> dataSources) {
+        StringBuilder builder = new StringBuilder("id,alias,type,host,port,url,environmentShortName\n");
+        if (dataSources == null || dataSources.isEmpty()) {
+            return builder.toString();
+        }
+        for (DataSource dataSource : dataSources) {
+            builder.append(csvCell(dataSource.getId() == null ? null : dataSource.getId().toString())).append(',')
+                .append(csvCell(dataSource.getAlias())).append(',')
+                .append(csvCell(dataSource.getType())).append(',')
+                .append(csvCell(dataSource.getHost())).append(',')
+                .append(csvCell(dataSource.getPort())).append(',')
+                .append(csvCell(dataSource.getUrl())).append(',')
+                .append(csvCell(dataSource.getEnvironment() == null ? null : dataSource.getEnvironment().getShortName()))
+                .append('\n');
+        }
+        return builder.toString();
+    }
+
+    public String formatDatabasesCsv(List<Database> databases) {
+        StringBuilder builder = new StringBuilder("name,comment,charset,collation,owner,count\n");
+        if (databases == null || databases.isEmpty()) {
+            return builder.toString();
+        }
+        for (Database database : databases) {
+            builder.append(csvCell(database.getName())).append(',')
+                .append(csvCell(database.getComment())).append(',')
+                .append(csvCell(database.getCharset())).append(',')
+                .append(csvCell(database.getCollation())).append(',')
+                .append(csvCell(database.getOwner())).append(',')
+                .append(csvCell(database.getCount() == null ? null : database.getCount().toString()))
+                .append('\n');
         }
         return builder.toString();
     }

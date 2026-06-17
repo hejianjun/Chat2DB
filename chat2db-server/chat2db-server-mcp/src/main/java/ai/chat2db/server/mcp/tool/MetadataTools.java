@@ -10,6 +10,7 @@ import ai.chat2db.server.domain.api.param.datasource.DatabaseQueryAllParam;
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
+import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.SimpleTable;
@@ -27,19 +28,22 @@ public class MetadataTools {
     private final DatabaseService databaseService;
     private final TableService tableService;
     private final ConnectionScope connectionScope;
+    private final ResultFormatter resultFormatter;
 
-    public MetadataTools(DatabaseService databaseService, TableService tableService, ConnectionScope connectionScope) {
+    public MetadataTools(DatabaseService databaseService, TableService tableService, ConnectionScope connectionScope,
+        ResultFormatter resultFormatter) {
         this.databaseService = databaseService;
         this.tableService = tableService;
         this.connectionScope = connectionScope;
+        this.resultFormatter = resultFormatter;
     }
 
-    @Tool(description = "List databases for a datasource. Read-only metadata operation.")
-    public List<Database> listDatabases(@ToolParam(description = "Datasource id") Long dataSourceId) {
+    @Tool(description = "List databases for a datasource as CSV. Read-only metadata operation.")
+    public String listDatabases(@ToolParam(description = "Datasource id") Long dataSourceId) {
         return connectionScope.run(dataSourceId, null, null, () -> {
             DatabaseQueryAllParam param = new DatabaseQueryAllParam();
             param.setDataSourceId(dataSourceId);
-            return databaseService.queryAll(param);
+            return resultFormatter.formatDatabasesCsv(databaseService.queryAll(param));
         });
     }
 
