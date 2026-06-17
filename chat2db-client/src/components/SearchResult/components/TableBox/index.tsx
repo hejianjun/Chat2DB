@@ -52,6 +52,7 @@ interface ITableProps {
   tableBoxId: string;
   isActive?: boolean;
   concealTabHeader?: boolean; // concealTabHeader 是否隐藏tab头部, 目前来说隐藏头部都是单表查询。需要显示筛选
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
 interface IViewTableCellData {
@@ -102,7 +103,7 @@ const defaultPaginationConfig: IResultConfig = {
   hasNextPage: true,
 };
 
-const getDefaultPageSize = (_databaseType?: DatabaseTypeCode) => 200;
+const getDefaultPageSize = () => 200;
 
 export const TableContext = React.createContext({} as any);
 
@@ -113,7 +114,11 @@ export default function TableBox(props: ITableProps) {
   const [, contextHolder] = message.useMessage();
   const [paginationConfig, setPaginationConfig] = useState<IResultConfig>({
     ...defaultPaginationConfig,
-    pageSize: props.executeSqlParams?.pageSize || getDefaultPageSize(props.executeSqlParams?.databaseType),
+    pageNo: outerQueryResultData.pageNo || defaultPaginationConfig.pageNo,
+    pageSize:
+      outerQueryResultData.pageSize ||
+      props.executeSqlParams?.pageSize ||
+      getDefaultPageSize(),
   });
   // sql查询结果
   const [queryResultData, setQueryResultData] = useState<IManageResultData>(outerQueryResultData);
@@ -455,6 +460,7 @@ export default function TableBox(props: ITableProps) {
   };
 
   const onPageSizeChange = (pageSize: number) => {
+    props.onPageSizeChange?.(pageSize);
     const config = { ...paginationConfig, pageSize, pageNo: 1 };
     setPaginationConfig(config);
     getTableData({ pageSize, pageNo: 1 });

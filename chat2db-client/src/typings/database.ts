@@ -36,6 +36,8 @@ export interface IManageResultData {
   duration: number;
   fuzzyTotal: string;
   hasNextPage: boolean;
+  pageNo?: number;
+  pageSize?: number;
   sqlType: 'SELECT' | 'UNKNOWN';
   updateCount?: number; // 如果是修改的话。后端会返回修改的条数
   canEdit?: boolean; // 返回的数据是否可以编辑

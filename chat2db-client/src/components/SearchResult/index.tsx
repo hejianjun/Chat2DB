@@ -24,7 +24,6 @@ import sqlServer, { IExecuteSqlParams, ICreateVirtualFKParams } from '@/service/
 import { v4 as uuidV4 } from 'uuid';
 import { Spin, Modal, message, Button } from 'antd';
 import { setPendingAiChat, setCurrentWorkspaceExtend } from '@/pages/main/workspace/store/common';
-import { DatabaseTypeCode } from '@/constants';
 
 interface IProps {
   className?: string;
@@ -43,7 +42,7 @@ const defaultResultConfig: IResultConfig = {
   hasNextPage: true,
 };
 
-const getDefaultPageSize = (_databaseType?: DatabaseTypeCode) => 200;
+const getDefaultPageSize = () => 200;
 
 export interface ISearchResultRef {
   handleExecuteSQL: (sql: string, options?: { scriptStartLine?: number }) => void;
@@ -65,10 +64,19 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
   const [activeTabId, setActiveTabId] = useState<string>('');
   const [notChangedSql, setNotChangedSql] = useState<string>('');
   const executeSqlParamsRef = useRef(executeSqlParams);
+  const [selectedPageSize, setSelectedPageSize] = useState(
+    executeSqlParams?.pageSize || getDefaultPageSize(),
+  );
+  const selectedPageSizeRef = useRef(selectedPageSize);
 
   useEffect(() => {
     executeSqlParamsRef.current = executeSqlParams;
   }, [executeSqlParams]);
+
+  const handlePageSizeChange = useCallback((pageSize: number) => {
+    selectedPageSizeRef.current = pageSize;
+    setSelectedPageSize(pageSize);
+  }, []);
 
   const handleAiFix = useCallback((originalSql: string, errorMessage: string) => {
     const params = executeSqlParamsRef.current;
@@ -119,7 +127,7 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
       tableName: executeSqlParams?.tableName,
       ...defaultResultConfig,
       ...executeSqlParams,
-      pageSize: executeSqlParams?.pageSize || getDefaultPageSize(executeSqlParams?.databaseType),
+      pageSize: selectedPageSizeRef.current,
       type: executeSqlParams?.databaseType, // 兼容写法，希望后端可以统一把type改成databaseType
     };
 
@@ -210,7 +218,11 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
                 tableBoxId={queryResultData.uuid}
                 key={queryResultData.uuid}
                 outerQueryResultData={queryResultData}
-                executeSqlParams={props.executeSqlParams}
+                executeSqlParams={{
+                  ...props.executeSqlParams,
+                  pageSize: selectedPageSize,
+                }}
+                onPageSizeChange={handlePageSizeChange}
                 concealTabHeader={concealTabHeader}
               />
             ) : (
