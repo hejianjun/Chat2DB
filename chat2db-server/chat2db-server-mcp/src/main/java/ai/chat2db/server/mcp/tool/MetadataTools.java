@@ -47,19 +47,19 @@ public class MetadataTools {
         });
     }
 
-    @Tool(description = "List schemas under a database. Read-only metadata operation.")
-    public List<Schema> listSchemas(@ToolParam(description = "Datasource id") Long dataSourceId,
+    @Tool(description = "List schemas under a database as CSV. Read-only metadata operation.")
+    public String listSchemas(@ToolParam(description = "Datasource id") Long dataSourceId,
         @ToolParam(description = "Database name") String databaseName) {
         return connectionScope.run(dataSourceId, databaseName, null, () -> {
             SchemaQueryParam param = new SchemaQueryParam();
             param.setDataSourceId(dataSourceId);
             param.setDataBaseName(databaseName);
-            return databaseService.querySchema(param);
+            return resultFormatter.formatSchemasCsv(databaseService.querySchema(param));
         });
     }
 
-    @Tool(description = "List tables in a database/schema. Supports optional keyword search. Read-only metadata operation.")
-    public List<SimpleTable> listTables(@ToolParam(description = "Datasource id") Long dataSourceId,
+    @Tool(description = "List tables in a database/schema as CSV. Supports optional keyword search. Read-only metadata operation.")
+    public String listTables(@ToolParam(description = "Datasource id") Long dataSourceId,
         @ToolParam(description = "Database name") String databaseName,
         @ToolParam(description = "Schema name, optional", required = false) String schemaName,
         @ToolParam(description = "Optional table search keyword", required = false) String keyword) {
@@ -71,7 +71,7 @@ public class MetadataTools {
             param.setSearchKey(keyword);
             param.setPageNo(1);
             param.setPageSize(1000);
-            return tableService.queryTables(param);
+            return resultFormatter.formatSimpleTablesCsv(tableService.queryTables(param));
         });
     }
 
@@ -97,8 +97,8 @@ public class MetadataTools {
         });
     }
 
-    @Tool(description = "List deprecated tables in the recycle bin for a database/schema. Read-only metadata operation.")
-    public List<Table> listDeprecatedTables(@ToolParam(description = "Datasource id") Long dataSourceId,
+    @Tool(description = "List deprecated tables in the recycle bin for a database/schema as CSV. Read-only metadata operation.")
+    public String listDeprecatedTables(@ToolParam(description = "Datasource id") Long dataSourceId,
         @ToolParam(description = "Database name") String databaseName,
         @ToolParam(description = "Schema name, optional", required = false) String schemaName,
         @ToolParam(description = "Optional table search keyword", required = false) String keyword) {
@@ -110,7 +110,8 @@ public class MetadataTools {
             param.setSearchKey(keyword);
             param.setPageNo(1);
             param.setPageSize(1000);
-            return tableService.pageQueryDeprecated(param, TableSelector.builder().columnList(false).indexList(false).build());
+            return resultFormatter.formatTablesCsv(
+                tableService.pageQueryDeprecated(param, TableSelector.builder().columnList(false).indexList(false).build()));
         });
     }
 

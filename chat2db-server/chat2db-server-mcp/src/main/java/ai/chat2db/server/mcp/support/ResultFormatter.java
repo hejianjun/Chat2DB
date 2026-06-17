@@ -7,6 +7,9 @@ import ai.chat2db.server.domain.api.model.DataSource;
 import ai.chat2db.spi.model.Database;
 import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Header;
+import ai.chat2db.spi.model.Schema;
+import ai.chat2db.spi.model.SimpleTable;
+import ai.chat2db.spi.model.Table;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -82,6 +85,61 @@ public class ResultFormatter {
                 .append(csvCell(database.getCollation())).append(',')
                 .append(csvCell(database.getOwner())).append(',')
                 .append(csvCell(database.getCount() == null ? null : database.getCount().toString()))
+                .append('\n');
+        }
+        return builder.toString();
+    }
+
+    public String formatSchemasCsv(List<Schema> schemas) {
+        StringBuilder builder = new StringBuilder("databaseName,name,comment,owner,treeNodeType,keyType\n");
+        if (schemas == null || schemas.isEmpty()) {
+            return builder.toString();
+        }
+        for (Schema schema : schemas) {
+            builder.append(csvCell(schema.getDatabaseName())).append(',')
+                .append(csvCell(schema.getName())).append(',')
+                .append(csvCell(schema.getComment())).append(',')
+                .append(csvCell(schema.getOwner())).append(',')
+                .append(csvCell(schema.getTreeNodeType())).append(',')
+                .append(csvCell(schema.getKeyType()))
+                .append('\n');
+        }
+        return builder.toString();
+    }
+
+    public String formatSimpleTablesCsv(List<SimpleTable> tables) {
+        StringBuilder builder = new StringBuilder("name,comment\n");
+        if (tables == null || tables.isEmpty()) {
+            return builder.toString();
+        }
+        for (SimpleTable table : tables) {
+            builder.append(csvCell(table.getName())).append(',')
+                .append(csvCell(table.getComment()))
+                .append('\n');
+        }
+        return builder.toString();
+    }
+
+    public String formatTablesCsv(List<Table> tables) {
+        StringBuilder builder = new StringBuilder(
+            "name,comment,databaseName,schemaName,dbType,type,pinned,deprecated,engine,charset,collate,rowCount,aiComment\n");
+        if (tables == null || tables.isEmpty()) {
+            return builder.toString();
+        }
+        for (Table table : tables) {
+            builder.append(csvCell(table.getName())).append(',')
+                .append(csvCell(table.getComment())).append(',')
+                .append(csvCell(table.getDatabaseName())).append(',')
+                .append(csvCell(table.getSchemaName())).append(',')
+                .append(csvCell(table.getDbType())).append(',')
+                .append(csvCell(table.getType())).append(',')
+                .append(csvCell(Boolean.toString(table.isPinned()))).append(',')
+                .append(csvCell(Boolean.toString(table.isDeprecated()))).append(',')
+                .append(csvCell(table.getEngine())).append(',')
+                .append(csvCell(table.getCharset())).append(',')
+                .append(csvCell(table.getCollate())).append(',')
+                .append(csvCell(table.getRowCount() == null ? null : table.getRowCount().toString())).append(',')
+                .append(csvCell(table.getAiComment()))
                 .append('\n');
         }
         return builder.toString();
