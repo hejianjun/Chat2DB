@@ -29,7 +29,7 @@ export const workspaceTabConfig: {
   };
 } = {
   [WorkspaceTabType.CONSOLE]: {
-    icon: '\uec83'
+    icon: '\ue610'
   },
   [WorkspaceTabType.VIEW]: {
     icon: '\ue70c'

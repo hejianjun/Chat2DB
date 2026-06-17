@@ -1,13 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import i18n from '@/i18n';
-import { Dropdown, Input, message, Modal, Pagination, Tooltip } from 'antd';
+import { Dropdown, Input, message, Modal, Pagination, Popover, Select, Tooltip } from 'antd';
 import Iconfont from '@/components/Iconfont';
 import LoadingContent from '@/components/Loading/LoadingContent';
 import historyServer from '@/service/history';
 import { ConsoleOpenedStatus, ConsoleStatus, WorkspaceTabType, workspaceTabConfig } from '@/constants';
-import { IConsole, ITreeNode } from '@/typings';
+import { IConsole } from '@/typings';
 import styles from './index.less';
-import { approximateList } from '@/utils';
 import { addWorkspaceTab, getSavedConsoleList } from '@/pages/main/workspace/store/console';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import MenuLabel from '@/components/MenuLabel';
@@ -34,11 +33,34 @@ const downloadSqlFile = (filename: string, sql: string) => {
   URL.revokeObjectURL(blobUrl);
 };
 
+const getSavedConsoleContext = (data: IConsole) => {
+  return [data.dataSourceName, data.databaseName, data.schemaName].filter(Boolean).join(' / ');
+};
+
+const getSearchText = (data: IConsole) => {
+  return [data.name, data.dataSourceName, data.databaseName, data.schemaName]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase();
+};
+
+const getFilterOptions = (data: IConsole[] | null, field: keyof IConsole) => {
+  return Array.from(new Set((data || []).map((item) => item[field]).filter(Boolean)))
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((value) => ({
+      value: String(value),
+      label: String(value),
+    }));
+};
+
 const SaveList = () => {
   const [searching, setSearching] = useState<boolean>(false);
+  const [searchValue, setSearchValue] = useState<string>('');
+  const [dataSourceFilter, setDataSourceFilter] = useState<string>();
+  const [databaseFilter, setDatabaseFilter] = useState<string>();
+  const [schemaFilter, setSchemaFilter] = useState<string>();
   const inputRef = useRef<any>();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [searchedList, setSearchedList] = useState<ITreeNode[] | undefined>();
   const leftModuleTitleRef = useRef<any>(null);
   const saveBoxListRef = useRef<any>(null);
   const savedConsoleList = useWorkspaceStore((state) => state.savedConsoleList);
@@ -52,6 +74,29 @@ const SaveList = () => {
     };
   });
   const [editData, setEditData] = useState<any>(null);
+  const hasFilter = !!dataSourceFilter || !!databaseFilter || !!schemaFilter;
+  const dataSourceOptions = useMemo(() => getFilterOptions(savedConsoleList, 'dataSourceName'), [savedConsoleList]);
+  const databaseOptions = useMemo(() => getFilterOptions(savedConsoleList, 'databaseName'), [savedConsoleList]);
+  const schemaOptions = useMemo(() => getFilterOptions(savedConsoleList, 'schemaName'), [savedConsoleList]);
+  const filteredConsoleList = useMemo(() => {
+    const keyword = searchValue.trim().toLocaleLowerCase();
+
+    return (savedConsoleList || []).filter((item) => {
+      if (keyword && !getSearchText(item).includes(keyword)) {
+        return false;
+      }
+      if (dataSourceFilter && item.dataSourceName !== dataSourceFilter) {
+        return false;
+      }
+      if (databaseFilter && item.databaseName !== databaseFilter) {
+        return false;
+      }
+      if (schemaFilter && item.schemaName !== schemaFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [dataSourceFilter, databaseFilter, savedConsoleList, schemaFilter, searchValue]);
 
   const getConnectionEnvironment = (dataSourceId?: number) => {
     if (!dataSourceId || !connectionList) return null;
@@ -85,16 +130,19 @@ const SaveList = () => {
   }
 
   function onBlur() {
-    if (!inputRef.current.input.value) {
+    if (!inputRef.current.input.value && !hasFilter) {
       setSearching(false);
-      setSearchedList(undefined);
     }
   }
 
   function onChange(value: string) {
-    if (savedConsoleList) {
-      setSearchedList(approximateList(savedConsoleList as any, value));
-    }
+    setSearchValue(value);
+  }
+
+  function clearFilters() {
+    setDataSourceFilter(undefined);
+    setDatabaseFilter(undefined);
+    setSchemaFilter(undefined);
   }
 
   function openConsole(item: IConsole) {
@@ -240,7 +288,7 @@ const SaveList = () => {
               <Input
                 ref={inputRef}
                 size="small"
-                placeholder={i18n('common.text.search')}
+                placeholder={i18n('workspace.savedConsole.search.placeholder')}
                 prefix={<Iconfont code="&#xe600;" />}
                 onBlur={onBlur}
                 onChange={(e) => onChange(e.target.value)}
@@ -259,6 +307,54 @@ const SaveList = () => {
                     <Iconfont code="&#xe63a;" />
                   </div>
                 </Tooltip>
+                <Popover
+                  placement="bottomRight"
+                  trigger="click"
+                  content={
+                    <div className={styles.filterPanel}>
+                      <Select
+                        allowClear
+                        showSearch
+                        size="small"
+                        value={dataSourceFilter}
+                        options={dataSourceOptions}
+                        placeholder={i18n('workspace.savedConsole.filter.dataSource')}
+                        optionFilterProp="label"
+                        onChange={setDataSourceFilter}
+                      />
+                      <Select
+                        allowClear
+                        showSearch
+                        size="small"
+                        value={databaseFilter}
+                        options={databaseOptions}
+                        placeholder={i18n('workspace.savedConsole.filter.database')}
+                        optionFilterProp="label"
+                        onChange={setDatabaseFilter}
+                      />
+                      <Select
+                        allowClear
+                        showSearch
+                        size="small"
+                        value={schemaFilter}
+                        options={schemaOptions}
+                        placeholder={i18n('workspace.savedConsole.filter.schema')}
+                        optionFilterProp="label"
+                        onChange={setSchemaFilter}
+                      />
+                      {hasFilter && (
+                        <div className={styles.clearFilter} onClick={clearFilters}>
+                          {i18n('workspace.savedConsole.filter.clear')}
+                        </div>
+                      )}
+                    </div>
+                  }
+                >
+                  <div className={styles.filterIcon}>
+                    <Iconfont code="&#xe66a;" />
+                    {hasFilter && <span className={styles.filterDot} />}
+                  </div>
+                </Popover>
                 <div className={styles.searchIcon} onClick={() => openSearch()}>
                   <Iconfont code="&#xe600;" />
                 </div>
@@ -267,9 +363,14 @@ const SaveList = () => {
           )}
         </div>
         <div ref={saveBoxListRef} className={styles.saveBoxList}>
-          <LoadingContent className={styles.loadingContent} data={savedConsoleList} handleEmpty>
-            {(searchedList || savedConsoleList)?.map((t) => {
+          <LoadingContent
+            className={styles.loadingContent}
+            data={savedConsoleList ? filteredConsoleList : savedConsoleList}
+            handleEmpty
+          >
+            {filteredConsoleList.map((t) => {
               const environment = getConnectionEnvironment(t.dataSourceId);
+              const context = getSavedConsoleContext(t);
               return (
                 <Dropdown
                   key={t.id}
@@ -323,7 +424,12 @@ const SaveList = () => {
                       <div className={styles.iconBox}>
                         <Iconfont code={workspaceTabConfig[t.operationType]?.icon} />
                       </div>
-                      <div className={styles.itemName} dangerouslySetInnerHTML={{ __html: t.name }} />
+                      <Tooltip title={context || t.name} placement="left">
+                        <div className={styles.itemInfo}>
+                          <div className={styles.itemName}>{t.name}</div>
+                          {context && <div className={styles.itemContext}>{context}</div>}
+                        </div>
+                      </Tooltip>
                     </div>
                   </div>
                 </Dropdown>
