@@ -157,6 +157,8 @@ public class StreamAction extends BaseChatAction {
             Map<String, Object> outputMetadata = generation.getOutput().getMetadata();
             if (outputMetadata.containsKey("reasoningContent")) {
                 return outputMetadata.get("reasoningContent").toString();
+            } else if (outputMetadata.containsKey("reasoning_content")) {
+                return outputMetadata.get("reasoning_content").toString();
             } else if (outputMetadata.containsKey("reasoning_details")) {
                 return outputMetadata.get("reasoning_details").toString();
             }

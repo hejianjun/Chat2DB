@@ -102,6 +102,9 @@ public class AiChatConfig {
             extraBody.put("enable_thinking", !fastMode);
         } else if (StringUtils.contains(modelItem.getModel(), "hy")) {
             extraBody.put("reasoning", ImmutableMap.of("enable", !fastMode));
+        } else if(fastMode){
+            extraBody.put("thinking", ImmutableMap.of("type", "disabled"));
+            extraBody.put("reasoning_effort","minimal");
         }
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelItem.getModel())

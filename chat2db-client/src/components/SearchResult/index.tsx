@@ -43,7 +43,7 @@ const defaultResultConfig: IResultConfig = {
   hasNextPage: true,
 };
 
-const getDefaultPageSize = (databaseType?: DatabaseTypeCode) => (databaseType === DatabaseTypeCode.DLC ? 10 : 200);
+const getDefaultPageSize = (_databaseType?: DatabaseTypeCode) => 200;
 
 export interface ISearchResultRef {
   handleExecuteSQL: (sql: string, options?: { scriptStartLine?: number }) => void;

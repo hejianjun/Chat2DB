@@ -102,7 +102,7 @@ const defaultPaginationConfig: IResultConfig = {
   hasNextPage: true,
 };
 
-const getDefaultPageSize = (databaseType?: DatabaseTypeCode) => (databaseType === DatabaseTypeCode.DLC ? 10 : 200);
+const getDefaultPageSize = (_databaseType?: DatabaseTypeCode) => 200;
 
 export const TableContext = React.createContext({} as any);
 
