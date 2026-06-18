@@ -23,6 +23,7 @@ export default {
   'setting.tab.aiType.tongyiqianwen': '通義千問',
   'setting.tab.aiType.custom.tips': "インターフェース形式はOpenAIのものと互換性があります",
   'setting.label.serviceAddress': 'サービスアドレス',
+  'setting.label.mcpAddress': 'MCPアドレス',
   'setting.button.apply': '適用',
   'setting.text.currentEnv': '現在の環境',
   'setting.text.currentVersion': '現在のバージョン',

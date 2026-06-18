@@ -34,6 +34,20 @@ public interface AiConversationService {
     void deleteWithPermission(@NotNull String conversationId, @NotNull Long userId);
 
     /**
+     * 删除单条消息,并重排会话消息序号
+     */
+    void deleteMessageWithPermission(@NotNull String conversationId,
+                                     @NotNull String messageId,
+                                     @NotNull Long userId);
+
+    /**
+     * 删除指定消息及其之后的消息
+     */
+    void truncateMessagesFromWithPermission(@NotNull String conversationId,
+                                            @NotNull String messageId,
+                                            @NotNull Long userId);
+
+    /**
      * 列表(分页,按用户隔离)
      */
     ServicePage<AiConversation> queryPage(@NotNull AiConversationQueryParam param);

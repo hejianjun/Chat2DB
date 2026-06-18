@@ -123,6 +123,7 @@ public class ChatController {
                 .loginUser(loginUser)
                 .connectInfo(connectInfo)
                 .userMessageId(queryRequest.getUserMessageId())
+                .assistantMessageId(queryRequest.getAssistantMessageId())
                 .firstTurnOfConversation(firstTurn)
                 .build();
 

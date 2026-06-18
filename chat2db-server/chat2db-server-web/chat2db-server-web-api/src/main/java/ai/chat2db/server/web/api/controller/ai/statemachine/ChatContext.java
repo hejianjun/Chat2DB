@@ -36,6 +36,11 @@ public class ChatContext {
     private String userMessageId;
 
     /**
+     * 助手消息的客户端 UUID(落库用)
+     */
+    private String assistantMessageId;
+
+    /**
      * 标记本轮是否为该会话的首条消息(用于触发标题生成)
      */
     private Boolean firstTurnOfConversation;

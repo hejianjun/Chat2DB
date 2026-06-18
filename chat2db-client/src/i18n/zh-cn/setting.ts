@@ -19,6 +19,7 @@ export default {
   'setting.tab.custom': '自定义',
   'setting.tab.aiType.custom.tips': "接口格式与OpenAI接口格式一致",
   'setting.label.serviceAddress': '服务地址',
+  'setting.label.mcpAddress': 'MCP 地址',
   'setting.button.apply': '应用',
   'setting.text.currentEnv': '当前环境',
   'setting.text.currentVersion': '当前版本',

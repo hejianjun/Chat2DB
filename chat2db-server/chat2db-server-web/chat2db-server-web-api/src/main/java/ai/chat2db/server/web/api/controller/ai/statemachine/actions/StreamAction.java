@@ -228,7 +228,9 @@ public class StreamAction extends BaseChatAction {
         String promptType = request.getPromptType();
         String sqlExtracted = extractSql(assistantContent);
         String userMessageId = ctx.getUserMessageId() != null ? ctx.getUserMessageId() : UUID.randomUUID().toString();
-        String assistantMessageId = UUID.randomUUID().toString();
+        String assistantMessageId = ctx.getAssistantMessageId() != null
+                ? ctx.getAssistantMessageId()
+                : UUID.randomUUID().toString();
 
         buildContext(ctx);
         try {

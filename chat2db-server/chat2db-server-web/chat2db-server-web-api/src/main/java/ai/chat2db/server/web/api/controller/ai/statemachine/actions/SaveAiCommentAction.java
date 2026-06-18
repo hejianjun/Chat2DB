@@ -1,9 +1,11 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
@@ -102,7 +104,8 @@ public class SaveAiCommentAction extends BaseChatAction {
             return;
         }
 
-        saveBatchTableAiComments(dataSourceId, databaseName, schemaName, batchResult);
+        saveBatchTableAiComments(dataSourceId, databaseName, schemaName,
+                ctx.getRequest().getTableNames(), batchResult);
         log.info("[SaveAiCommentAction] Successfully saved batch aiComment for uid: {}, count: {}",
                 ctx.getUid(), batchResult.size());
     }
@@ -152,12 +155,24 @@ public class SaveAiCommentAction extends BaseChatAction {
     }
 
     private void saveBatchTableAiComments(Long dataSourceId, String databaseName, String schemaName,
+                                          List<String> requestTableNames,
                                           List<BatchTableComment> batchComments) {
         try {
             LuceneIndexManager<Table> manager = managerFactory.getManager(dataSourceId);
 
             List<Table> tables = batchComments.stream()
                     .filter(btc -> StringUtils.isNotBlank(btc.getTableName()) && StringUtils.isNotBlank(btc.getTableComment()))
+                    .map(btc -> {
+                        String tableName = normalizeBatchTableName(btc.getTableName(), requestTableNames,
+                                databaseName, schemaName);
+                        if (StringUtils.isBlank(tableName)) {
+                            log.warn("[SaveAiCommentAction] Skip unknown batch table aiComment: {}", btc.getTableName());
+                            return null;
+                        }
+                        btc.setTableName(tableName);
+                        return btc;
+                    })
+                    .filter(btc -> btc != null)
                     .map(btc -> {
                         Table table = new Table();
                         table.setDatabaseName(databaseName);
@@ -175,6 +190,64 @@ public class SaveAiCommentAction extends BaseChatAction {
         } catch (Exception e) {
             log.error("[SaveAiCommentAction] Failed to save batch table aiComments", e);
         }
+    }
+
+    static String normalizeBatchTableName(String rawTableName, List<String> requestTableNames,
+                                          String databaseName, String schemaName) {
+        if (StringUtils.isBlank(rawTableName) || CollectionUtils.isEmpty(requestTableNames)) {
+            return null;
+        }
+
+        Set<String> requestNameSet = requestTableNames.stream()
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+        String tableName = unwrapIdentifier(rawTableName.trim());
+        if (requestNameSet.contains(tableName)) {
+            return tableName;
+        }
+
+        for (String qualifier : Stream.of(databaseName, schemaName)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toList())) {
+            String normalized = removeQualifier(tableName, qualifier);
+            if (requestNameSet.contains(normalized)) {
+                return normalized;
+            }
+        }
+
+        if (StringUtils.isNoneBlank(databaseName, schemaName)) {
+            String normalized = removeQualifier(removeQualifier(tableName, databaseName), schemaName);
+            if (requestNameSet.contains(normalized)) {
+                return normalized;
+            }
+        }
+
+        String lastPart = StringUtils.substringAfterLast(tableName, ".");
+        if (StringUtils.isBlank(lastPart) || lastPart.equals(tableName)) {
+            return null;
+        }
+        List<String> matchedNames = requestNameSet.stream()
+                .filter(requestName -> requestName.equals(lastPart))
+                .collect(Collectors.toList());
+        return matchedNames.size() == 1 ? matchedNames.get(0) : null;
+    }
+
+    private static String removeQualifier(String tableName, String qualifier) {
+        if (StringUtils.isBlank(tableName) || StringUtils.isBlank(qualifier)) {
+            return tableName;
+        }
+        String prefix = unwrapIdentifier(qualifier) + ".";
+        if (!tableName.startsWith(prefix)) {
+            return tableName;
+        }
+        return tableName.substring(prefix.length());
+    }
+
+    private static String unwrapIdentifier(String identifier) {
+        if (StringUtils.isBlank(identifier)) {
+            return identifier;
+        }
+        return Pattern.compile("[`\"\\[\\]]").matcher(identifier).replaceAll("");
     }
 
     private AiCommentResult parseCommentResult(String content) {

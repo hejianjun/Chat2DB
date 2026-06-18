@@ -35,6 +35,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AiConversationServiceImpl implements AiConversationService {
@@ -113,6 +114,45 @@ public class AiConversationServiceImpl implements AiConversationService {
                 .eq(AiConversationDO::getConversationId, conversationId)
                 .set(AiConversationDO::getStatus, STATUS_DELETED)
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteMessageWithPermission(String conversationId, String messageId, Long userId) {
+        AiConversation conv = findActiveConversationWithPermission(conversationId);
+        if (conv == null || StringUtils.isBlank(messageId)) {
+            return;
+        }
+        getMessageMapper().delete(
+            new LambdaQueryWrapper<AiMessageDO>()
+                .eq(AiMessageDO::getConversationId, conversationId)
+                .eq(AiMessageDO::getMessageId, messageId)
+        );
+        normalizeMessagesAndConversation(conversationId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void truncateMessagesFromWithPermission(String conversationId, String messageId, Long userId) {
+        AiConversation conv = findActiveConversationWithPermission(conversationId);
+        if (conv == null || StringUtils.isBlank(messageId)) {
+            return;
+        }
+        AiMessageDO anchor = getMessageMapper().selectOne(
+            new LambdaQueryWrapper<AiMessageDO>()
+                .eq(AiMessageDO::getConversationId, conversationId)
+                .eq(AiMessageDO::getMessageId, messageId)
+                .last("LIMIT 1")
+        );
+        if (anchor == null || anchor.getSequenceNo() == null) {
+            return;
+        }
+        getMessageMapper().delete(
+            new LambdaQueryWrapper<AiMessageDO>()
+                .eq(AiMessageDO::getConversationId, conversationId)
+                .ge(AiMessageDO::getSequenceNo, anchor.getSequenceNo())
+        );
+        normalizeMessagesAndConversation(conversationId);
     }
 
     @Override
@@ -261,16 +301,11 @@ public class AiConversationServiceImpl implements AiConversationService {
         assistantMsg.setGmtCreate(LocalDateTime.now());
         getMessageMapper().insert(assistantMsg);
 
-        String preview = assistantContent.length() > 200
-            ? assistantContent.substring(0, 200) + "..."
-            : assistantContent;
-        preview = preview.replaceAll("\\s+", " ").trim();
-
         getConversationMapper().update(null,
             new LambdaUpdateWrapper<AiConversationDO>()
                 .eq(AiConversationDO::getConversationId, conversationId)
                 .set(AiConversationDO::getMessageCount, nextSeq + 2)
-                .set(AiConversationDO::getLastMessagePreview, preview)
+                .set(AiConversationDO::getLastMessagePreview, buildMessagePreview(assistantContent))
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
     }
 
@@ -324,5 +359,51 @@ public class AiConversationServiceImpl implements AiConversationService {
                 .in(AiConversationDO::getId, ids)
                 .set(AiConversationDO::getStatus, STATUS_ARCHIVED)
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
+    }
+
+    private AiConversation findActiveConversationWithPermission(String conversationId) {
+        AiConversation conv = findByConversationId(conversationId);
+        if (conv == null || STATUS_DELETED.equals(conv.getStatus())) {
+            return null;
+        }
+        PermissionUtils.checkOperationPermission(conv.getUserId());
+        return conv;
+    }
+
+    private void normalizeMessagesAndConversation(String conversationId) {
+        List<AiMessageDO> messages = getMessageMapper().selectList(
+            new LambdaQueryWrapper<AiMessageDO>()
+                .eq(AiMessageDO::getConversationId, conversationId)
+                .orderByAsc(AiMessageDO::getSequenceNo)
+                .orderByAsc(AiMessageDO::getId)
+        );
+        for (int i = 0; i < messages.size(); i++) {
+            AiMessageDO message = messages.get(i);
+            if (message.getSequenceNo() != null && message.getSequenceNo() == i) {
+                continue;
+            }
+            getMessageMapper().update(null,
+                new LambdaUpdateWrapper<AiMessageDO>()
+                    .eq(AiMessageDO::getId, message.getId())
+                    .set(AiMessageDO::getSequenceNo, i));
+            message.setSequenceNo(i);
+        }
+
+        AiMessageDO lastMessage = messages.isEmpty() ? null : messages.get(messages.size() - 1);
+        String preview = lastMessage == null ? null : buildMessagePreview(lastMessage.getContent());
+        getConversationMapper().update(null,
+            new LambdaUpdateWrapper<AiConversationDO>()
+                .eq(AiConversationDO::getConversationId, conversationId)
+                .set(AiConversationDO::getMessageCount, messages.size())
+                .set(AiConversationDO::getLastMessagePreview, preview)
+                .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
+    }
+
+    private String buildMessagePreview(String content) {
+        if (StringUtils.isBlank(content)) {
+            return null;
+        }
+        String preview = content.length() > 200 ? content.substring(0, 200) + "..." : content;
+        return preview.replaceAll("\\s+", " ").trim();
     }
 }

@@ -23,6 +23,7 @@ export default {
   'setting.tab.aiType.tongyiqianwen': 'TongYiQianWen AI',
   'setting.tab.aiType.custom.tips': "API formatı OpenAI API formatıyla uyumludur",
   'setting.label.serviceAddress': 'Hizmet Adresi',
+  'setting.label.mcpAddress': 'MCP Adresi',
   'setting.button.apply': 'Uygula',
   'setting.text.currentEnv': 'Geçerli Ortam',
   'setting.text.currentVersion': 'Geçerli Sürüm',

@@ -19,6 +19,7 @@ export default {
   'setting.tab.custom': 'Custom',
   'setting.tab.aiType.custom.tips': "The API format is consistent with the OpenAI API format",
   'setting.label.serviceAddress': 'Service Address',
+  'setting.label.mcpAddress': 'MCP Address',
   'setting.button.apply': 'Apply',
   'setting.text.currentEnv': 'Current Env',
   'setting.text.currentVersion': 'Current Version',

@@ -73,4 +73,9 @@ public class ChatQueryRequest extends DataSourceBaseRequest {
      * 用户消息的客户端 UUID(可选,用于落库)
      */
     private String userMessageId;
+
+    /**
+     * 助手消息的客户端 UUID(可选,用于落库)
+     */
+    private String assistantMessageId;
 }

@@ -1,6 +1,15 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Button, Input, Spin, message, Tag, Alert, Modal, Select } from 'antd';
-import { DownOutlined, RightOutlined, PlayCircleOutlined, SendOutlined, PlusOutlined, LinkOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  DownOutlined,
+  RightOutlined,
+  PlayCircleOutlined,
+  SendOutlined,
+  PlusOutlined,
+  LinkOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -227,7 +236,11 @@ const getLastAssistantSql = (messages: IChatMessage[]): string | null => {
 
 const normalizeNullableText = (value?: string | null): string => value || '';
 
-const SqlActionButtons = memo<{ sql: string; onExecute?: (sql: string) => void; onSendToEditor?: (sql: string) => void }>(({ sql, onExecute, onSendToEditor }) => {
+const SqlActionButtons = memo<{
+  sql: string;
+  onExecute?: (sql: string) => void;
+  onSendToEditor?: (sql: string) => void;
+}>(({ sql, onExecute, onSendToEditor }) => {
   return (
     <div className={styles.sqlActionButtons}>
       <Button
@@ -254,7 +267,7 @@ interface IProps {
   data?: any;
 }
 
-export default memo<IProps>((props) => {
+export default memo<IProps>(() => {
   const [inputValue, setInputValue] = useState('');
   const closeEventSource = useRef<() => void>();
   const closeTitleEventSource = useRef<() => void>();
@@ -272,6 +285,11 @@ export default memo<IProps>((props) => {
   const [databaseTables, setDatabaseTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [selectedTableDraft, setSelectedTableDraft] = useState<string[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [editAnchor, setEditAnchor] = useState<{
+    sessionId: string;
+    messageId: string;
+    content: string;
+  } | null>(null);
 
   const {
     currentSessionId,
@@ -287,6 +305,8 @@ export default memo<IProps>((props) => {
     clearSession,
     resetCurrentContent,
     renameSession,
+    deleteMessage,
+    truncateMessagesFrom,
     lastRequest,
   } = useAiChatStore();
 
@@ -329,6 +349,13 @@ export default memo<IProps>((props) => {
       setSidebarCollapsed(true);
     }
   }, [currentSession?.transient]);
+
+  useEffect(() => {
+    if (editAnchor && editAnchor.sessionId !== currentSessionId) {
+      setEditAnchor(null);
+      setInputValue('');
+    }
+  }, [currentSessionId, editAnchor]);
 
   const generateConversationTitle = useCallback(
     async (
@@ -536,6 +563,23 @@ export default memo<IProps>((props) => {
         return;
       }
 
+      const activeEditAnchor =
+        editAnchor &&
+        promptType === 'NL_2_SQL' &&
+        editAnchor.sessionId === useAiChatStore.getState().currentSessionId
+          ? editAnchor
+          : null;
+      if (activeEditAnchor) {
+        try {
+          await truncateMessagesFrom(activeEditAnchor.sessionId, activeEditAnchor.messageId);
+          setEditAnchor(null);
+        } catch (error) {
+          console.error('[AiChat] Truncate messages before resend failed:', error);
+          message.error('删除后续消息失败，无法重新发送');
+          return;
+        }
+      }
+
       const storeState = useAiChatStore.getState();
       const existingSessionId = storeState.currentSessionId;
       const existingSession = existingSessionId ? storeState.sessions[existingSessionId] : null;
@@ -609,8 +653,10 @@ export default memo<IProps>((props) => {
         await renameSession(sessionId, sessionTitle);
       }
 
+      const userMessageId = uuidv4();
+      const assistantMessageId = uuidv4();
       const userMessage: IChatMessage = {
-        id: uuidv4(),
+        id: userMessageId,
         role: 'user',
         content: messageText,
       };
@@ -640,6 +686,8 @@ export default memo<IProps>((props) => {
         ext,
         conversationId: sessionId,
         isRevision,
+        userMessageId,
+        assistantMessageId,
       };
 
       setInputValue('');
@@ -707,7 +755,7 @@ export default memo<IProps>((props) => {
               session.messages.filter((item) => item.role === 'user').length === 1 &&
               (!session.title || session.title === '新对话' || session.title === 'NL_2_SQL');
             addMessage(sessionId, {
-              id: uuidv4(),
+              id: assistantMessageId,
               role: 'assistant',
               content: session.currentContent,
               thinking: session.currentThinking || undefined,
@@ -831,6 +879,8 @@ export default memo<IProps>((props) => {
       setSchemaInfo,
       setError,
       renameSession,
+      truncateMessagesFrom,
+      editAnchor,
       generateConversationTitle,
     ],
   );
@@ -916,9 +966,61 @@ export default memo<IProps>((props) => {
     }
   }, [consoleList, activeConsoleId]);
 
+  const handleDeleteMessage = useCallback(
+    (msg: IChatMessage) => {
+      if (!currentSessionId) {
+        return;
+      }
+      Modal.confirm({
+        title: '删除这条消息？',
+        okText: '删除',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: async () => {
+          try {
+            await deleteMessage(currentSessionId, msg.id);
+            if (editAnchor?.messageId === msg.id) {
+              setEditAnchor(null);
+              setInputValue('');
+            }
+          } catch (error) {
+            console.error('[AiChat] Delete message failed:', error);
+            message.error('删除消息失败');
+          }
+        },
+      });
+    },
+    [currentSessionId, deleteMessage, editAnchor?.messageId],
+  );
+
+  const handleEditResend = useCallback(
+    (msg: IChatMessage) => {
+      if (!currentSessionId || msg.role !== 'user') {
+        return;
+      }
+      setEditAnchor({
+        sessionId: currentSessionId,
+        messageId: msg.id,
+        content: msg.content,
+      });
+      setInputValue(msg.content);
+    },
+    [currentSessionId],
+  );
+
+  const handleCancelEditResend = useCallback(() => {
+    setEditAnchor(null);
+    setInputValue('');
+  }, []);
+
   const handleRetry = () => {
     if (lastRequest) {
-      sendAiChat(lastRequest.message, lastRequest.promptType as IAiChatPromptType, lastRequest.tableNames, lastRequest.ext);
+      sendAiChat(
+        lastRequest.message,
+        lastRequest.promptType as IAiChatPromptType,
+        lastRequest.tableNames,
+        lastRequest.ext,
+      );
     }
   };
 
@@ -952,6 +1054,8 @@ export default memo<IProps>((props) => {
       tableNames: null,
     }));
     setSelectedTableDraft([]);
+    setEditAnchor(null);
+    setInputValue('');
   }, []);
 
   const stateInfo = currentSession ? STATE_LABELS[currentSession.state] : null;
@@ -1047,6 +1151,29 @@ export default memo<IProps>((props) => {
             <div key={msg.id} className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}>
               {msg.thinking && <ThinkingBlock thinking={msg.thinking} />}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              <div className={styles.messageActions}>
+                {msg.role === 'user' && (
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<EditOutlined />}
+                    disabled={isProcessing}
+                    onClick={() => handleEditResend(msg)}
+                  >
+                    编辑重发
+                  </Button>
+                )}
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={isProcessing}
+                  onClick={() => handleDeleteMessage(msg)}
+                >
+                  删除
+                </Button>
+              </div>
               {extractedSql && msg.role === 'assistant' && (
                 <SqlActionButtons
                   sql={extractedSql}
@@ -1097,6 +1224,14 @@ export default memo<IProps>((props) => {
           curDatabaseName={boundInfo.databaseName}
           curSchemaName={boundInfo.schemaName}
         />
+        {editAnchor && (
+          <div className={styles.editResendBar}>
+            <span>正在编辑历史消息，发送后将删除该消息及之后的消息</span>
+            <Button size="small" type="text" onClick={handleCancelEditResend}>
+              取消
+            </Button>
+          </div>
+        )}
         <Input.TextArea
           value={inputValue}
           onChange={handleInputChange}
@@ -1111,7 +1246,7 @@ export default memo<IProps>((props) => {
             onClick={() => sendAiChat(inputValue)}
             disabled={!inputValue.trim() || isInputDisabled}
           >
-            发送
+            {editAnchor ? '重新发送' : '发送'}
           </Button>
         </div>
       </div>

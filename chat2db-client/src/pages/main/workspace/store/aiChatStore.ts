@@ -94,6 +94,8 @@ interface IAiChatStore {
   resetCurrentContent: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
+  deleteMessage: (sessionId: string, messageId: string) => Promise<void>;
+  truncateMessagesFrom: (sessionId: string, messageId: string) => Promise<void>;
   switchToSession: (sessionId: string) => void;
   startNewConversation: (boundInfo?: {
     dataSourceId?: number | null;
@@ -120,6 +122,34 @@ const filterPersistentSessions = (sessions: Record<string, AiChatSession>): Reco
     }
     return result;
   }, {});
+};
+
+const normalizeMessages = (messages: IChatMessage[]): IChatMessage[] => {
+  return messages.map((message, index) => ({
+    ...message,
+    sequenceNo: index,
+  }));
+};
+
+const getLastMessagePreview = (messages: IChatMessage[]): string | null => {
+  const lastMessage = messages[messages.length - 1];
+  return lastMessage?.content || null;
+};
+
+const updateConversationSummary = (
+  list: IConversationSummary[],
+  sessionId: string,
+  messages: IChatMessage[],
+): IConversationSummary[] => {
+  return list.map((item) =>
+    item.conversationId === sessionId
+      ? {
+          ...item,
+          messageCount: messages.length,
+          lastMessagePreview: getLastMessagePreview(messages),
+        }
+      : item,
+  );
 };
 
 export const useAiChatStore = create<IAiChatStore>()(
@@ -212,24 +242,17 @@ export const useAiChatStore = create<IAiChatStore>()(
           if (!session) {
             return state;
           }
+          const messages = normalizeMessages([...session.messages, message]);
           return {
             sessions: {
               ...state.sessions,
               [sessionId]: {
                 ...session,
-                messages: [...session.messages, message],
+                messages,
                 updatedAt: Date.now(),
               },
             },
-            conversationList: state.conversationList.map((item) =>
-              item.conversationId === sessionId
-                ? {
-                    ...item,
-                    messageCount: item.messageCount + 1,
-                    lastMessagePreview: message.content,
-                  }
-                : item,
-            ),
+            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
           };
         });
       },
@@ -368,6 +391,67 @@ export const useAiChatStore = create<IAiChatStore>()(
         }
       },
 
+      deleteMessage: async (sessionId: string, messageId: string) => {
+        const shouldSyncRemote = !get().sessions[sessionId]?.transient;
+        if (shouldSyncRemote) {
+          await aiConversationService.deleteAiConversationMessage({ conversationId: sessionId, messageId });
+        }
+        set((state) => {
+          const session = state.sessions[sessionId];
+          if (!session) {
+            return state;
+          }
+          const messages = normalizeMessages(session.messages.filter((item) => item.id !== messageId));
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages,
+                currentContent: '',
+                currentThinking: '',
+                updatedAt: Date.now(),
+              },
+            },
+            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
+          };
+        });
+      },
+
+      truncateMessagesFrom: async (sessionId: string, messageId: string) => {
+        const shouldSyncRemote = !get().sessions[sessionId]?.transient;
+        if (shouldSyncRemote) {
+          await aiConversationService.truncateAiConversationMessages({ conversationId: sessionId, messageId });
+        }
+        set((state) => {
+          const session = state.sessions[sessionId];
+          if (!session) {
+            return state;
+          }
+          const anchorIndex = session.messages.findIndex((item) => item.id === messageId);
+          if (anchorIndex < 0) {
+            return state;
+          }
+          const messages = normalizeMessages(session.messages.slice(0, anchorIndex));
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages,
+                currentContent: '',
+                currentThinking: '',
+                explainResult: undefined,
+                error: undefined,
+                state: 'COMPLETED',
+                updatedAt: Date.now(),
+              },
+            },
+            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
+          };
+        });
+      },
+
       switchToSession: (sessionId: string) => {
         set({ currentSessionId: sessionId });
         const session = get().sessions[sessionId];
@@ -466,14 +550,14 @@ export const useAiChatStore = create<IAiChatStore>()(
         messages: IAiMessage[],
       ) => {
         set((state) => {
-          const localMessages: IChatMessage[] = messages.map((m) => ({
+          const localMessages: IChatMessage[] = normalizeMessages(messages.map((m) => ({
             id: m.messageId,
             role: m.role,
             content: m.content,
             thinking: m.thinking || undefined,
             sequenceNo: m.sequenceNo,
             sqlExtracted: undefined,
-          }));
+          })));
           const existing = state.sessions[conversationId];
           const now = Date.now();
           const session: AiChatSession = {
