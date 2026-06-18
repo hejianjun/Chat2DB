@@ -51,6 +51,56 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
     }
 
     @Override
+    public List<Schema> schemas(Connection connection, String databaseName) {
+        // DLC does not support schemas; avoid calling JDBC metadata for schema discovery.
+        return Collections.emptyList();
+    }
+
+    @Override
+    public TableMeta getTableMeta(Connection connection, String databaseName, String schemaName) {
+        // DLC JDBC does not support DatabaseMetaData#getTypeInfo, so provide the common type set directly.
+        return TableMeta.builder()
+                .columnTypes(Arrays.asList(
+                        columnType("STRING", false, false),
+                        columnType("VARCHAR", true, false),
+                        columnType("CHAR", true, false),
+                        columnType("BOOLEAN", false, false),
+                        columnType("TINYINT", false, false),
+                        columnType("SMALLINT", false, false),
+                        columnType("INT", false, false),
+                        columnType("INTEGER", false, false),
+                        columnType("BIGINT", false, false),
+                        columnType("FLOAT", false, false),
+                        columnType("DOUBLE", false, false),
+                        columnType("DECIMAL", true, true),
+                        columnType("DATE", false, false),
+                        columnType("TIMESTAMP", false, false),
+                        columnType("BINARY", false, false),
+                        columnType("ARRAY", false, false),
+                        columnType("MAP", false, false),
+                        columnType("STRUCT", false, false)
+                ))
+                .build();
+    }
+
+    private ColumnType columnType(String typeName, boolean supportLength, boolean supportScale) {
+        return new ColumnType(
+                typeName,
+                supportLength,
+                supportScale,
+                true,
+                false,
+                false,
+                false,
+                true,
+                true,
+                false,
+                true,
+                false
+        );
+    }
+
+    @Override
     public List<Table> tables(Connection connection, String databaseName, String schemaName, String tableName) {
         try {
             String sql = "SHOW TABLES";

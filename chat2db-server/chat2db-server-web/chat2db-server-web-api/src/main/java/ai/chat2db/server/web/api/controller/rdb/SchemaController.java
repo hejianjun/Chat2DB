@@ -1,5 +1,6 @@
 package ai.chat2db.server.web.api.controller.rdb;
 
+import java.util.Collections;
 import java.util.List;
 
 import ai.chat2db.server.domain.api.param.SchemaOperationParam;
@@ -16,8 +17,10 @@ import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.SchemaCreateRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.UpdateSchemaRequest;
 import ai.chat2db.server.web.api.controller.rdb.vo.SchemaVO;
+import ai.chat2db.spi.config.DBConfig;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.Sql;
+import ai.chat2db.spi.sql.Chat2DBContext;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,12 +29,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * shema controller
  */
 @ConnectionInfoAspect
 @RequestMapping("/api/rdb/schema")
 @RestController
+@Slf4j
 public class SchemaController {
 
     @Autowired
@@ -48,6 +54,13 @@ public class SchemaController {
      */
     @GetMapping("/list")
     public ListResult<SchemaVO> list(@Valid DataSourceBaseRequest request) {
+        DBConfig dbConfig = Chat2DBContext.getDBConfig();
+        if (dbConfig != null && !dbConfig.isSupportSchema()) {
+            // Some generic clients still call this endpoint; do not hit JDBC metadata for schema-less engines.
+            log.info("Skip schema list query because datasource does not support schema, dataSourceId:{}, databaseName:{}, dbType:{}",
+                    request.getDataSourceId(), request.getDatabaseName(), Chat2DBContext.getConnectInfo().getDbType());
+            return ListResult.of(Collections.emptyList());
+        }
         SchemaQueryParam queryParam = SchemaQueryParam.builder().dataSourceId(request.getDataSourceId()).dataBaseName(
                 request.getDatabaseName()).refresh(request.isRefresh()).build();
         List<Schema> schemas = databaseService.querySchema(queryParam);

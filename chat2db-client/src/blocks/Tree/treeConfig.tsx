@@ -132,6 +132,66 @@ const mapDatabaseListToTreeNodes = (list: any[], extraParams: any): ITreeNode[] 
   });
 };
 
+// Older cached tree nodes may not have supportSchema, so keep a db-type fallback here.
+const withoutSchemaDatabaseTypes = [DatabaseTypeCode.DLC];
+
+const supportSchema = (extraParams: any) => {
+  if (extraParams?.supportSchema === false) {
+    return false;
+  }
+  return !withoutSchemaDatabaseTypes.includes(extraParams?.databaseType);
+};
+
+const buildDatabaseChildrenWithoutSchema = (extraParams: any): ITreeNode[] => {
+  const { dataSourceId, databaseName } = extraParams;
+  const preCode = [dataSourceId, databaseName].join('-');
+  // Databases without schema still expose the normal table/function folders directly under database.
+  return [
+    {
+      uuid: uuid(),
+      key: `${preCode}-tables`,
+      name: 'tables',
+      treeNodeType: TreeNodeType.TABLES,
+      extraParams,
+    },
+    {
+      uuid: uuid(),
+      key: `${preCode}-deprecated-tables`,
+      name: 'recycleBin',
+      treeNodeType: TreeNodeType.DEPRECATED_TABLES,
+      extraParams,
+    },
+    {
+      uuid: uuid(),
+      key: `${preCode}-views`,
+      name: 'view',
+      treeNodeType: TreeNodeType.VIEWS,
+      extraParams,
+    },
+    {
+      uuid: uuid(),
+      key: `${preCode}-functions`,
+      name: 'functions',
+      treeNodeType: TreeNodeType.FUNCTIONS,
+      extraParams,
+    },
+    {
+      uuid: uuid(),
+      key: `${preCode}-procedures`,
+      name: 'procedures',
+      treeNodeType: TreeNodeType.PROCEDURES,
+      extraParams,
+    },
+    {
+      uuid: uuid(),
+      key: `${preCode}-triggers`,
+      name: 'triggers',
+      treeNodeType: TreeNodeType.TRIGGERS,
+      extraParams,
+    },
+  ];
+};
+
 const getDatabaseListCache = (dataSourceId: number): ITreeNode[] | null => {
   try {
     const cache = localStorage.getItem(getDatabaseListCacheKey(dataSourceId));
@@ -181,6 +241,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                   databaseType: t.type,
                   dataSourceId: t.id,
                   dataSourceName: t.alias,
+                  supportSchema: t.supportSchema,
                 },
               };
             });
@@ -281,6 +342,14 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
             },
           },
         ]);
+      }
+      if (!supportSchema(_extraParams)) {
+        const databaseName = params.databaseName || _extraParams?.databaseName;
+        // Skip /schema/list for engines such as DLC where schema discovery is unsupported and slow.
+        return Promise.resolve(buildDatabaseChildrenWithoutSchema({
+          ..._extraParams,
+          databaseName,
+        }));
       }
       return new Promise((r: (value: ITreeNode[], b?: any) => void, j) => {
         connectionService

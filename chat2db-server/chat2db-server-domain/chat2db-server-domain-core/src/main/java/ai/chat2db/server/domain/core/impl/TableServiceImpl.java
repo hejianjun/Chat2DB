@@ -355,6 +355,9 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
+            log.info("[TableCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
+                    param.getSchemaName(), param.getTableName());
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> tables;
@@ -415,6 +418,9 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
+            log.info("[TableCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
+                    param.getSchemaName(), param.getTableName());
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> search = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
@@ -432,6 +438,16 @@ public class TableServiceImpl implements TableService {
 
     private boolean needRefreshCache(TablePageQueryParam param, Long version) {
         return param.isRefresh() || version == null;
+    }
+
+    private String getCacheRefreshReason(boolean refresh, Long version) {
+        if (refresh) {
+            return "requestRefresh=true";
+        }
+        if (version == null) {
+            return "cacheVersionMissing";
+        }
+        return "unknown";
     }
 
     private void loadAndCacheMetadata(LuceneIndexManager<Table> mgr, String databaseName, String schemaName, Long version) {
@@ -535,6 +551,9 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
+            log.info("[TableCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
+                    param.getSchemaName(), param.getTableName());
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         return luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
@@ -596,6 +615,9 @@ public class TableServiceImpl implements TableService {
         MetaData metaSchema = Chat2DBContext.getMetaData();
         Long version = mgr.getMaxVersion(param);
         if (param.isRefresh() || version == null) {
+            log.info("[TableColumnCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
+                    param.getSchemaName(), param.getTableName());
             mgr.getLock().writeLock().lock();
             try {
                 List<TableColumn> columns = metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(),
@@ -631,6 +653,14 @@ public class TableServiceImpl implements TableService {
             if (hasAllTableColumns(cachedColumns, tables)) {
                 return cachedColumns;
             }
+            // A cache version can exist while selected tables are missing columns, so record the exact misses.
+            log.info("[TableColumnCache] Cache penetration, reason:missingTableColumns, dataSourceId:{}, databaseName:{}, schemaName:{}, tableNames:{}, missingTableNames:{}",
+                    param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), getTableNames(tables),
+                    getMissingTableNames(cachedColumns, tables));
+        } else {
+            log.info("[TableColumnCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableNames:{}",
+                    getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
+                    param.getSchemaName(), getTableNames(tables));
         }
         return groupTableColumns(loadAndCacheTableColumns(mgr, queryParam, version, tables), tables);
     }
@@ -643,8 +673,13 @@ public class TableServiceImpl implements TableService {
         mgr.getLock().writeLock().lock();
         try {
             if (!metaSchema.supportBatchQueryColumns()) {
+                // Some engines, including DLC, can only describe one table at a time.
+                log.info("[TableColumnCache] Batch column query unsupported, query tables individually, dataSourceId:{}, databaseName:{}, schemaName:{}, tableNames:{}",
+                        param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), getTableNames(tables));
                 return loadAndCacheTableColumnsIndividually(mgr, metaSchema, param, version, tables);
             }
+            log.info("[TableColumnCache] Load all columns from datasource, dataSourceId:{}, databaseName:{}, schemaName:{}, tableNames:{}",
+                    param.getDataSourceId(), param.getDatabaseName(), param.getSchemaName(), getTableNames(tables));
             List<TableColumn> columns = metaSchema.columns(Chat2DBContext.getConnection(), param.getDatabaseName(),
                     param.getSchemaName(), null);
             if (CollectionUtils.isNotEmpty(columns)) {
@@ -674,6 +709,9 @@ public class TableServiceImpl implements TableService {
             if (table == null || StringUtils.isBlank(table.getName())) {
                 continue;
             }
+            log.info("[TableColumnCache] Load table columns from datasource, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
+                    param.getDataSourceId(), StringUtils.defaultIfBlank(table.getDatabaseName(), param.getDatabaseName()),
+                    StringUtils.defaultIfBlank(table.getSchemaName(), param.getSchemaName()), table.getName());
             List<TableColumn> tableColumns = metaSchema.columns(
                     Chat2DBContext.getConnection(),
                     StringUtils.defaultIfBlank(table.getDatabaseName(), param.getDatabaseName()),
@@ -699,6 +737,29 @@ public class TableServiceImpl implements TableService {
         return columns.stream()
                 .filter(column -> tableNames.contains(column.getTableName()))
                 .collect(Collectors.groupingBy(TableColumn::getTableName));
+    }
+
+    private List<String> getTableNames(List<Table> tables) {
+        if (CollectionUtils.isEmpty(tables)) {
+            return Collections.emptyList();
+        }
+        return tables.stream()
+                .filter(Objects::nonNull)
+                .map(Table::getName)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toList());
+    }
+
+    private List<String> getMissingTableNames(Map<String, List<TableColumn>> tableColumnMap, List<Table> tables) {
+        if (CollectionUtils.isEmpty(tables)) {
+            return Collections.emptyList();
+        }
+        return tables.stream()
+                .filter(Objects::nonNull)
+                .map(Table::getName)
+                .filter(StringUtils::isNotBlank)
+                .filter(tableName -> CollectionUtils.isEmpty(tableColumnMap.get(tableName)))
+                .collect(Collectors.toList());
     }
 
     private boolean hasAllTableColumns(Map<String, List<TableColumn>> tableColumnMap, List<Table> tables) {
