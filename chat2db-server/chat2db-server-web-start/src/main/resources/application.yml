@@ -44,15 +44,16 @@ spring:
   ai:
     mcp:
       server:
+        protocol: STREAMABLE
         name: chat2db-mcp
         version: 1.0.0
         type: SYNC
         instructions: Chat2DB database MCP server
         capabilities:
           tool: true
-        sse-endpoint: /api/mcp/sse
-        sse-message-endpoint: /api/mcp/message
-        keep-alive-interval: 30s
+        streamable-http:
+          mcp-endpoint: /api/mcp
+          keep-alive-interval: 30s
 
 chat2db:
   version: 1.0.0
