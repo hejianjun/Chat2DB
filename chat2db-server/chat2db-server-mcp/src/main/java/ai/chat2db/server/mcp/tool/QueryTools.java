@@ -30,17 +30,17 @@ public class QueryTools {
 
     @McpTool(description = "Execute a read-only SQL query. Only SELECT/SHOW/DESC/DESCRIBE/EXPLAIN/WITH are allowed. Use this for normal data exploration."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String executeSelect(@McpToolParam(description = "Datasource id") Long dataSourceId,
+    public String executeSelect(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Read-only SQL") String sql,
         @McpToolParam(description = "Page number, default 1", required = false) Integer pageNo,
         @McpToolParam(description = "Page size, default 100, capped by server config", required = false) Integer pageSize) {
-        return connectionScope.run(dataSourceId, databaseName, schemaName,
-            () -> {
+        return connectionScope.run(datasourceRef, databaseName, schemaName,
+            resolvedDataSource -> {
                 sqlGuard.requireSingleReadOnlySql(sql);
                 return resultFormatter.formatCsv(dlTemplateService.execute(
-                    executeParam(dataSourceId, databaseName, schemaName, sql, pageNo, pageSize)));
+                    executeParam(resolvedDataSource.getDataSourceId(), databaseName, schemaName, sql, pageNo, pageSize)));
             });
     }
 

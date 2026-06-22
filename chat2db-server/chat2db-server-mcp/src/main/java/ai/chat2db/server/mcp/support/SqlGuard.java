@@ -60,6 +60,22 @@ public class SqlGuard {
         }
     }
 
+    public void requireExpectedUpdateCounts(List<String> sqlList, List<Integer> expectedUpdateCounts) {
+        if (CollectionUtils.isEmpty(expectedUpdateCounts) || expectedUpdateCounts.size() != sqlList.size()) {
+            throw new IllegalArgumentException("expectedUpdateCounts must have the same size as sqlList.");
+        }
+    }
+
+    public void requireSingleDdlSql(String sql) {
+        List<String> sqlList = parseSql(sql);
+        if (sqlList.size() != 1) {
+            throw new IllegalArgumentException("This MCP DDL tool accepts exactly one SQL statement.");
+        }
+        if (!isDdlSql(sqlList.get(0))) {
+            throw new IllegalArgumentException("Only CREATE/ALTER/DROP/TRUNCATE/RENAME/COMMENT/GRANT/REVOKE SQL is allowed by this tool.");
+        }
+    }
+
     public void requireWriteAllowed(Long dataSourceId, Boolean confirm) {
         // Production datasources remain protected even if write tools are enabled in configuration.
         if (isReleaseDatasource(dataSourceId)) {
@@ -108,6 +124,13 @@ public class SqlGuard {
     public boolean isWriteSql(String sql) {
         String keyword = firstKeyword(sql);
         return "insert".equals(keyword) || "update".equals(keyword) || "delete".equals(keyword);
+    }
+
+    public boolean isDdlSql(String sql) {
+        String keyword = firstKeyword(sql);
+        return "create".equals(keyword) || "alter".equals(keyword) || "drop".equals(keyword)
+            || "truncate".equals(keyword) || "rename".equals(keyword) || "comment".equals(keyword)
+            || "grant".equals(keyword) || "revoke".equals(keyword);
     }
 
     public boolean isReleaseDatasource(Long dataSourceId) {

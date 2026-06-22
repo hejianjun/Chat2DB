@@ -1,6 +1,7 @@
 package ai.chat2db.server.mcp.support;
 
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import ai.chat2db.server.domain.api.model.DataSource;
@@ -56,12 +57,17 @@ public class ResultFormatter {
     }
 
     public String formatDatasourcesCsv(List<DataSource> dataSources) {
-        StringBuilder builder = new StringBuilder("id,alias,type,host,port,url,environmentShortName\n");
+        return formatDatasourcesCsv(dataSources, null);
+    }
+
+    public String formatDatasourcesCsv(List<DataSource> dataSources, Function<DataSource, String> refProvider) {
+        StringBuilder builder = new StringBuilder("datasourceRef,id,alias,type,host,port,url,environmentShortName\n");
         if (dataSources == null || dataSources.isEmpty()) {
             return builder.toString();
         }
         for (DataSource dataSource : dataSources) {
-            builder.append(csvCell(dataSource.getId() == null ? null : dataSource.getId().toString())).append(',')
+            builder.append(csvCell(refProvider == null ? null : refProvider.apply(dataSource))).append(',')
+                .append(csvCell(dataSource.getId() == null ? null : dataSource.getId().toString())).append(',')
                 .append(csvCell(dataSource.getAlias())).append(',')
                 .append(csvCell(dataSource.getType())).append(',')
                 .append(csvCell(dataSource.getHost())).append(',')

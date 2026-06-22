@@ -1,10 +1,10 @@
 package ai.chat2db.server.mcp.support;
 
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import ai.chat2db.server.domain.api.model.DataSource;
-import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.tools.common.exception.ParamBusinessException;
+import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.spi.config.DriverConfig;
 import ai.chat2db.spi.sql.Chat2DBContext;
@@ -18,16 +18,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConnectionScope {
 
-    private final DataSourceService dataSourceService;
+    private final DataSourceRefService dataSourceRefService;
 
-    public ConnectionScope(DataSourceService dataSourceService) {
-        this.dataSourceService = dataSourceService;
+    public ConnectionScope(DataSourceRefService dataSourceRefService) {
+        this.dataSourceRefService = dataSourceRefService;
     }
 
-    public <T> T run(Long dataSourceId, String databaseName, String schemaName, Supplier<T> supplier) {
-        Chat2DBContext.putContext(toInfo(dataSourceId, databaseName, schemaName));
+    public <T> T run(String datasourceRef, String databaseName, String schemaName,
+        Function<ResolvedDataSource, T> supplier) {
+        ResolvedDataSource resolvedDataSource = dataSourceRefService.resolve(datasourceRef);
+        Chat2DBContext.putContext(toInfo(resolvedDataSource, databaseName, schemaName));
         try {
-            return supplier.get();
+            return supplier.apply(resolvedDataSource);
         } finally {
             // MCP calls share server threads, so both context holders must be cleared after each tool call.
             ContextUtils.removeContext();
@@ -38,16 +40,16 @@ public class ConnectionScope {
     /**
      * Converts a persisted datasource into the SPI connection object expected by database plugins.
      */
-    private ConnectInfo toInfo(Long dataSourceId, String databaseName, String schemaName) {
-        DataSource dataSource = dataSourceService.queryById(dataSourceId);
+    public ConnectInfo toInfo(ResolvedDataSource resolvedDataSource, String databaseName, String schemaName) {
+        DataSource dataSource = resolvedDataSource.getDataSource();
         if (dataSource == null) {
             throw new ParamBusinessException("dataSourceId");
         }
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setAlias(dataSource.getAlias());
         connectInfo.setUser(dataSource.getUserName());
-        connectInfo.setDataSourceId(dataSourceId);
-        connectInfo.setUserId(ContextUtils.getUserId());
+        connectInfo.setDataSourceId(resolvedDataSource.getDataSourceId());
+        connectInfo.setUserId(currentUserId());
         connectInfo.setPassword(dataSource.getPassword());
         connectInfo.setDbType(dataSource.getType());
         connectInfo.setUrl(dataSource.getUrl());
@@ -66,5 +68,10 @@ public class ConnectionScope {
             connectInfo.setDriverConfig(driverConfig);
         }
         return connectInfo;
+    }
+
+    private Long currentUserId() {
+        LoginUser loginUser = ContextUtils.queryLoginUser();
+        return loginUser == null ? null : loginUser.getId();
     }
 }
