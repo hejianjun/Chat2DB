@@ -7,7 +7,8 @@ import ai.chat2db.server.domain.api.enums.EnvironmentEnum;
 import ai.chat2db.server.domain.api.model.DataSource;
 import ai.chat2db.server.domain.api.param.datasource.DataSourceSelector;
 import ai.chat2db.server.domain.api.service.DataSourceService;
-import ai.chat2db.server.mcp.config.McpProperties;
+import ai.chat2db.server.mcp.config.McpProperties.Sql;
+import ai.chat2db.server.mcp.config.McpServerConfigService;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.util.JdbcUtils;
 import ai.chat2db.spi.util.SqlUtils;
@@ -22,11 +23,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class SqlGuard {
 
-    private final McpProperties properties;
+    private final McpServerConfigService mcpServerConfigService;
     private final DataSourceService dataSourceService;
 
-    public SqlGuard(McpProperties properties, DataSourceService dataSourceService) {
-        this.properties = properties;
+    public SqlGuard(McpServerConfigService mcpServerConfigService, DataSourceService dataSourceService) {
+        this.mcpServerConfigService = mcpServerConfigService;
         this.dataSourceService = dataSourceService;
     }
 
@@ -64,10 +65,11 @@ public class SqlGuard {
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 write operations are disabled for Release/production datasources.");
         }
-        if (!properties.getSql().isAllowWrite()) {
+        Sql sqlConfig = mcpServerConfigService.getEffectiveSql();
+        if (!sqlConfig.isAllowWrite()) {
             throw new IllegalStateException("P2 write operations are disabled. Set chat2db.mcp.sql.allow-write=true to enable.");
         }
-        requireConfirm(confirm);
+        requireConfirm(confirm, sqlConfig);
     }
 
     public void requireDdlAllowed(Long dataSourceId, Boolean confirm) {
@@ -75,15 +77,17 @@ public class SqlGuard {
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 DDL operations are disabled for Release/production datasources.");
         }
-        if (!properties.getSql().isAllowDdl()) {
+        Sql sqlConfig = mcpServerConfigService.getEffectiveSql();
+        if (!sqlConfig.isAllowDdl()) {
             throw new IllegalStateException("P2 DDL operations are disabled. Set chat2db.mcp.sql.allow-ddl=true to enable.");
         }
-        requireConfirm(confirm);
+        requireConfirm(confirm, sqlConfig);
     }
 
     public int normalizePageSize(Integer pageSize) {
-        int value = pageSize == null || pageSize <= 0 ? properties.getSql().getDefaultPageSize() : pageSize;
-        return Math.min(value, properties.getSql().getMaxRows());
+        Sql sqlConfig = mcpServerConfigService.getEffectiveSql();
+        int value = pageSize == null || pageSize <= 0 ? sqlConfig.getDefaultPageSize() : pageSize;
+        return Math.min(value, sqlConfig.getMaxRows());
     }
 
     /**
@@ -125,8 +129,8 @@ public class SqlGuard {
         return StringUtils.containsAny(normalized, "release", "prod", "production", "正式", "生产");
     }
 
-    private void requireConfirm(Boolean confirm) {
-        if (properties.getSql().isRequireConfirmParam() && !Boolean.TRUE.equals(confirm)) {
+    private void requireConfirm(Boolean confirm, Sql sqlConfig) {
+        if (sqlConfig.isRequireConfirmParam() && !Boolean.TRUE.equals(confirm)) {
             throw new IllegalArgumentException("This P2 operation requires user confirmation. Call again with confirm=true after the MCP client confirmation dialog.");
         }
     }

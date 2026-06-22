@@ -1,12 +1,7 @@
 package ai.chat2db.server.mcp.config;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
 
-import ai.chat2db.server.domain.api.model.Config;
-import ai.chat2db.server.domain.api.service.ConfigService;
-import ai.chat2db.server.domain.repository.Dbutils;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,17 +21,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class McpAuthFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String MCP_SERVER_CONFIG_CODE = "mcp.server.config";
-    private static final String AUTH_TYPE_BEARER = "bearer";
 
-    private final McpProperties properties;
-    private final ConfigService configService;
-    private final ObjectMapper objectMapper;
+    private final McpServerConfigService mcpServerConfigService;
 
-    public McpAuthFilter(McpProperties properties, ConfigService configService, ObjectMapper objectMapper) {
-        this.properties = properties;
-        this.configService = configService;
-        this.objectMapper = objectMapper;
+    public McpAuthFilter(McpServerConfigService mcpServerConfigService) {
+        this.mcpServerConfigService = mcpServerConfigService;
     }
 
     @Override
@@ -78,54 +67,6 @@ public class McpAuthFilter extends OncePerRequestFilter {
     }
 
     private String getEffectiveToken() {
-        McpServerConfig config = getStoredConfig();
-        if (config != null) {
-            if (StringUtils.equals(config.getAuthType(), AUTH_TYPE_BEARER)) {
-                log.info("MCP auth config loaded from system config: authType={}, tokenConfigured={}, tokenLength={}",
-                    config.getAuthType(), StringUtils.isNotBlank(config.getToken()), StringUtils.length(config.getToken()));
-                return StringUtils.trimToEmpty(config.getToken());
-            }
-            log.info("MCP auth disabled by system config: authType={}", config.getAuthType());
-            return "";
-        }
-        log.info("MCP auth config loaded from properties: tokenConfigured={}, tokenLength={}",
-            StringUtils.isNotBlank(properties.getToken()), StringUtils.length(properties.getToken()));
-        return StringUtils.trimToEmpty(properties.getToken());
-    }
-
-    private McpServerConfig getStoredConfig() {
-        try {
-            AtomicReference<Config> configRef = new AtomicReference<>();
-            Dbutils.runWithSession(() -> configRef.set(configService.find(MCP_SERVER_CONFIG_CODE)));
-            Config config = configRef.get();
-            if (config == null || StringUtils.isBlank(config.getContent())) {
-                return null;
-            }
-            return objectMapper.readValue(config.getContent(), McpServerConfig.class);
-        } catch (Exception e) {
-            log.warn("Failed to read MCP auth system config, fallback to properties. code={}", MCP_SERVER_CONFIG_CODE, e);
-            return null;
-        }
-    }
-
-    public static class McpServerConfig {
-        private String authType;
-        private String token;
-
-        public String getAuthType() {
-            return authType;
-        }
-
-        public void setAuthType(String authType) {
-            this.authType = authType;
-        }
-
-        public String getToken() {
-            return token;
-        }
-
-        public void setToken(String token) {
-            this.token = token;
-        }
+        return mcpServerConfigService.getEffectiveToken();
     }
 }

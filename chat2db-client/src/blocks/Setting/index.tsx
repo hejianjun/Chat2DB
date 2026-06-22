@@ -5,6 +5,7 @@ import { Modal, Tooltip } from 'antd';
 import i18n from '@/i18n';
 import BaseSetting from './BaseSetting';
 import AISetting from './AiSetting';
+import McpSetting from './McpSetting';
 import ProxySetting from './ProxySetting';
 import About from './About';
 import styles from './index.less';
@@ -37,7 +38,6 @@ function Setting(props: IProps) {
       showModal();
     }
   }, []);
-
 
   const showModal = (_currentMenu: number = 0) => {
     setCurrentMenu(_currentMenu);
@@ -80,6 +80,12 @@ function Setting(props: IProps) {
       icon: '\ue63f',
       body: <ProxySetting />,
       code: 'proxy',
+    },
+    {
+      label: i18n('setting.nav.mcp'),
+      icon: '\ue62d',
+      body: <McpSetting />,
+      code: 'mcp',
     },
     {
       label: i18n('setting.nav.aboutUs'),
