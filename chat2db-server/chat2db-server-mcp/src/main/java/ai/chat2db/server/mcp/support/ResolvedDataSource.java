@@ -15,7 +15,5 @@ public class ResolvedDataSource {
 
     private DataSource dataSource;
 
-    private String fingerprint;
-
     private String summary;
 }

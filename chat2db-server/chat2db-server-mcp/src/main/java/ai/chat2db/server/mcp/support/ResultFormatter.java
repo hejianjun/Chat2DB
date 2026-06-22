@@ -1,6 +1,8 @@
 package ai.chat2db.server.mcp.support;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -11,6 +13,7 @@ import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.model.Schema;
 import ai.chat2db.spi.model.SimpleTable;
 import ai.chat2db.spi.model.Table;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +25,12 @@ public class ResultFormatter {
 
     /** Keeps individual cells short enough for chat-oriented transports. */
     private static final int MAX_CELL_LENGTH = 200;
+
+    private final ObjectMapper objectMapper;
+
+    public ResultFormatter(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public String format(List<ExecuteResult> results) {
         if (results == null || results.isEmpty()) {
@@ -61,7 +70,7 @@ public class ResultFormatter {
     }
 
     public String formatDatasourcesCsv(List<DataSource> dataSources, Function<DataSource, String> refProvider) {
-        StringBuilder builder = new StringBuilder("datasourceRef,id,alias,type,host,port,url,environmentShortName\n");
+        StringBuilder builder = new StringBuilder("datasourceRef,id,name,environment\n");
         if (dataSources == null || dataSources.isEmpty()) {
             return builder.toString();
         }
@@ -69,14 +78,37 @@ public class ResultFormatter {
             builder.append(csvCell(refProvider == null ? null : refProvider.apply(dataSource))).append(',')
                 .append(csvCell(dataSource.getId() == null ? null : dataSource.getId().toString())).append(',')
                 .append(csvCell(dataSource.getAlias())).append(',')
-                .append(csvCell(dataSource.getType())).append(',')
-                .append(csvCell(dataSource.getHost())).append(',')
-                .append(csvCell(dataSource.getPort())).append(',')
-                .append(csvCell(dataSource.getUrl())).append(',')
-                .append(csvCell(dataSource.getEnvironment() == null ? null : dataSource.getEnvironment().getShortName()))
+                .append(csvCell(dataSource.getEnvironment() == null ? dataSource.getEnvType()
+                    : dataSource.getEnvironment().getShortName()))
                 .append('\n');
         }
         return builder.toString();
+    }
+
+    public String formatDatasourcesJson(List<DataSource> dataSources, Function<DataSource, String> refProvider) {
+        List<Map<String, Object>> rows = dataSources == null ? List.of() : dataSources.stream()
+            .map(dataSource -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("datasourceRef", refProvider == null ? "" : refProvider.apply(dataSource));
+                row.put("id", dataSource.getId());
+                row.put("name", StringUtils.defaultString(dataSource.getAlias()));
+                row.put("environment", environment(dataSource));
+                return row;
+            })
+            .collect(Collectors.toList());
+        try {
+            return objectMapper.writeValueAsString(rows);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to format datasources as JSON.", e);
+        }
+    }
+
+    private String environment(DataSource dataSource) {
+        if (dataSource.getEnvironment() == null) {
+            return StringUtils.defaultString(dataSource.getEnvType());
+        }
+        return StringUtils.defaultIfBlank(dataSource.getEnvironment().getShortName(),
+            StringUtils.defaultString(dataSource.getEnvironment().getName()));
     }
 
     public String formatDatabasesCsv(List<Database> databases) {

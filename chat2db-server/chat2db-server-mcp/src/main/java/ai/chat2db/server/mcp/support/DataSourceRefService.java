@@ -1,11 +1,15 @@
 package ai.chat2db.server.mcp.support;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -24,8 +28,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataSourceRefService {
 
+    private static final String REF_PREFIX = "dsref:v1:";
     private static final String SIGN_ALGORITHM = "HmacSHA256";
-    private static final String DIGEST_ALGORITHM = "SHA-256";
     private static final long REF_TTL_SECONDS = 30 * 60;
 
     private final DataSourceService dataSourceService;
@@ -39,74 +43,51 @@ public class DataSourceRefService {
 
     public String issue(DataSource dataSource) {
         long expiresAt = Instant.now().plusSeconds(REF_TTL_SECONDS).getEpochSecond();
-        String payload = String.join("|",
-            String.valueOf(dataSource.getId()),
-            currentUserKey(),
-            String.valueOf(expiresAt),
-            fingerprint(dataSource));
-        String encodedPayload = base64Url(payload.getBytes(StandardCharsets.UTF_8));
-        return encodedPayload + "." + sign(encodedPayload);
+        String payload = canonicalPayload(dataSource, currentUserKey(), expiresAt);
+        return REF_PREFIX + payload + ";sig=" + sign(payload);
     }
 
     public ResolvedDataSource resolve(String datasourceRef) {
         if (StringUtils.isBlank(datasourceRef)) {
             throw new IllegalArgumentException("datasourceRef must not be blank. Call listDatasources first.");
         }
-        String[] parts = datasourceRef.split("\\.", 2);
-        if (parts.length != 2 || !StringUtils.equals(sign(parts[0]), parts[1])) {
+        if (!StringUtils.startsWith(datasourceRef, REF_PREFIX)) {
+            throw new IllegalArgumentException("Invalid datasourceRef format. Call listDatasources again.");
+        }
+
+        Map<String, String> fields = parseFields(datasourceRef.substring(REF_PREFIX.length()));
+        String signature = fields.remove("sig");
+        String payload = canonicalPayload(fields);
+        if (!StringUtils.equals(sign(payload), signature)) {
             throw new IllegalArgumentException("Invalid datasourceRef signature. Call listDatasources again.");
         }
 
-        String payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-        String[] fields = payload.split("\\|", -1);
-        if (fields.length != 4) {
-            throw new IllegalArgumentException("Invalid datasourceRef payload. Call listDatasources again.");
-        }
-        if (!StringUtils.equals(fields[1], currentUserKey())) {
+        if (!StringUtils.equals(fields.get("user"), currentUserKey())) {
             throw new IllegalArgumentException("datasourceRef belongs to another user/session. Call listDatasources again.");
         }
-        if (Long.parseLong(fields[2]) < Instant.now().getEpochSecond()) {
+        if (Long.parseLong(fields.get("exp")) < Instant.now().getEpochSecond()) {
             throw new IllegalArgumentException("datasourceRef expired. Call listDatasources again.");
         }
 
-        Long dataSourceId = Long.valueOf(fields[0]);
+        Long dataSourceId = Long.valueOf(fields.get("id"));
         DataSource dataSource = dataSourceService.queryExistent(dataSourceId,
             DataSourceSelector.builder().environment(true).build());
-        String currentFingerprint = fingerprint(dataSource);
-        if (!StringUtils.equals(fields[3], currentFingerprint)) {
+        Map<String, String> currentFields = readableFields(dataSource, fields.get("user"), Long.parseLong(fields.get("exp")));
+        if (!sameDatasource(fields, currentFields)) {
             throw new IllegalArgumentException("Datasource changed after datasourceRef was issued. Call listDatasources again.");
         }
         return ResolvedDataSource.builder()
             .dataSourceId(dataSourceId)
             .dataSource(dataSource)
-            .fingerprint(currentFingerprint)
             .summary(summary(dataSource))
             .build();
     }
 
-    public String fingerprint(DataSource dataSource) {
-        String text = String.join("|",
-            value(dataSource.getId()),
-            value(dataSource.getAlias()),
-            value(dataSource.getType()),
-            value(dataSource.getHost()),
-            value(dataSource.getPort()),
-            value(dataSource.getUrl()),
-            value(dataSource.getEnvType()),
-            value(dataSource.getEnvironmentId()),
-            dataSource.getEnvironment() == null ? "" : value(dataSource.getEnvironment().getShortName()),
-            dataSource.getEnvironment() == null ? "" : value(dataSource.getEnvironment().getName()));
-        return sha256(text);
-    }
-
     public String summary(DataSource dataSource) {
-        String env = dataSource.getEnvironment() == null ? dataSource.getEnvType() : dataSource.getEnvironment().getShortName();
-        return String.format(Locale.ROOT, "%s[%s]@%s:%s env=%s",
+        return String.format(Locale.ROOT, "id=%s;name=%s;env=%s",
+            StringUtils.defaultString(value(dataSource.getId())),
             StringUtils.defaultIfBlank(dataSource.getAlias(), String.valueOf(dataSource.getId())),
-            StringUtils.defaultString(dataSource.getType()),
-            StringUtils.defaultString(dataSource.getHost()),
-            StringUtils.defaultString(dataSource.getPort()),
-            StringUtils.defaultString(env));
+            environmentText(dataSource));
     }
 
     private String currentUserKey() {
@@ -114,27 +95,71 @@ public class DataSourceRefService {
         return loginUser == null || loginUser.getId() == null ? "anonymous" : loginUser.getId().toString();
     }
 
-    private String sign(String encodedPayload) {
+    private String canonicalPayload(DataSource dataSource, String userKey, long expiresAt) {
+        return canonicalPayload(readableFields(dataSource, userKey, expiresAt));
+    }
+
+    private String canonicalPayload(Map<String, String> fields) {
+        return fields.entrySet().stream()
+            .map(entry -> entry.getKey() + "=" + encode(entry.getValue()))
+            .collect(Collectors.joining(";"));
+    }
+
+    private Map<String, String> readableFields(DataSource dataSource, String userKey, long expiresAt) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("id", value(dataSource.getId()));
+        fields.put("name", value(dataSource.getAlias()));
+        fields.put("env", environmentText(dataSource));
+        fields.put("exp", String.valueOf(expiresAt));
+        return fields;
+    }
+
+    private boolean sameDatasource(Map<String, String> expected, Map<String, String> actual) {
+        return StringUtils.equals(expected.get("id"), actual.get("id"))
+            && StringUtils.equals(expected.get("name"), actual.get("name"))
+            && StringUtils.equals(expected.get("env"), actual.get("env"));
+    }
+
+    private String environmentText(DataSource dataSource) {
+        if (dataSource.getEnvironment() != null) {
+            return StringUtils.defaultIfBlank(dataSource.getEnvironment().getShortName(),
+                StringUtils.defaultString(dataSource.getEnvironment().getName()));
+        }
+        return StringUtils.defaultString(dataSource.getEnvType());
+    }
+
+    private Map<String, String> parseFields(String refBody) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        for (String part : StringUtils.splitPreserveAllTokens(refBody, ';')) {
+            int index = StringUtils.indexOf(part, '=');
+            if (index <= 0) {
+                throw new IllegalArgumentException("Invalid datasourceRef field. Call listDatasources again.");
+            }
+            fields.put(part.substring(0, index), decode(part.substring(index + 1)));
+        }
+        return fields;
+    }
+
+    private String sign(String payload) {
         try {
             Mac mac = Mac.getInstance(SIGN_ALGORITHM);
             mac.init(new SecretKeySpec(secret, SIGN_ALGORITHM));
-            return base64Url(mac.doFinal(encodedPayload.getBytes(StandardCharsets.UTF_8)));
+            return base64Url(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException("Failed to sign datasourceRef.", e);
         }
     }
 
-    private String sha256(String text) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(DIGEST_ALGORITHM);
-            return base64Url(digest.digest(text.getBytes(StandardCharsets.UTF_8))).substring(0, 16);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to build datasource fingerprint.", e);
-        }
-    }
-
     private String base64Url(byte[] bytes) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value(value), StandardCharsets.UTF_8);
+    }
+
+    private String decode(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
     private String value(Object value) {

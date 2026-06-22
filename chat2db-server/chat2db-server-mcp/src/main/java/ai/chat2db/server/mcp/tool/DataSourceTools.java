@@ -31,7 +31,7 @@ public class DataSourceTools {
         this.resultFormatter = resultFormatter;
     }
 
-    @McpTool(description = "List configured Chat2DB datasources as CSV. Returns datasourceRef plus readable datasource details. Call this before database operations and pass datasourceRef, not raw id, to other tools."
+    @McpTool(description = "List configured Chat2DB datasources as JSON. Returns datasourceRef, id, name and environment. Call this before database operations and pass datasourceRef, not raw id, to other tools."
             , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true))
     public String listDatasources(
             @McpToolParam(description = "Optional keyword to search datasource alias or connection info", required = false) String keyword,
@@ -42,7 +42,7 @@ public class DataSourceTools {
         param.setPageNo(pageNo == null ? 1 : pageNo);
         param.setPageSize(pageSize == null ? 100 : pageSize);
         ServicePage<DataSource> page = dataSourceService.queryPage(param, DataSourceSelector.builder().environment(true).build());
-        return resultFormatter.formatDatasourcesCsv(page.getData(), dataSourceRefService::issue);
+        return resultFormatter.formatDatasourcesJson(page.getData(), dataSourceRefService::issue);
     }
 
     @McpTool(description = "Connect a datasource and return databases visible to it. This is read-only metadata discovery."
