@@ -199,7 +199,13 @@ const TableRelationModal = memo((props: IProps) => {
       okText: i18n('common.button.confirm'),
       cancelText: i18n('common.button.cancel'),
       onOk: async () => {
-        const result = await sqlService.deleteForeignKey({ id: record.id!, sourceType: record.sourceType });
+        const result = await sqlService.deleteForeignKey({
+          dataSourceId: dataSourceId!,
+          databaseName,
+          schemaName,
+          id: record.id!,
+          sourceType: record.sourceType,
+        });
         if (result?.executedDDL) {
           Modal.info({
             title: i18n('workspace.tableRelation.realDeleteDDLTitle'),

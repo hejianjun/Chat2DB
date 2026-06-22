@@ -593,6 +593,9 @@ export interface IUpdateVirtualFKParams {
 
 /** 删除外键参数 */
 export interface IDeleteFKParams {
+  dataSourceId: number;
+  databaseName?: string;
+  schemaName?: string;
   id: number;
   sourceType: 'REAL' | 'VIRTUAL';
 }
