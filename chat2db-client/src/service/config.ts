@@ -44,6 +44,11 @@ const setSystemConfig = createRequest<{ code: string; content: string }, void>('
   errorLevel: 'toast',
   method: 'post',
 });
+const setSystemConfigByUrl = createRequest<string, void>('', {
+  dynamicUrl: true,
+  errorLevel: 'toast',
+  method: 'post',
+});
 
 const getModelServiceList = createRequest<void, IModelServiceConfig[]>('/api/config/model_service/list', {
   method: 'get',
@@ -100,6 +105,7 @@ const setAppUpdateType = createRequest<ILatestVersion['type'], boolean>('/api/sy
 export default {
   getSystemConfig,
   setSystemConfig,
+  setSystemConfigByUrl,
   getModelServiceList,
   upsertModelService,
   deleteModelService,

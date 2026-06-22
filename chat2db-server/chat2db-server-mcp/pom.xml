@@ -20,6 +20,10 @@
         </dependency>
         <dependency>
             <groupId>ai.chat2db</groupId>
+            <artifactId>chat2db-server-domain-repository</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ai.chat2db</groupId>
             <artifactId>chat2db-server-tools-common</artifactId>
         </dependency>
         <dependency>

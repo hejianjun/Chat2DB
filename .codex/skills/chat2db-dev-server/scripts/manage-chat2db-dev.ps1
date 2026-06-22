@@ -38,7 +38,7 @@ function Install-BackendDependencies {
     $env:JAVA_HOME = $JavaHome
     Push-Location (Join-Path $Workspace "chat2db-server")
     try {
-        mvn -pl chat2db-server-web/chat2db-server-web-api,chat2db-server-domain/chat2db-server-domain-core -am -DskipTests install
+        mvn -pl chat2db-server-web/chat2db-server-web-api,chat2db-server-domain/chat2db-server-domain-core,chat2db-server-mcp -am -DskipTests install
     } finally {
         Pop-Location
     }

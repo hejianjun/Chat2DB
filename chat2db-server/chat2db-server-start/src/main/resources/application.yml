@@ -44,6 +44,8 @@ spring:
   ai:
     mcp:
       server:
+        annotation-scanner:
+          enabled: false
         protocol: STREAMABLE
         name: chat2db-mcp
         version: 1.0.0

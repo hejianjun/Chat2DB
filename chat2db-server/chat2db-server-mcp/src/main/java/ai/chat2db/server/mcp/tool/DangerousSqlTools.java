@@ -34,8 +34,7 @@ public class DangerousSqlTools {
 
     @McpTool(description = "DESTRUCTIVE P2: Execute INSERT/UPDATE/DELETE SQL statements in one transaction. Requires allow-write=true, non-release datasource environment, and confirm=true. Rolls back if any actual update count differs from expectedUpdateCounts."
             , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String executeUpdate(McpSyncServerExchange exchange,
-                                @McpToolParam(description = "Datasource id") Long dataSourceId,
+    public String executeUpdate(@McpToolParam(description = "Datasource id") Long dataSourceId,
                                 @McpToolParam(description = "Database name") String databaseName,
                                 @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
                                 @McpToolParam(description = "INSERT/UPDATE/DELETE SQL list. Each item must contain exactly one statement.") List<String> sqlList,

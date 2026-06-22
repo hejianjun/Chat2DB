@@ -45,13 +45,16 @@ export default function ProxyBody() {
     setApiPrefix(e.target.value);
   }
 
-  async function saveMcpConfig() {
-    await configServer.setSystemConfig({
-      code: MCP_SERVER_CONFIG_CODE,
-      content: JSON.stringify({
-        authType: mcpAuthType,
-        token: mcpAuthType === 'bearer' ? mcpToken.trim() : '',
-      }),
+  async function saveMcpConfig(targetApiPrefix: string) {
+    const normalizedApiPrefix = targetApiPrefix.replace(/\/+$/, '');
+    await configServer.setSystemConfigByUrl(`${normalizedApiPrefix}/api/config/system_config`, {
+      data: {
+        code: MCP_SERVER_CONFIG_CODE,
+        content: JSON.stringify({
+          authType: mcpAuthType,
+          token: mcpAuthType === 'bearer' ? mcpToken.trim() : '',
+        }),
+      },
     });
   }
 
@@ -62,7 +65,7 @@ export default function ProxyBody() {
     outSideService
       .dynamicUrl(`${apiPrefix}/api/system/get-version-a`)
       .then(async () => {
-        await saveMcpConfig();
+        await saveMcpConfig(apiPrefix);
         localStorage.setItem('_BaseURL', apiPrefix);
         location.reload();
       })
