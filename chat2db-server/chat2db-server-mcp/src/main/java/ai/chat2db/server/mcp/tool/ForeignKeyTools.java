@@ -8,8 +8,8 @@ import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
 import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.VirtualForeignKey;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
+import org.springaicommunity.mcp.annotation.McpTool;
+import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
 
 /**
@@ -26,44 +26,48 @@ public class ForeignKeyTools {
         this.connectionScope = connectionScope;
     }
 
-    @Tool(description = "List real and virtual foreign keys for a table or its relationships. Read-only metadata operation. relation can be SOURCE, REFERENCED or ANY; default SOURCE.")
-    public List<ForeignKey> listForeignKeys(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Table name, optional. Omit to list all foreign keys in the database/schema", required = false) String tableName,
-        @ToolParam(description = "Relation filter: SOURCE, REFERENCED, ANY. Default SOURCE", required = false) String relation) {
+    @McpTool(description = "List real and virtual foreign keys for a table or its relationships. Read-only metadata operation. relation can be SOURCE, REFERENCED or ANY; default SOURCE."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public List<ForeignKey> listForeignKeys(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Table name, optional. Omit to list all foreign keys in the database/schema", required = false) String tableName,
+        @McpToolParam(description = "Relation filter: SOURCE, REFERENCED, ANY. Default SOURCE", required = false) String relation) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
             () -> foreignKeySyncService.listForeignKeys(dataSourceId, databaseName, schemaName, tableName,
                 parseRelation(relation)));
     }
 
-    @Tool(description = "List real database foreign keys only. Read-only metadata operation.")
-    public List<ForeignKey> listRealForeignKeys(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Table name, optional. Omit to list all real foreign keys in the database/schema", required = false) String tableName) {
+    @McpTool(description = "List real database foreign keys only. Read-only metadata operation."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public List<ForeignKey> listRealForeignKeys(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Table name, optional. Omit to list all real foreign keys in the database/schema", required = false) String tableName) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
             () -> foreignKeySyncService.queryRealForeignKeys(dataSourceId, databaseName, schemaName, tableName));
     }
 
-    @Tool(description = "List virtual foreign keys only. Read-only metadata operation.")
-    public List<VirtualForeignKey> listVirtualForeignKeys(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Table name, optional. Omit to list all virtual foreign keys in the database/schema", required = false) String tableName) {
+    @McpTool(description = "List virtual foreign keys only. Read-only metadata operation."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public List<VirtualForeignKey> listVirtualForeignKeys(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Table name, optional. Omit to list all virtual foreign keys in the database/schema", required = false) String tableName) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
             () -> foreignKeySyncService.queryVirtualForeignKeys(dataSourceId, databaseName, schemaName, tableName));
     }
 
-    @Tool(description = "Create a virtual foreign key. Metadata-only operation; it does not alter the physical database schema.")
-    public VirtualForeignKey createVirtualForeignKey(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Source table name") String tableName,
-        @ToolParam(description = "Source column name") String columnName,
-        @ToolParam(description = "Referenced table name") String referencedTable,
-        @ToolParam(description = "Referenced column name") String referencedColumnName,
-        @ToolParam(description = "Comment, optional", required = false) String comment) {
+    @McpTool(description = "Create a virtual foreign key. Metadata-only operation; it does not alter the physical database schema."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
+    public VirtualForeignKey createVirtualForeignKey(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Source table name") String tableName,
+        @McpToolParam(description = "Source column name") String columnName,
+        @McpToolParam(description = "Referenced table name") String referencedTable,
+        @McpToolParam(description = "Referenced column name") String referencedColumnName,
+        @McpToolParam(description = "Comment, optional", required = false) String comment) {
         return connectionScope.run(dataSourceId, databaseName, schemaName, () -> foreignKeySyncService.createVirtualFK(
             CreateVirtualFKParam.builder()
                 .dataSourceId(dataSourceId)
@@ -77,17 +81,18 @@ public class ForeignKeyTools {
                 .build()));
     }
 
-    @Tool(description = "Update a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema.")
-    public VirtualForeignKey updateVirtualForeignKey(@ToolParam(description = "Virtual foreign key id") Long id,
-        @ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Source table name, optional", required = false) String tableName,
-        @ToolParam(description = "Source column name, optional", required = false) String columnName,
-        @ToolParam(description = "Referenced table name, optional", required = false) String referencedTable,
-        @ToolParam(description = "Referenced column name, optional", required = false) String referencedColumnName,
-        @ToolParam(description = "Virtual foreign key name, optional", required = false) String name,
-        @ToolParam(description = "Comment, optional", required = false) String comment) {
+    @McpTool(description = "Update a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
+    public VirtualForeignKey updateVirtualForeignKey(@McpToolParam(description = "Virtual foreign key id") Long id,
+        @McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Source table name, optional", required = false) String tableName,
+        @McpToolParam(description = "Source column name, optional", required = false) String columnName,
+        @McpToolParam(description = "Referenced table name, optional", required = false) String referencedTable,
+        @McpToolParam(description = "Referenced column name, optional", required = false) String referencedColumnName,
+        @McpToolParam(description = "Virtual foreign key name, optional", required = false) String name,
+        @McpToolParam(description = "Comment, optional", required = false) String comment) {
         return connectionScope.run(dataSourceId, databaseName, schemaName, () -> foreignKeySyncService.updateVirtualFK(
             UpdateVirtualFKParam.builder()
                 .id(id)
@@ -103,11 +108,12 @@ public class ForeignKeyTools {
                 .build()));
     }
 
-    @Tool(description = "Delete a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema.")
-    public String deleteVirtualForeignKey(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Virtual foreign key id") Long id) {
+    @McpTool(description = "Delete a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
+    public String deleteVirtualForeignKey(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Virtual foreign key id") Long id) {
         return connectionScope.run(dataSourceId, databaseName, schemaName, () -> {
             foreignKeySyncService.deleteVirtualFK(id);
             return "Deleted virtual foreign key: " + id;

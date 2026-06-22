@@ -5,8 +5,8 @@ import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
 import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.server.mcp.support.SqlGuard;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
+import org.springaicommunity.mcp.annotation.McpTool;
+import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
 
 /**
@@ -28,13 +28,14 @@ public class QueryTools {
         this.sqlGuard = sqlGuard;
     }
 
-    @Tool(description = "Execute a read-only SQL query. Only SELECT/SHOW/DESC/DESCRIBE/EXPLAIN/WITH are allowed. Use this for normal data exploration.")
-    public String executeSelect(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Read-only SQL") String sql,
-        @ToolParam(description = "Page number, default 1", required = false) Integer pageNo,
-        @ToolParam(description = "Page size, default 100, capped by server config", required = false) Integer pageSize) {
+    @McpTool(description = "Execute a read-only SQL query. Only SELECT/SHOW/DESC/DESCRIBE/EXPLAIN/WITH are allowed. Use this for normal data exploration."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public String executeSelect(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Read-only SQL") String sql,
+        @McpToolParam(description = "Page number, default 1", required = false) Integer pageNo,
+        @McpToolParam(description = "Page size, default 100, capped by server config", required = false) Integer pageSize) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
             () -> {
                 sqlGuard.requireSingleReadOnlySql(sql);

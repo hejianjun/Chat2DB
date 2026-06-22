@@ -9,8 +9,8 @@ import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.spi.model.Database;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
+import org.springaicommunity.mcp.annotation.McpTool;
+import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
 
 /**
@@ -27,11 +27,12 @@ public class DataSourceTools {
         this.resultFormatter = resultFormatter;
     }
 
-    @Tool(description = "List configured Chat2DB datasources as CSV. Returns id, alias, type, host, port, url and environmentShortName. Call this before database operations to choose dataSourceId.")
+    @McpTool(description = "List configured Chat2DB datasources as CSV. Returns id, alias, type, host, port, url and environmentShortName. Call this before database operations to choose dataSourceId."
+            , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true))
     public String listDatasources(
-        @ToolParam(description = "Optional keyword to search datasource alias or connection info", required = false) String keyword,
-        @ToolParam(description = "Page number, default 1", required = false) Integer pageNo,
-        @ToolParam(description = "Page size, default 100", required = false) Integer pageSize) {
+            @McpToolParam(description = "Optional keyword to search datasource alias or connection info", required = false) String keyword,
+            @McpToolParam(description = "Page number, default 1", required = false) Integer pageNo,
+            @McpToolParam(description = "Page size, default 100", required = false) Integer pageSize) {
         DataSourcePageQueryParam param = new DataSourcePageQueryParam();
         param.setSearchKey(keyword);
         param.setPageNo(pageNo == null ? 1 : pageNo);
@@ -40,8 +41,9 @@ public class DataSourceTools {
         return resultFormatter.formatDatasourcesCsv(page.getData());
     }
 
-    @Tool(description = "Connect a datasource and return databases visible to it. This is read-only metadata discovery.")
-    public List<Database> connectDatasource(@ToolParam(description = "Datasource id from list_datasources") Long dataSourceId) {
+    @McpTool(description = "Connect a datasource and return databases visible to it. This is read-only metadata discovery."
+            , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false))
+    public List<Database> connectDatasource(@McpToolParam(description = "Datasource id from list_datasources") Long dataSourceId) {
         return dataSourceService.connect(dataSourceId);
     }
 }

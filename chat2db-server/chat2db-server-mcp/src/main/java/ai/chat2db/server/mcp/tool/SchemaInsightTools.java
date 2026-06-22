@@ -5,8 +5,8 @@ import ai.chat2db.server.domain.api.service.FunctionService;
 import ai.chat2db.server.domain.api.service.ProcedureService;
 import ai.chat2db.server.domain.api.service.ViewService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
+import org.springaicommunity.mcp.annotation.McpTool;
+import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,12 +30,13 @@ public class SchemaInsightTools {
         this.connectionScope = connectionScope;
     }
 
-    @Tool(description = "List database objects of type view, function or procedure. Read-only metadata operation.")
-    public Object listDbObjects(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Object type: view, function, procedure") String type,
-        @ToolParam(description = "Optional search keyword", required = false) String keyword) {
+    @McpTool(description = "List database objects of type view, function or procedure. Read-only metadata operation."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public Object listDbObjects(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Object type: view, function, procedure") String type,
+        @McpToolParam(description = "Optional search keyword", required = false) String keyword) {
         return connectionScope.run(dataSourceId, databaseName, schemaName, () -> switch (type.toLowerCase()) {
             case "view", "views" -> viewService.viewsWithCache(dataSourceId, databaseName, schemaName, keyword, false);
             case "function", "functions" -> functionService.functionsWithCache(dataSourceId, databaseName, schemaName,
@@ -46,11 +47,12 @@ public class SchemaInsightTools {
         });
     }
 
-    @Tool(description = "Search tables by keyword. Currently searches table names via list_tables metadata cache. Read-only operation.")
-    public String searchTables(@ToolParam(description = "Datasource id") Long dataSourceId,
-        @ToolParam(description = "Database name") String databaseName,
-        @ToolParam(description = "Schema name, optional", required = false) String schemaName,
-        @ToolParam(description = "Search keyword") String keyword) {
+    @McpTool(description = "Search tables by keyword. Currently searches table names via list_tables metadata cache. Read-only operation."
+        , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public String searchTables(@McpToolParam(description = "Datasource id") Long dataSourceId,
+        @McpToolParam(description = "Database name") String databaseName,
+        @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
+        @McpToolParam(description = "Search keyword") String keyword) {
         return connectionScope.run(dataSourceId, databaseName, schemaName,
             () -> databaseService.searchTableColumns(dataSourceId, databaseName, schemaName, keyword));
     }
