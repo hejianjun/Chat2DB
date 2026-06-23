@@ -17,8 +17,6 @@ import javax.crypto.spec.SecretKeySpec;
 import ai.chat2db.server.domain.api.model.DataSource;
 import ai.chat2db.server.domain.api.param.datasource.DataSourceSelector;
 import ai.chat2db.server.domain.api.service.DataSourceService;
-import ai.chat2db.server.tools.common.model.LoginUser;
-import ai.chat2db.server.tools.common.util.ContextUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
@@ -43,7 +41,7 @@ public class DataSourceRefService {
 
     public String issue(DataSource dataSource) {
         long expiresAt = Instant.now().plusSeconds(REF_TTL_SECONDS).getEpochSecond();
-        String payload = canonicalPayload(dataSource, currentUserKey(), expiresAt);
+        String payload = canonicalPayload(dataSource, expiresAt);
         return REF_PREFIX + payload + ";sig=" + sign(payload);
     }
 
@@ -61,10 +59,6 @@ public class DataSourceRefService {
         if (!StringUtils.equals(sign(payload), signature)) {
             throw new IllegalArgumentException("Invalid datasourceRef signature. Call listDatasources again.");
         }
-
-        if (!StringUtils.equals(fields.get("user"), currentUserKey())) {
-            throw new IllegalArgumentException("datasourceRef belongs to another user/session. Call listDatasources again.");
-        }
         if (Long.parseLong(fields.get("exp")) < Instant.now().getEpochSecond()) {
             throw new IllegalArgumentException("datasourceRef expired. Call listDatasources again.");
         }
@@ -72,7 +66,7 @@ public class DataSourceRefService {
         Long dataSourceId = Long.valueOf(fields.get("id"));
         DataSource dataSource = dataSourceService.queryExistent(dataSourceId,
             DataSourceSelector.builder().environment(true).build());
-        Map<String, String> currentFields = readableFields(dataSource, fields.get("user"), Long.parseLong(fields.get("exp")));
+        Map<String, String> currentFields = readableFields(dataSource, Long.parseLong(fields.get("exp")));
         if (!sameDatasource(fields, currentFields)) {
             throw new IllegalArgumentException("Datasource changed after datasourceRef was issued. Call listDatasources again.");
         }
@@ -90,13 +84,8 @@ public class DataSourceRefService {
             environmentText(dataSource));
     }
 
-    private String currentUserKey() {
-        LoginUser loginUser = ContextUtils.queryLoginUser();
-        return loginUser == null || loginUser.getId() == null ? "anonymous" : loginUser.getId().toString();
-    }
-
-    private String canonicalPayload(DataSource dataSource, String userKey, long expiresAt) {
-        return canonicalPayload(readableFields(dataSource, userKey, expiresAt));
+    private String canonicalPayload(DataSource dataSource, long expiresAt) {
+        return canonicalPayload(readableFields(dataSource, expiresAt));
     }
 
     private String canonicalPayload(Map<String, String> fields) {
@@ -105,7 +94,7 @@ public class DataSourceRefService {
             .collect(Collectors.joining(";"));
     }
 
-    private Map<String, String> readableFields(DataSource dataSource, String userKey, long expiresAt) {
+    private Map<String, String> readableFields(DataSource dataSource, long expiresAt) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("id", value(dataSource.getId()));
         fields.put("name", value(dataSource.getAlias()));

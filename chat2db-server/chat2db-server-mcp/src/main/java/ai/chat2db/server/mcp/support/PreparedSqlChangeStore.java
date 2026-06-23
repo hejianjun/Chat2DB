@@ -55,9 +55,9 @@ public class PreparedSqlChangeStore {
         cleanupExpired();
         PreparedSqlChange change = changes.remove(operationId);
         if (change == null) {
-            throw new IllegalArgumentException("Prepared SQL change not found or expired. Call prepare_sql_change again.");
+            throw new IllegalArgumentException("Prepared SQL change not found or expired. Call prepareUpdateSqlChange or prepareDdlSqlChange again.");
         }
-        if (!StringUtils.equals(change.getUserKey(), currentUserKey())) {
+        if (StringUtils.isNotBlank(change.getUserKey()) && !StringUtils.equals(change.getUserKey(), currentUserKey())) {
             throw new IllegalArgumentException("Prepared SQL change belongs to another user/session.");
         }
         if (!StringUtils.equals(change.getConfirmationText(), confirmationText)) {
@@ -92,7 +92,7 @@ public class PreparedSqlChangeStore {
 
     private String currentUserKey() {
         LoginUser loginUser = ContextUtils.queryLoginUser();
-        return loginUser == null || loginUser.getId() == null ? "anonymous" : loginUser.getId().toString();
+        return loginUser == null || loginUser.getId() == null ? null : loginUser.getId().toString();
     }
 
     @Data
