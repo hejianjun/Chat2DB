@@ -649,7 +649,7 @@ public class TableServiceImpl implements TableService {
                 .build();
         Long version = mgr.getMaxVersion(queryParam);
         if (!param.isRefresh() && version != null) {
-            Map<String, List<TableColumn>> cachedColumns = groupTableColumns(mgr.search(queryParam, null, null), tables);
+            Map<String, List<TableColumn>> cachedColumns = groupTableColumns(mgr.searchAll(queryParam, null), tables);
             if (hasAllTableColumns(cachedColumns, tables)) {
                 return cachedColumns;
             }

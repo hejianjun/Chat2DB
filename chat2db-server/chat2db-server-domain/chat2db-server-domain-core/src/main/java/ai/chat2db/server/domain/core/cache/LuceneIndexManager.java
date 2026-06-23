@@ -540,6 +540,21 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         return search(queryModel, lastDocId, queryStr, null, false);
     }
 
+    @SneakyThrows
+    public <E extends BaseModel> List<T> searchAll(E queryModel, String queryStr) {
+        lock.readLock().lock();
+        try {
+            BooleanQuery booleanQuery = buildSearchQuery(queryModel, queryStr);
+            int maxHits = Math.max(1, searcher.getIndexReader().numDocs());
+            TopDocs topDocs = searcher.search(booleanQuery, maxHits);
+            return Arrays.stream(topDocs.scoreDocs)
+                    .map(scoreDoc -> (T) getDocument(queryModel.getClassType(), scoreDoc.doc))
+                    .collect(Collectors.toList());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * 搜索文档（支持排序）
      *
