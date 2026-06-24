@@ -14,7 +14,11 @@ import ai.chat2db.server.domain.api.param.SchemaOperationParam;
 import ai.chat2db.server.domain.api.param.SchemaQueryParam;
 import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.param.TableSelector;
+import ai.chat2db.server.domain.api.model.MetadataComment;
+import ai.chat2db.server.domain.api.model.MetadataSnapshot;
 import ai.chat2db.server.domain.api.service.DatabaseService;
+import ai.chat2db.server.domain.api.service.MetadataCommentService;
+import ai.chat2db.server.domain.api.service.MetadataSnapshotService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.core.cache.CacheManage;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
@@ -32,6 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static ai.chat2db.server.domain.core.cache.CacheKey.getDataBasesKey;
@@ -53,13 +59,67 @@ public class DatabaseServiceImpl implements DatabaseService {
     @Autowired
     private LuceneIndexManagerFactory luceneIndexManagerFactory;
 
+    @Autowired
+    private MetadataCommentService metadataCommentService;
+
+    @Autowired
+    private MetadataSnapshotService metadataSnapshotService;
+
     @Override
     public List<Database> queryAll(DatabaseQueryAllParam param) {
         List<Database> databases = CacheManage.getList(getDataBasesKey(param.getDataSourceId()), Database.class,
                 (key) -> param.isRefresh(),
                 (key) -> getDatabases(param.getDbType(), getConnection(param.getDbType(), param.getConnection()))
         );
+        return enrichDatabases(param.getDataSourceId(), databases, isRedis(param.getDbType()));
+    }
+
+    private List<Database> enrichDatabases(Long dataSourceId, List<Database> databases, boolean redis) {
+        if (CollectionUtils.isEmpty(databases)) {
+            return databases;
+        }
+        Map<String, Database> databaseKeyMap = new HashMap<>();
+        Map<String, String> snapshotKeyToDatabaseName = new HashMap<>();
+        String snapshotType = redis ? MetadataSnapshotService.TYPE_REDIS_KEY : MetadataSnapshotService.TYPE_TABLE;
+        for (Database database : databases) {
+            if (database == null || StringUtils.isBlank(database.getName())) {
+                continue;
+            }
+            String commentKey = metadataCommentService.buildObjectKey(MetadataCommentService.TYPE_DATABASE,
+                    database.getName(), null, null, null, database.getName());
+            databaseKeyMap.put(commentKey, database);
+            String snapshotKey = metadataSnapshotService.buildObjectKey(snapshotType,
+                    database.getName(), null, database.getName());
+            snapshotKeyToDatabaseName.put(snapshotKey, database.getName());
+        }
+        Map<String, MetadataComment> comments = metadataCommentService.queryByKeys(dataSourceId, null,
+                MetadataCommentService.TYPE_DATABASE, databaseKeyMap.keySet());
+        comments.forEach((key, comment) -> {
+            Database database = databaseKeyMap.get(key);
+            if (database != null) {
+                database.setComment(StringUtils.defaultIfBlank(comment.getComment(), comment.getAiComment()));
+            }
+        });
+
+        Map<String, MetadataSnapshot> snapshots = metadataSnapshotService.queryByKeys(dataSourceId, snapshotType,
+                snapshotKeyToDatabaseName.keySet());
+        snapshots.forEach((key, snapshot) -> {
+            String databaseName = snapshotKeyToDatabaseName.get(key);
+            if (databaseName == null || snapshot.getObjectCount() == null) {
+                return;
+            }
+            databases.stream()
+                    .filter(database -> StringUtils.equals(database.getName(), databaseName))
+                    .findFirst()
+                    .ifPresent(database -> database.setCount(snapshot.getObjectCount().intValue()));
+        });
         return databases;
+    }
+
+    private boolean isRedis(String dbType) {
+        String currentDbType = StringUtils.defaultIfBlank(dbType,
+                Chat2DBContext.getConnectInfo() == null ? null : Chat2DBContext.getConnectInfo().getDbType());
+        return DataSourceTypeEnum.REDIS.getCode().equals(currentDbType);
     }
 
     private Connection getConnection(String dbType, Connection connection) {

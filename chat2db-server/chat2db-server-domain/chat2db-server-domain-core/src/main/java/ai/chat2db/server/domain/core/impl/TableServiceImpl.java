@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import com.google.common.collect.Lists;
 
+import ai.chat2db.server.domain.api.model.MetadataSnapshot;
 import ai.chat2db.server.domain.api.model.TreeNode;
 import ai.chat2db.server.domain.api.param.DeprecatedTableParam;
 import ai.chat2db.server.domain.api.param.DropParam;
@@ -24,6 +25,7 @@ import ai.chat2db.server.domain.api.param.TableSelector;
 import ai.chat2db.server.domain.api.param.TreeSearchParam;
 import ai.chat2db.server.domain.api.param.TypeQueryParam;
 import ai.chat2db.server.domain.api.service.DeprecatedTableService;
+import ai.chat2db.server.domain.api.service.MetadataSnapshotService;
 import ai.chat2db.server.domain.api.service.PinService;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
@@ -72,6 +74,9 @@ public class TableServiceImpl implements TableService {
 
     @Autowired
     private ForeignKeySyncService foreignKeySyncService;
+
+    @Autowired
+    private MetadataSnapshotService metadataSnapshotService;
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
@@ -355,6 +360,10 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
+            if (!param.isRefresh() && isEmptyTableSnapshot(param)) {
+                param.setLastDocId(null);
+                return Collections.emptyList();
+            }
             log.info("[TableCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
                     getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
                     param.getSchemaName(), param.getTableName());
@@ -418,6 +427,9 @@ public class TableServiceImpl implements TableService {
         LuceneIndexManager<Table> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         Long version = luceneMgr.getMaxVersion(param);
         if (needRefreshCache(param, version)) {
+            if (!param.isRefresh() && isEmptyTableSnapshot(param)) {
+                return Collections.emptyList();
+            }
             log.info("[TableCache] Cache penetration, reason:{}, dataSourceId:{}, databaseName:{}, schemaName:{}, tableName:{}",
                     getCacheRefreshReason(param.isRefresh(), version), param.getDataSourceId(), param.getDatabaseName(),
                     param.getSchemaName(), param.getTableName());
@@ -440,6 +452,15 @@ public class TableServiceImpl implements TableService {
         return param.isRefresh() || version == null;
     }
 
+    private boolean isEmptyTableSnapshot(TablePageQueryParam param) {
+        String objectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_TABLE,
+                param.getDatabaseName(), param.getSchemaName(), param.getDatabaseName());
+        MetadataSnapshot snapshot = metadataSnapshotService.get(param.getDataSourceId(), MetadataSnapshotService.TYPE_TABLE,
+                objectKey);
+        return snapshot != null && MetadataSnapshotService.STATUS_EMPTY.equals(snapshot.getStatus())
+                && Long.valueOf(0L).equals(snapshot.getObjectCount());
+    }
+
     private String getCacheRefreshReason(boolean refresh, Long version) {
         if (refresh) {
             return "requestRefresh=true";
@@ -457,14 +478,22 @@ public class TableServiceImpl implements TableService {
             Connection conn = redis ? null : Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
             List<Table> tables = meta.tables(conn, databaseName, schemaName, null);
+            Long dataSourceId = Chat2DBContext.getConnectInfo().getDataSourceId();
+            String objectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_TABLE, databaseName,
+                    schemaName, databaseName);
             if (CollectionUtils.isEmpty(tables)) {
                 mgr.deleteByDatabaseAndSchema(Table.builder()
                         .databaseName(databaseName)
                         .schemaName(schemaName)
                         .build());
+                metadataSnapshotService.upsertCount(dataSourceId, MetadataSnapshotService.TYPE_TABLE, objectKey,
+                        databaseName, schemaName, databaseName, 0L, version, MetadataSnapshotService.STATUS_EMPTY, null);
                 return;
             }
             mgr.updateDocuments(tables, version);
+            metadataSnapshotService.upsertCount(dataSourceId, MetadataSnapshotService.TYPE_TABLE, objectKey,
+                    databaseName, schemaName, databaseName, (long) tables.size(), version,
+                    MetadataSnapshotService.STATUS_READY, null);
         } catch (Exception e) {
             log.error("loadAndCacheMetadata error,version:{}", version, e);
         } finally {

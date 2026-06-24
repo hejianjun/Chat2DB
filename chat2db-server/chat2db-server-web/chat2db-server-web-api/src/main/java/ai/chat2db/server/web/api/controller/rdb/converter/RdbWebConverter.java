@@ -289,6 +289,7 @@ public abstract class RdbWebConverter {
      * @param dto
      * @return
      */
+    @Mapping(source = "comment", target = "description")
     public abstract DatabaseVO databaseDto2vo(Database dto);
 
 

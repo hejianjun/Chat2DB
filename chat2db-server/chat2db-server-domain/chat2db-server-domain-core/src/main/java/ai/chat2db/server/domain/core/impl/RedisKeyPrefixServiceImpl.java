@@ -12,9 +12,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefixBuildStatus;
 import ai.chat2db.server.domain.api.param.RedisKeyPrefixQueryParam;
+import ai.chat2db.server.domain.api.service.MetadataSnapshotService;
 import ai.chat2db.server.domain.api.service.RedisKeyPrefixService;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
+import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
@@ -57,6 +59,9 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
+
+    @Autowired
+    private MetadataSnapshotService metadataSnapshotService;
 
     /**
      * 刷新任务状态缓存。
@@ -109,6 +114,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .updatedAt(now())
                 .build();
         statusMap.put(statusKey, status);
+        updateRedisSnapshots(dataSourceId, databaseName, 0L, 0L, MetadataSnapshotService.STATUS_REFRESHING, null);
 
         CompletableFuture.runAsync(() -> doRefresh(dataSourceId, databaseName, asyncConnectInfo, statusKey));
         return statusKey;
@@ -215,6 +221,8 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             status.setPrefixCount((long) prefixCountMap.size());
             // 记录任务完成时间。
             status.setUpdatedAt(now());
+            updateRedisSnapshots(dataSourceId, databaseName, scannedCount.get(), (long) prefixCountMap.size(),
+                    MetadataSnapshotService.STATUS_READY, null);
         } catch (Exception e) {
             log.error("Refresh redis key prefix cache failed, dataSourceId={}, databaseName={}",
                     dataSourceId, databaseName, e);
@@ -222,6 +230,8 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             status.setErrorMessage(e.getMessage());
             // 记录失败时间。
             status.setUpdatedAt(now());
+            updateRedisSnapshots(dataSourceId, databaseName, scannedCount.get(), (long) prefixCountMap.size(),
+                    MetadataSnapshotService.STATUS_FAILED, e.getMessage());
         } finally {
             Chat2DBContext.removeContext();
         }
@@ -317,6 +327,21 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      */
     private String buildStatusKey(Long dataSourceId, String databaseName) {
         return dataSourceId + ":" + StringUtils.defaultString(databaseName);
+    }
+
+    private void updateRedisSnapshots(Long dataSourceId, String databaseName, Long keyCount, Long prefixCount,
+                                      String status, String errorMessage) {
+        Dbutils.runWithSession(() -> {
+            String redisKeyObjectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_REDIS_KEY,
+                    databaseName, null, databaseName);
+            metadataSnapshotService.upsertCount(dataSourceId, MetadataSnapshotService.TYPE_REDIS_KEY, redisKeyObjectKey,
+                    databaseName, null, databaseName, keyCount, null, status, errorMessage);
+
+            String redisPrefixObjectKey = metadataSnapshotService.buildObjectKey(
+                    MetadataSnapshotService.TYPE_REDIS_PREFIX, databaseName, null, databaseName);
+            metadataSnapshotService.upsertCount(dataSourceId, MetadataSnapshotService.TYPE_REDIS_PREFIX,
+                    redisPrefixObjectKey, databaseName, null, databaseName, prefixCount, null, status, errorMessage);
+        });
     }
 
     /**

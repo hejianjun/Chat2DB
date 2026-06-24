@@ -1,8 +1,9 @@
 import { DatabaseTypeCode, OperationColumn, TreeNodeType, WorkspaceTabType } from '@/constants';
 import i18n from '@/i18n';
+import metadataService from '@/service/metadata';
 import sqlServer from '@/service/sql';
 import { ITreeNode } from '@/typings';
-import { message } from 'antd';
+import { Input, message, Modal } from 'antd';
 import { v4 as uuid } from 'uuid';
 
 // ----- components -----
@@ -10,7 +11,7 @@ import { dataSourceFormConfigs } from '@/components/ConnectionEdit/config/dataSo
 import { IConnectionConfig } from '@/components/ConnectionEdit/config/types';
 
 // ----- config -----
-import { useMemo } from 'react';
+import { createElement, useMemo } from 'react';
 import { ITreeConfigItem, treeConfig } from '../treeConfig';
 
 // ----- store -----
@@ -62,6 +63,15 @@ const DATA_OPS: (OperationColumn | string)[] = [
   OperationColumn.DataTransfer,
   OperationColumn.GenerateData,
 ];
+
+const DATABASE_LIST_CACHE_KEY_PREFIX = 'chat2db-database-list-cache';
+
+const clearDatabaseListCache = (dataSourceId?: number) => {
+  if (!dataSourceId) {
+    return;
+  }
+  localStorage.removeItem(`${DATABASE_LIST_CACHE_KEY_PREFIX}-${dataSourceId}`);
+};
 
 const REDIS_EXCLUDED_OPERATIONS = new Set<OperationColumn>([
   OperationColumn.SchemaDiff,
@@ -168,6 +178,48 @@ export const useGetRightClickMenu = (props: IProps) => {
         loadData({
           refresh: true,
         });
+      },
+    });
+  };
+
+  const openEditDatabaseCommentModal = () => {
+    const databaseName = treeNodeData.extraParams?.databaseName || treeNodeData.name;
+    let comment = treeNodeData.comment || '';
+    Modal.confirm({
+      title: '编辑注释',
+      icon: null,
+      width: 460,
+      okText: i18n('common.button.save'),
+      cancelText: i18n('common.button.cancel'),
+      content: createElement(Input.TextArea, {
+        defaultValue: comment,
+        placeholder: '请输入数据库注释',
+        autoSize: { minRows: 4, maxRows: 8 },
+        maxLength: 2048,
+        style: { marginTop: 8 },
+        onChange: (event) => {
+          comment = event.target.value;
+        },
+      }),
+      onOk: async () => {
+        await metadataService.saveComment({
+          dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          objectType: 'DATABASE',
+          databaseName,
+          objectName: databaseName,
+          comment,
+        });
+        treeNodeData.comment = comment;
+        clearDatabaseListCache(treeNodeData.extraParams?.dataSourceId);
+        message.success(i18n('common.tips.saveSuccessfully'));
+        if (treeNodeData.parentNode) {
+          loadData?.({
+            treeNodeData: treeNodeData.parentNode,
+            refresh: true,
+          });
+          return;
+        }
+        refreshRootData?.(true);
       },
     });
   };
@@ -428,6 +480,12 @@ export const useGetRightClickMenu = (props: IProps) => {
         handle: () => {
           navigator.clipboard.writeText(treeNodeData.name);
         },
+      },
+
+      [OperationColumn.EditDatabaseComment]: {
+        text: '编辑注释',
+        icon: '\ue602',
+        handle: openEditDatabaseCommentModal,
       },
 
       // 打开表
@@ -712,7 +770,7 @@ export const useGetRightClickMenu = (props: IProps) => {
 };
 
 export const getRightClickMenu = (props: IProps) => {
-  const { treeNodeData, loadData } = props;
+  const { treeNodeData, loadData, refreshRootData } = props;
 
   const openCreateDatabaseModal = useWorkspaceStore.getState().openCreateDatabaseModal;
   const currentConnectionDetails = useWorkspaceStore.getState().currentConnectionDetails;
@@ -731,6 +789,48 @@ export const getRightClickMenu = (props: IProps) => {
         loadData({
           refresh: true,
         });
+      },
+    });
+  };
+
+  const openEditDatabaseCommentModal = () => {
+    const databaseName = treeNodeData.extraParams?.databaseName || treeNodeData.name;
+    let comment = treeNodeData.comment || '';
+    Modal.confirm({
+      title: '编辑注释',
+      icon: null,
+      width: 460,
+      okText: i18n('common.button.save'),
+      cancelText: i18n('common.button.cancel'),
+      content: createElement(Input.TextArea, {
+        defaultValue: comment,
+        placeholder: '请输入数据库注释',
+        autoSize: { minRows: 4, maxRows: 8 },
+        maxLength: 2048,
+        style: { marginTop: 8 },
+        onChange: (event) => {
+          comment = event.target.value;
+        },
+      }),
+      onOk: async () => {
+        await metadataService.saveComment({
+          dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          objectType: 'DATABASE',
+          databaseName,
+          objectName: databaseName,
+          comment,
+        });
+        treeNodeData.comment = comment;
+        clearDatabaseListCache(treeNodeData.extraParams?.dataSourceId);
+        message.success(i18n('common.tips.saveSuccessfully'));
+        if (treeNodeData.parentNode) {
+          loadData?.({
+            treeNodeData: treeNodeData.parentNode,
+            refresh: true,
+          });
+          return;
+        }
+        refreshRootData?.(true);
       },
     });
   };
@@ -955,6 +1055,12 @@ export const getRightClickMenu = (props: IProps) => {
       handle: () => {
         navigator.clipboard.writeText(treeNodeData.name);
       },
+    },
+
+    [OperationColumn.EditDatabaseComment]: {
+      text: '编辑注释',
+      icon: '\ue602',
+      handle: openEditDatabaseCommentModal,
     },
 
     // 打开表

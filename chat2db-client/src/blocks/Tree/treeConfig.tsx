@@ -123,6 +123,7 @@ const mapDatabaseListToTreeNodes = (list: any[], extraParams: any): ITreeNode[] 
       key: t.name,
       name: t.name,
       count: t.count,
+      comment: t.description || t.comment,
       treeNodeType: TreeNodeType.DATABASE,
       extraParams: {
         ...extraParams,
@@ -384,6 +385,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
       OperationColumn.CreateSchema,
       // OperationColumn.CreateTable,
       OperationColumn.CopyName,
+      OperationColumn.EditDatabaseComment,
       OperationColumn.Refresh,
       OperationColumn.DeleteDatabase,
     ],
