@@ -32,12 +32,13 @@ public class SchemaInsightTools {
 
     @McpTool(description = "List database objects of type view, function or procedure. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public Object listDbObjects(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public Object listDbObjects(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Object type: view, function, procedure") String type,
         @McpToolParam(description = "Optional search keyword", required = false) String keyword) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> switch (type.toLowerCase()) {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> switch (type.toLowerCase()) {
             case "view", "views" -> viewService.viewsWithCache(resolvedDataSource.getDataSourceId(), databaseName,
                 schemaName, keyword, false);
             case "function", "functions" -> functionService.functionsWithCache(resolvedDataSource.getDataSourceId(),
@@ -50,11 +51,12 @@ public class SchemaInsightTools {
 
     @McpTool(description = "Search tables by keyword. Currently searches table names via list_tables metadata cache. Read-only operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String searchTables(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String searchTables(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Search keyword") String keyword) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
             resolvedDataSource -> databaseService.searchTableColumns(resolvedDataSource.getDataSourceId(), databaseName,
                 schemaName, keyword));
     }

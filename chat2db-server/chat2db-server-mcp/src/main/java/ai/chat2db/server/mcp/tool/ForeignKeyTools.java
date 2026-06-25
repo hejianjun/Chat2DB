@@ -28,12 +28,13 @@ public class ForeignKeyTools {
 
     @McpTool(description = "List real and virtual foreign keys for a table or its relationships. Read-only metadata operation. relation can be SOURCE, REFERENCED or ANY; default SOURCE."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public List<ForeignKey> listForeignKeys(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public List<ForeignKey> listForeignKeys(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name, optional. Omit to list all foreign keys in the database/schema", required = false) String tableName,
         @McpToolParam(description = "Relation filter: SOURCE, REFERENCED, ANY. Default SOURCE", required = false) String relation) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
             resolvedDataSource -> foreignKeySyncService.listForeignKeys(resolvedDataSource.getDataSourceId(),
                 databaseName, schemaName, tableName,
                 parseRelation(relation)));
@@ -41,29 +42,32 @@ public class ForeignKeyTools {
 
     @McpTool(description = "List real database foreign keys only. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public List<ForeignKey> listRealForeignKeys(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public List<ForeignKey> listRealForeignKeys(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name, optional. Omit to list all real foreign keys in the database/schema", required = false) String tableName) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
             resolvedDataSource -> foreignKeySyncService.queryRealForeignKeys(resolvedDataSource.getDataSourceId(),
                 databaseName, schemaName, tableName));
     }
 
     @McpTool(description = "List virtual foreign keys only. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public List<VirtualForeignKey> listVirtualForeignKeys(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public List<VirtualForeignKey> listVirtualForeignKeys(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name, optional. Omit to list all virtual foreign keys in the database/schema", required = false) String tableName) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
             resolvedDataSource -> foreignKeySyncService.queryVirtualForeignKeys(resolvedDataSource.getDataSourceId(),
                 databaseName, schemaName, tableName));
     }
 
     @McpTool(description = "Create a virtual foreign key. Metadata-only operation; it does not alter the physical database schema."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
-    public VirtualForeignKey createVirtualForeignKey(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public VirtualForeignKey createVirtualForeignKey(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Source table name") String tableName,
@@ -71,7 +75,7 @@ public class ForeignKeyTools {
         @McpToolParam(description = "Referenced table name") String referencedTable,
         @McpToolParam(description = "Referenced column name") String referencedColumnName,
         @McpToolParam(description = "Comment, optional", required = false) String comment) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> foreignKeySyncService.createVirtualFK(
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> foreignKeySyncService.createVirtualFK(
             CreateVirtualFKParam.builder()
                 .dataSourceId(resolvedDataSource.getDataSourceId())
                 .databaseName(databaseName)
@@ -87,7 +91,7 @@ public class ForeignKeyTools {
     @McpTool(description = "Update a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
     public VirtualForeignKey updateVirtualForeignKey(@McpToolParam(description = "Virtual foreign key id") Long id,
-        @McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Source table name, optional", required = false) String tableName,
@@ -96,7 +100,7 @@ public class ForeignKeyTools {
         @McpToolParam(description = "Referenced column name, optional", required = false) String referencedColumnName,
         @McpToolParam(description = "Virtual foreign key name, optional", required = false) String name,
         @McpToolParam(description = "Comment, optional", required = false) String comment) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> foreignKeySyncService.updateVirtualFK(
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> foreignKeySyncService.updateVirtualFK(
             UpdateVirtualFKParam.builder()
                 .id(id)
                 .dataSourceId(resolvedDataSource.getDataSourceId())
@@ -113,11 +117,12 @@ public class ForeignKeyTools {
 
     @McpTool(description = "Delete a virtual foreign key by id. Metadata-only operation; it does not alter the physical database schema."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
-    public String deleteVirtualForeignKey(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String deleteVirtualForeignKey(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Virtual foreign key id") Long id) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             foreignKeySyncService.deleteVirtualFK(id);
             return "Deleted virtual foreign key: " + id;
         });

@@ -8,6 +8,7 @@ import ai.chat2db.server.mcp.tool.ForeignKeyTools;
 import ai.chat2db.server.mcp.tool.MetadataTools;
 import ai.chat2db.server.mcp.tool.QueryTools;
 import ai.chat2db.server.mcp.tool.SchemaInsightTools;
+import ai.chat2db.server.mcp.support.DataSourceResourceService;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -29,5 +30,17 @@ public class McpServerConfiguration {
         ForeignKeyTools foreignKeyTools, SchemaInsightTools schemaInsightTools) {
         return SyncMcpAnnotationProviders.toolSpecifications(List.of(dataSourceTools, metadataTools, queryTools,
             dangerousSqlTools, foreignKeyTools, schemaInsightTools));
+    }
+
+    @Bean
+    public List<McpServerFeatures.SyncResourceSpecification> chat2dbMcpResources(
+        DataSourceResourceService dataSourceResourceService) {
+        return List.of();
+    }
+
+    @Bean
+    public List<McpServerFeatures.SyncResourceTemplateSpecification> chat2dbMcpResourceTemplates(
+        DataSourceResourceService dataSourceResourceService) {
+        return dataSourceResourceService.resourceTemplateSpecifications();
     }
 }

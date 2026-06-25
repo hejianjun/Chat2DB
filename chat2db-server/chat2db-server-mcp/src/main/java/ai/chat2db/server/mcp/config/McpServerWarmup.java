@@ -1,5 +1,6 @@
 package ai.chat2db.server.mcp.config;
 
+import ai.chat2db.server.mcp.support.DataSourceResourceService;
 import io.modelcontextprotocol.server.McpSyncServer;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -16,14 +17,18 @@ import org.springframework.stereotype.Component;
 public class McpServerWarmup implements ApplicationRunner {
 
     private final McpSyncServer mcpSyncServer;
+    private final DataSourceResourceService dataSourceResourceService;
 
-    public McpServerWarmup(McpSyncServer mcpSyncServer) {
+    public McpServerWarmup(McpSyncServer mcpSyncServer, DataSourceResourceService dataSourceResourceService) {
         this.mcpSyncServer = mcpSyncServer;
+        this.dataSourceResourceService = dataSourceResourceService;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         // Force MCP server creation so the SSE transport receives its session factory.
         mcpSyncServer.getServerCapabilities();
+        dataSourceResourceService.resourceSpecifications().forEach(mcpSyncServer::addResource);
+        mcpSyncServer.notifyResourcesListChanged();
     }
 }

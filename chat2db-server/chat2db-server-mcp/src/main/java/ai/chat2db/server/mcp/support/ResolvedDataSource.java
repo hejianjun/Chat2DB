@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * Datasource identity resolved from a signed MCP datasource reference.
+ * Datasource identity resolved from an MCP datasource resource URI.
  */
 @Data
 @Builder

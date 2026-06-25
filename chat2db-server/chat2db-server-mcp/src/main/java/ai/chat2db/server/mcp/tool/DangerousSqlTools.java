@@ -39,17 +39,18 @@ public class DangerousSqlTools {
 
     @McpTool(description = "DESTRUCTIVE P2 PREPARE: Prepare INSERT/UPDATE/DELETE SQL statements. This does not execute SQL. Returns operationId, target summary, SQL preview and exact confirmationText required by executePreparedSqlChange."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String prepareUpdateSqlChange(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String prepareUpdateSqlChange(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
                                 @McpToolParam(description = "Database name") String databaseName,
                                 @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
                                 @McpToolParam(description = "INSERT/UPDATE/DELETE SQL list. Each item must contain exactly one statement.") List<String> sqlList,
                                 @McpToolParam(description = "Expected updated row count for each SQL item. Must have the same size as sqlList.") List<Integer> expectedUpdateCounts) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
                 resolvedDataSource -> {
                     sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId(), true);
                     sqlGuard.requireWriteSqlList(sqlList);
                     sqlGuard.requireExpectedUpdateCounts(sqlList, expectedUpdateCounts);
-                    PreparedSqlChange change = preparedSqlChangeStore.prepare("UPDATE", datasourceRef, resolvedDataSource,
+                    PreparedSqlChange change = preparedSqlChangeStore.prepare("UPDATE", datasourceUri, resolvedDataSource,
                         databaseName, schemaName, sqlList, expectedUpdateCounts);
                     return formatPreparedChange(change);
                 });
@@ -57,15 +58,16 @@ public class DangerousSqlTools {
 
     @McpTool(description = "DESTRUCTIVE P2 PREPARE: Prepare DDL SQL such as CREATE/ALTER/DROP/TRUNCATE. This does not execute SQL. Returns operationId, target summary, SQL preview and exact confirmationText required by executePreparedSqlChange."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String prepareDdlSqlChange(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String prepareDdlSqlChange(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
                              @McpToolParam(description = "Database name") String databaseName,
                              @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
                              @McpToolParam(description = "DDL SQL") String sql) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName,
+        return connectionScope.run(datasourceUri, databaseName, schemaName,
                 resolvedDataSource -> {
                     sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId(), true);
                     sqlGuard.requireSingleDdlSql(sql);
-                    PreparedSqlChange change = preparedSqlChangeStore.prepare("DDL", datasourceRef, resolvedDataSource,
+                    PreparedSqlChange change = preparedSqlChangeStore.prepare("DDL", datasourceUri, resolvedDataSource,
                         databaseName, schemaName, List.of(sql), null);
                     return formatPreparedChange(change);
                 });
@@ -76,7 +78,7 @@ public class DangerousSqlTools {
     public String executePreparedSqlChange(@McpToolParam(description = "operationId returned by prepareUpdateSqlChange or prepareDdlSqlChange") String operationId,
         @McpToolParam(description = "Exact confirmationText returned by prepareUpdateSqlChange or prepareDdlSqlChange") String confirmationText) {
         PreparedSqlChange change = preparedSqlChangeStore.consume(operationId, confirmationText);
-        return connectionScope.run(change.getDatasourceRef(), change.getDatabaseName(), change.getSchemaName(),
+        return connectionScope.run(change.getDatasourceUri(), change.getDatabaseName(), change.getSchemaName(),
             resolvedDataSource -> {
                 if ("UPDATE".equals(change.getOperationType())) {
                     sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId(), true);

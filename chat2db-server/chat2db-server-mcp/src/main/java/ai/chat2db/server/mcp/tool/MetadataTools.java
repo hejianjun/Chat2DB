@@ -40,8 +40,9 @@ public class MetadataTools {
 
     @McpTool(description = "List databases for a datasource as CSV. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String listDatabases(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef) {
-        return connectionScope.run(datasourceRef, null, null, resolvedDataSource -> {
+    public String listDatabases(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri) {
+        return connectionScope.run(datasourceUri, null, null, resolvedDataSource -> {
             DatabaseQueryAllParam param = new DatabaseQueryAllParam();
             param.setDataSourceId(resolvedDataSource.getDataSourceId());
             return resultFormatter.formatDatabasesCsv(databaseService.queryAll(param));
@@ -50,9 +51,10 @@ public class MetadataTools {
 
     @McpTool(description = "List schemas under a database as CSV. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String listSchemas(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String listSchemas(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName) {
-        return connectionScope.run(datasourceRef, databaseName, null, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, null, resolvedDataSource -> {
             SchemaQueryParam param = new SchemaQueryParam();
             param.setDataSourceId(resolvedDataSource.getDataSourceId());
             param.setDataBaseName(databaseName);
@@ -62,11 +64,12 @@ public class MetadataTools {
 
     @McpTool(description = "List tables in a database/schema as CSV. Supports optional keyword search. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String listTables(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String listTables(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Optional table search keyword", required = false) String keyword) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             TablePageQueryParam param = new TablePageQueryParam();
             param.setDataSourceId(resolvedDataSource.getDataSourceId());
             param.setDatabaseName(databaseName);
@@ -80,11 +83,12 @@ public class MetadataTools {
 
     @McpTool(description = "Mark a table as deprecated and hide it from normal table lists. Read-only metadata preference operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
-    public String deprecateTable(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String deprecateTable(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name") String tableName) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             tableService.deprecatedTable(
                 deprecatedTableParam(resolvedDataSource.getDataSourceId(), databaseName, schemaName, tableName));
             return "Deprecated table: " + tableName;
@@ -93,11 +97,12 @@ public class MetadataTools {
 
     @McpTool(description = "Restore a deprecated table from recycle bin back to normal table lists. Read-only metadata preference operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
-    public String restoreDeprecatedTable(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String restoreDeprecatedTable(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name") String tableName) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             tableService.deleteDeprecatedTable(
                 deprecatedTableParam(resolvedDataSource.getDataSourceId(), databaseName, schemaName, tableName));
             return "Restored table: " + tableName;
@@ -106,11 +111,12 @@ public class MetadataTools {
 
     @McpTool(description = "List deprecated tables in the recycle bin for a database/schema as CSV. Read-only metadata operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String listDeprecatedTables(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String listDeprecatedTables(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Optional table search keyword", required = false) String keyword) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             TablePageQueryParam param = new TablePageQueryParam();
             param.setDataSourceId(resolvedDataSource.getDataSourceId());
             param.setDatabaseName(databaseName);
@@ -125,13 +131,14 @@ public class MetadataTools {
 
     @McpTool(description = "Save AI comment for a table or one column. Pass columnName only when updating a column AI comment. Metadata-only operation."
         , annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = false))
-    public String saveAiComment(@McpToolParam(description = "Datasource ref from listDatasources") String datasourceRef,
+    public String saveAiComment(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "Database name") String databaseName,
         @McpToolParam(description = "Schema name, optional", required = false) String schemaName,
         @McpToolParam(description = "Table name") String tableName,
         @McpToolParam(description = "Column name, optional. Omit to update table AI comment", required = false) String columnName,
         @McpToolParam(description = "AI comment text") String aiComment) {
-        return connectionScope.run(datasourceRef, databaseName, schemaName, resolvedDataSource -> {
+        return connectionScope.run(datasourceUri, databaseName, schemaName, resolvedDataSource -> {
             tableService.saveAiComment(resolvedDataSource.getDataSourceId(), databaseName, schemaName, tableName,
                 columnName, aiComment);
             return columnName == null || columnName.isBlank()

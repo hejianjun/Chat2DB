@@ -25,7 +25,7 @@ public class PreparedSqlChangeStore {
 
     private final ConcurrentMap<String, PreparedSqlChange> changes = new ConcurrentHashMap<>();
 
-    public PreparedSqlChange prepare(String operationType, String datasourceRef, ResolvedDataSource dataSource,
+    public PreparedSqlChange prepare(String operationType, String datasourceUri, ResolvedDataSource dataSource,
         String databaseName, String schemaName, List<String> sqlList, List<Integer> expectedUpdateCounts) {
         cleanupExpired();
         String operationId = UUID.randomUUID().toString();
@@ -35,7 +35,7 @@ public class PreparedSqlChangeStore {
         PreparedSqlChange change = PreparedSqlChange.builder()
             .operationId(operationId)
             .operationType(operationType)
-            .datasourceRef(datasourceRef)
+            .datasourceUri(datasourceUri)
             .dataSource(dataSource)
             .databaseName(databaseName)
             .schemaName(schemaName)
@@ -103,7 +103,7 @@ public class PreparedSqlChangeStore {
 
         private String operationType;
 
-        private String datasourceRef;
+        private String datasourceUri;
 
         private ResolvedDataSource dataSource;
 

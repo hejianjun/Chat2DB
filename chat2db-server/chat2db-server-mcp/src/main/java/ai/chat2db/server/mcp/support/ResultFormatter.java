@@ -69,13 +69,13 @@ public class ResultFormatter {
         return formatDatasourcesCsv(dataSources, null);
     }
 
-    public String formatDatasourcesCsv(List<DataSource> dataSources, Function<DataSource, String> refProvider) {
-        StringBuilder builder = new StringBuilder("datasourceRef,id,name,environment\n");
+    public String formatDatasourcesCsv(List<DataSource> dataSources, Function<DataSource, String> uriProvider) {
+        StringBuilder builder = new StringBuilder("datasourceUri,id,name,environment\n");
         if (dataSources == null || dataSources.isEmpty()) {
             return builder.toString();
         }
         for (DataSource dataSource : dataSources) {
-            builder.append(csvCell(refProvider == null ? null : refProvider.apply(dataSource))).append(',')
+            builder.append(csvCell(uriProvider == null ? null : uriProvider.apply(dataSource))).append(',')
                 .append(csvCell(dataSource.getId() == null ? null : dataSource.getId().toString())).append(',')
                 .append(csvCell(dataSource.getAlias())).append(',')
                 .append(csvCell(dataSource.getEnvironment() == null ? dataSource.getEnvType()
@@ -85,11 +85,11 @@ public class ResultFormatter {
         return builder.toString();
     }
 
-    public String formatDatasourcesJson(List<DataSource> dataSources, Function<DataSource, String> refProvider) {
+    public String formatDatasourcesJson(List<DataSource> dataSources, Function<DataSource, String> uriProvider) {
         List<Map<String, Object>> rows = dataSources == null ? List.of() : dataSources.stream()
             .map(dataSource -> {
                 Map<String, Object> row = new LinkedHashMap<>();
-                row.put("datasourceRef", refProvider == null ? "" : refProvider.apply(dataSource));
+                row.put("datasourceUri", uriProvider == null ? "" : uriProvider.apply(dataSource));
                 row.put("id", dataSource.getId());
                 row.put("name", StringUtils.defaultString(dataSource.getAlias()));
                 row.put("environment", environment(dataSource));

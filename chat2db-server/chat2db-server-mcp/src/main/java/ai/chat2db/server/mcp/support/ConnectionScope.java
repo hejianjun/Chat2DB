@@ -18,15 +18,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConnectionScope {
 
-    private final DataSourceRefService dataSourceRefService;
+    private final DataSourceResourceService dataSourceResourceService;
 
-    public ConnectionScope(DataSourceRefService dataSourceRefService) {
-        this.dataSourceRefService = dataSourceRefService;
+    public ConnectionScope(DataSourceResourceService dataSourceResourceService) {
+        this.dataSourceResourceService = dataSourceResourceService;
     }
 
-    public <T> T run(String datasourceRef, String databaseName, String schemaName,
+    public <T> T run(String datasourceUri, String databaseName, String schemaName,
         Function<ResolvedDataSource, T> supplier) {
-        ResolvedDataSource resolvedDataSource = dataSourceRefService.resolve(datasourceRef);
+        ResolvedDataSource resolvedDataSource = dataSourceResourceService.resolve(datasourceUri);
         Chat2DBContext.putContext(toInfo(resolvedDataSource, databaseName, schemaName));
         try {
             return supplier.apply(resolvedDataSource);
@@ -43,7 +43,7 @@ public class ConnectionScope {
     public ConnectInfo toInfo(ResolvedDataSource resolvedDataSource, String databaseName, String schemaName) {
         DataSource dataSource = resolvedDataSource.getDataSource();
         if (dataSource == null) {
-            throw new ParamBusinessException("dataSourceId");
+            throw new ParamBusinessException("datasourceUri");
         }
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setAlias(dataSource.getAlias());
