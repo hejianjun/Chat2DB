@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -100,9 +101,10 @@ public class DataSourceResourceService {
     }
 
     public String summary(DataSource dataSource) {
+        String dataSourceId = Objects.toString(dataSource.getId(), "unknown");
         return String.format(Locale.ROOT, "id=%s;name=%s;env=%s",
-            StringUtils.defaultString(value(dataSource.getId())),
-            StringUtils.defaultIfBlank(dataSource.getAlias(), String.valueOf(dataSource.getId())),
+            dataSourceId,
+            Objects.toString(dataSource.getAlias(), dataSourceId),
             environmentText(dataSource));
     }
 
@@ -192,7 +194,4 @@ public class DataSourceResourceService {
         }
     }
 
-    private String value(Object value) {
-        return StringUtils.defaultString(value == null ? null : value.toString());
-    }
 }
