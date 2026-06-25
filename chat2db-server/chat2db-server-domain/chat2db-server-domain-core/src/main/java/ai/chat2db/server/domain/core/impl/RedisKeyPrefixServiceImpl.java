@@ -1,10 +1,11 @@
 package ai.chat2db.server.domain.core.impl;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -36,8 +37,8 @@ import org.springframework.stereotype.Service;
  * 便于前端分页搜索、展示 key 数量以及维护前缀备注。刷新过程采用异步执行，避免扫描
  * Redis 时阻塞调用线程。</p>
  *
- * <p>前缀提取规则：仅处理包含冒号分隔符的 key，并把最后一段之前的内容作为前缀。
- * 例如 {@code user:1001:profile} 会聚合到 {@code user:1001}。</p>
+ * <p>前缀提取规则：仅在配置的分隔符位置截断，并优先选择最长且 key 数量大于 1 的前缀。
+ * 例如 {@code user:1001:profile} 会优先聚合到 {@code user:1001:}。</p>
  */
 @Slf4j
 @Service
@@ -53,6 +54,15 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     private static final String STATUS_FAILED = "FAILED";
     /** Redis 前缀搜索默认按前缀名升序展示。 */
     private static final String DEFAULT_SORT_FIELD = "name";
+
+    /** 默认 Redis key 前缀分隔符，支持冒号、下划线、中划线和点号。 */
+    private static final String DEFAULT_PREFIX_DELIMITERS = ":_-.";
+
+    /** 自定义 Redis key 前缀分隔符系统属性。 */
+    private static final String PREFIX_DELIMITERS_PROPERTY = "chat2db.redis.key-prefix.delimiters";
+
+    /** 自定义 Redis key 前缀分隔符环境变量。 */
+    private static final String PREFIX_DELIMITERS_ENV = "CHAT2DB_REDIS_KEY_PREFIX_DELIMITERS";
 
     /** 每扫描到指定数量的 key 后，将当前聚合结果刷新到 Lucene，控制长时间扫描时的内存增长。 */
     private static final long FLUSH_KEY_THRESHOLD = 50000L;
@@ -190,7 +200,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         // 根据 refresh 方法提前写入的 statusKey，取出本轮异步刷新任务的状态对象。
         RedisKeyPrefixBuildStatus status = statusMap.get(statusKey);
 
-        // 前缀计数表：key 是提取出的 Redis 前缀，value 是该前缀下匹配到的 key 数量。
+        // 候选前缀计数表：key 是 Redis 前缀候选，value 是该候选覆盖的 key 数量。
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
 
         // 已扫描的 Redis key 总数，用 AtomicLong 便于在流式回调中安全累加。
@@ -223,17 +233,19 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
             }).join();
 
+            Map<String, Long> selectedPrefixCountMap = selectLongestPrefixes(prefixCountMap);
+
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
-            flushPrefixes(luceneMgr, dataSourceId, databaseName, prefixCountMap);
+            flushPrefixes(luceneMgr, dataSourceId, databaseName, selectedPrefixCountMap);
             // 扫描和索引写入全部完成后，标记任务成功。
             status.setStatus(STATUS_DONE);
             // 当前扫描接口未暴露游标恢复能力，完成后统一重置为初始游标。
             status.setCursor("0");
             // 最终前缀数量以完整扫描后的聚合结果为准。
-            status.setPrefixCount((long) prefixCountMap.size());
+            status.setPrefixCount((long) selectedPrefixCountMap.size());
             // 记录任务完成时间。
             status.setUpdatedAt(now());
-            updateRedisSnapshots(dataSourceId, databaseName, scannedCount.get(), (long) prefixCountMap.size(),
+            updateRedisSnapshots(dataSourceId, databaseName, scannedCount.get(), (long) selectedPrefixCountMap.size(),
                     MetadataSnapshotService.STATUS_READY, null);
         } catch (Exception e) {
             log.error("Refresh redis key prefix cache failed, dataSourceId={}, databaseName={}",
@@ -266,34 +278,60 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /**
      * 从单个 Redis key 中提取前缀并累计出现次数。
      *
-     * <p>只处理包含 {@code :} 的 key；空片段会被忽略，最后一个片段通常代表具体业务对象
-     * 或字段，不计入前缀。例如 {@code order::2024:1001} 会被规整为 {@code order:2024}。</p>
+     * <p>只在分隔符位置截断，截断结果保留分隔符，避免把 {@code us}、{@code use} 这类普通字符
+     * 误判为前缀。例如 {@code user:1001:profile} 会产生 {@code user:} 和
+     * {@code user:1001:} 两个候选。</p>
      */
     private void collectPrefixes(String key, Map<String, Long> prefixCountMap) {
-        if (StringUtils.isBlank(key) || !key.contains(":")) {
-            return;
+        collectPrefixes(key, prefixCountMap, resolvePrefixDelimiters());
+    }
+
+    static Map<String, Long> buildPrefixCountMap(Collection<String> keys, String delimiters) {
+        Map<String, Long> candidatePrefixCountMap = new ConcurrentHashMap<>();
+        keys.forEach(key -> collectPrefixes(key, candidatePrefixCountMap, delimiters));
+        return selectLongestPrefixes(candidatePrefixCountMap);
+    }
+
+    private static void collectPrefixes(String key, Map<String, Long> prefixCountMap, String delimiters) {
+        extractPrefixCandidates(key, delimiters).forEach(prefix -> prefixCountMap.merge(prefix, 1L, Long::sum));
+    }
+
+    private static List<String> extractPrefixCandidates(String key, String delimiters) {
+        if (StringUtils.isBlank(key) || StringUtils.isBlank(delimiters)) {
+            return List.of();
         }
-        String[] rawParts = key.split(":");
-        List<String> parts = new ArrayList<>();
-        for (String rawPart : rawParts) {
-            if (StringUtils.isNotEmpty(rawPart)) {
-                parts.add(rawPart);
-            }
+        return java.util.stream.IntStream.range(0, key.length())
+                .filter(index -> index > 0 && index < key.length() - 1)
+                .filter(index -> delimiters.indexOf(key.charAt(index)) >= 0)
+                .mapToObj(index -> key.substring(0, index + 1))
+                .filter(StringUtils::isNotBlank)
+                .toList();
+    }
+
+    private static Map<String, Long> selectLongestPrefixes(Map<String, Long> candidatePrefixCountMap) {
+        Map<String, Long> selected = new LinkedHashMap<>();
+        candidatePrefixCountMap.entrySet().stream()
+                .filter(entry -> entry.getValue() > 1)
+                .sorted(Comparator.<Map.Entry<String, Long>>comparingInt(entry -> entry.getKey().length())
+                        .reversed()
+                        .thenComparing(Map.Entry::getKey))
+                .forEach(entry -> {
+                    boolean hasContainingPrefix = selected.keySet().stream()
+                            .anyMatch(selectedPrefix -> selectedPrefix.startsWith(entry.getKey())
+                                    || entry.getKey().startsWith(selectedPrefix));
+                    if (!hasContainingPrefix) {
+                        selected.put(entry.getKey(), entry.getValue());
+                    }
+                });
+        return selected;
+    }
+
+    private static String resolvePrefixDelimiters() {
+        String propertyDelimiters = StringUtils.trimToNull(System.getProperty(PREFIX_DELIMITERS_PROPERTY));
+        if (propertyDelimiters != null) {
+            return propertyDelimiters;
         }
-        if (parts.size() < 2) {
-            log.debug("Skip redis key prefix because valid key parts are fewer than 2, key={}", key);
-            return;
-        }
-        StringJoiner joiner = new StringJoiner(":");
-        for (int i = 0; i < parts.size() - 1; i++) {
-            joiner.add(parts.get(i));
-        }
-        String prefix = joiner.toString();
-        if (StringUtils.isBlank(prefix)) {
-            log.debug("Skip blank redis key prefix, key={}", key);
-            return;
-        }
-        prefixCountMap.merge(prefix, 1L, Long::sum);
+        return StringUtils.defaultIfBlank(System.getenv(PREFIX_DELIMITERS_ENV), DEFAULT_PREFIX_DELIMITERS);
     }
 
     /**

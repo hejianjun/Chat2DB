@@ -41,7 +41,7 @@ interface IRedisKeyRow extends IRedisKeyItem {
   children?: IRedisKeyRow[];
 }
 
-const DEFAULT_LIMIT = 5000;
+const DEFAULT_LIMIT = 1000;
 const NO_TTL = -1;
 const KEY_TYPES = ['string', 'hash', 'list', 'set', 'zset'];
 const SEARCH_MODE_KEY = 'key';
@@ -50,6 +50,7 @@ const RUNNING_STATUS = 'RUNNING';
 const DONE_STATUS = 'DONE';
 const PREFIX_STATUS_POLL_INTERVAL = 3000;
 const DEFAULT_PREFIX_SORT = { field: 'displayName', order: 'ascend' as const };
+const REDIS_PREFIX_DELIMITERS = ':_-.';
 
 interface IHashFieldRow {
   id: string;
@@ -318,7 +319,14 @@ const RedisDataView = memo((props: IProps) => {
     if (!selectedPrefix) {
       return;
     }
-    const keyword = `${selectedPrefix}:*`;
+    loadKeysByPrefixName(selectedPrefix);
+  };
+
+  const loadKeysByPrefixName = (prefixName: string) => {
+    if (!prefixName) {
+      return;
+    }
+    const keyword = `${prefixName}*`;
     setSearchMode(SEARCH_MODE_KEY);
     setSearchKey(keyword);
     loadData(keyword, keyLimit);
@@ -864,6 +872,12 @@ const RedisDataView = memo((props: IProps) => {
                 loadKeyDetail(record.name);
               }
             },
+            onDoubleClick: () => {
+              if (record.prefixOnly) {
+                openPrefixEditor(record);
+                loadKeysByPrefixName(record.name);
+              }
+            },
           })}
         />
       </div>
@@ -1103,39 +1117,34 @@ const RedisDataView = memo((props: IProps) => {
 function buildRows(keys: IRedisKeyItem[], prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
   const root: IRedisKeyRow[] = [];
   const groupMap = new Map<string, IRedisKeyRow>();
+  const prefixCountMap = buildPrefixCountMap(keys.map((item) => item.name));
 
   keys.forEach((item) => {
-    const parts = item.name.split(':').filter((part) => part.length > 0);
-    if (parts.length === 1) {
+    const prefix = findLongestPrefix(item.name, prefixCountMap);
+    if (!prefix) {
       root.push(toLeaf(item, item.name, getClosestPrefixComment(item.name, prefixCommentMap)));
       return;
     }
 
-    let children = root;
-    let prefix = '';
-    for (let i = 0; i < parts.length - 1; i++) {
-      prefix = prefix ? `${prefix}:${parts[i]}` : parts[i];
-      let group = groupMap.get(prefix);
-      if (!group) {
-        group = {
-          rowKey: `group-${prefix}`,
-          name: prefix,
-          displayName: parts[i],
-          isGroup: true,
-          count: 0,
-          comment: prefixCommentMap[prefix]?.comment,
-          keyCount: prefixCommentMap[prefix]?.keyCount,
-          children: [],
-        };
-        groupMap.set(prefix, group);
-        children.push(group);
-      }
-      group.comment = prefixCommentMap[prefix]?.comment;
-      group.keyCount = prefixCommentMap[prefix]?.keyCount;
-      group.count = (group.count || 0) + 1;
-      children = group.children!;
+    let group = groupMap.get(prefix);
+    if (!group) {
+      group = {
+        rowKey: `group-${prefix}`,
+        name: prefix,
+        displayName: prefix,
+        isGroup: true,
+        count: 0,
+        comment: getPrefixComment(prefix, prefixCommentMap),
+        keyCount: getPrefixKeyCount(prefix, prefixCommentMap),
+        children: [],
+      };
+      groupMap.set(prefix, group);
+      root.push(group);
     }
-    children.push(toLeaf(item, parts[parts.length - 1], getClosestPrefixComment(item.name, prefixCommentMap)));
+    group.comment = getPrefixComment(prefix, prefixCommentMap);
+    group.keyCount = getPrefixKeyCount(prefix, prefixCommentMap);
+    group.count = (group.count || 0) + 1;
+    group.children!.push(toLeaf(item, item.name.slice(prefix.length) || item.name, group.comment));
   });
 
   return root;
@@ -1172,15 +1181,70 @@ function mergePrefixComments(
 }
 
 function getClosestPrefixComment(keyName: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
-  const parts = keyName.split(':').filter((part) => part.length > 0);
-  for (let i = parts.length - 1; i > 0; i--) {
-    const prefix = parts.slice(0, i).join(':');
-    const comment = prefixCommentMap[prefix]?.comment;
+  const candidates = extractPrefixCandidates(keyName).sort((a, b) => b.length - a.length);
+  for (const prefix of candidates) {
+    const comment = getPrefixComment(prefix, prefixCommentMap);
     if (comment) {
       return comment;
     }
   }
   return undefined;
+}
+
+// Keep visible key grouping aligned with backend prefix extraction.
+// Prefixes are delimiter-bound, longest-first, and skip single-key groups.
+function buildPrefixCountMap(keys: string[]) {
+  const candidateCountMap = new Map<string, number>();
+  keys.forEach((key) => {
+    extractPrefixCandidates(key).forEach((prefix) => {
+      candidateCountMap.set(prefix, (candidateCountMap.get(prefix) || 0) + 1);
+    });
+  });
+
+  const selected = new Map<string, number>();
+  [...candidateCountMap.entries()]
+    .filter(([, count]) => count > 1)
+    .sort(([prefixA], [prefixB]) => prefixB.length - prefixA.length || prefixA.localeCompare(prefixB))
+    .forEach(([prefix, count]) => {
+      const hasContainingPrefix = [...selected.keys()].some(
+        (selectedPrefix) => selectedPrefix.startsWith(prefix) || prefix.startsWith(selectedPrefix),
+      );
+      if (!hasContainingPrefix) {
+        selected.set(prefix, count);
+      }
+    });
+  return selected;
+}
+
+function extractPrefixCandidates(keyName: string) {
+  const candidates: string[] = [];
+  for (let index = 1; index < keyName.length - 1; index++) {
+    if (REDIS_PREFIX_DELIMITERS.includes(keyName[index])) {
+      candidates.push(keyName.slice(0, index + 1));
+    }
+  }
+  return candidates;
+}
+
+function findLongestPrefix(keyName: string, prefixCountMap: Map<string, number>) {
+  return [...prefixCountMap.keys()]
+    .filter((prefix) => keyName.startsWith(prefix))
+    .sort((prefixA, prefixB) => prefixB.length - prefixA.length)[0];
+}
+
+function getPrefixComment(prefix: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
+  return prefixCommentMap[prefix]?.comment || prefixCommentMap[trimTrailingDelimiter(prefix)]?.comment;
+}
+
+function getPrefixKeyCount(prefix: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
+  return prefixCommentMap[prefix]?.keyCount ?? prefixCommentMap[trimTrailingDelimiter(prefix)]?.keyCount;
+}
+
+function trimTrailingDelimiter(prefix: string) {
+  if (!prefix || !REDIS_PREFIX_DELIMITERS.includes(prefix[prefix.length - 1])) {
+    return prefix;
+  }
+  return prefix.slice(0, -1);
 }
 
 // 获取叶子节点的排序值
@@ -1334,7 +1398,7 @@ function collectSampleKeys(row: IRedisKeyRow) {
 }
 
 function getPrefixCount(prefix: string, prefixCommentMap: Record<string, IRedisKeyPrefixItem>, rows: IRedisKeyRow[]) {
-  const cachedCount = prefixCommentMap[prefix]?.keyCount;
+  const cachedCount = getPrefixKeyCount(prefix, prefixCommentMap);
   if (cachedCount !== undefined) {
     return `${cachedCount} keys`;
   }
