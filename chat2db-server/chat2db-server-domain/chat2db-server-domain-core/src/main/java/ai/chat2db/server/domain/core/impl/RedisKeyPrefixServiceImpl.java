@@ -26,7 +26,6 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.lucene.queryparser.classic.QueryParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -86,21 +85,44 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /**
      * 从 Lucene 索引中分页搜索 Redis key 前缀。
      *
-     * <p>搜索关键字会先经过 {@link QueryParser#escape(String)} 转义，避免用户输入 Lucene
-     * 查询语法中的特殊字符时破坏查询表达式。返回结果会附带当前数据源/库是否正在构建，
-     * 前端可据此展示刷新中的提示。</p>
+     * <p>带通配符的搜索关键字按 Redis 前缀做开头匹配，避免 Lucene 全文分词把中间包含相同片段的
+     * 其它前缀混入结果；普通关键字仍支持按前缀名称和注释搜索，并优先展示前缀名称命中的结果。
+     * 返回结果会附带当前数据源/库是否正在构建，前端可据此展示刷新中的提示。</p>
      */
     @Override
     public List<RedisKeyPrefix> search(RedisKeyPrefixQueryParam param) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(param.getDataSourceId());
         String sortField = normalizeSortField(param.getSortField());
         boolean reverse = "descend".equalsIgnoreCase(param.getSortOrder());
-        List<RedisKeyPrefix> prefixes = luceneMgr.search(param, param.getLastDocId(),
-                QueryParser.escape(StringUtils.defaultString(param.getSearchKey())), sortField, reverse);
+        String prefixSearchKey = normalizePrefixSearchKey(param.getSearchKey());
+        List<RedisKeyPrefix> prefixes;
+        if (StringUtils.isNotBlank(prefixSearchKey)) {
+            prefixes = searchByPrefix(luceneMgr, param, prefixSearchKey, isWildcardPrefixSearch(param.getSearchKey()),
+                    sortField, reverse);
+        } else {
+            prefixes = luceneMgr.search(param, param.getLastDocId(), "", sortField, reverse);
+            param.setLastDocId(luceneMgr.getLastDocId());
+        }
         RedisKeyPrefixBuildStatus status = getStatus(param.getDataSourceId(), param.getDatabaseName());
         boolean building = STATUS_RUNNING.equals(status.getStatus());
         prefixes.forEach(prefix -> prefix.setBuilding(building));
-        param.setLastDocId(luceneMgr.getLastDocId());
+        return prefixes;
+    }
+
+    private List<RedisKeyPrefix> searchByPrefix(LuceneIndexManager<RedisKeyPrefix> luceneMgr,
+                                                 RedisKeyPrefixQueryParam param,
+                                                 String prefixSearchKey,
+                                                 boolean wildcardPrefixSearch,
+                                                 String sortField,
+                                                 boolean reverse) {
+        int pageSize = param.getPageSize() == null ? 1000 : param.getPageSize();
+        List<RedisKeyPrefix> prefixes = luceneMgr.searchAll(param, "")
+                .stream()
+                .filter(prefix -> isPrefixSearchMatch(prefix, prefixSearchKey, wildcardPrefixSearch))
+                .sorted(buildPrefixSearchComparator(prefixSearchKey, sortField, reverse))
+                .limit(pageSize)
+                .toList();
+        param.setLastDocId(null);
         return prefixes;
     }
 
@@ -437,6 +459,57 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             return "keyCount";
         }
         return DEFAULT_SORT_FIELD;
+    }
+
+    static String normalizePrefixSearchKey(String searchKey) {
+        String normalized = StringUtils.trimToEmpty(searchKey);
+        while (normalized.endsWith("*")) {
+            normalized = StringUtils.trimToEmpty(normalized.substring(0, normalized.length() - 1));
+        }
+        return normalized;
+    }
+
+    static boolean isWildcardPrefixSearch(String searchKey) {
+        return StringUtils.trimToEmpty(searchKey).endsWith("*");
+    }
+
+    static boolean isPrefixSearchMatch(RedisKeyPrefix prefix, String prefixSearchKey, boolean wildcardPrefixSearch) {
+        if (prefix == null || StringUtils.isBlank(prefixSearchKey)) {
+            return false;
+        }
+        if (isPrefixNameMatch(prefix, prefixSearchKey)) {
+            return true;
+        }
+        return !wildcardPrefixSearch && (containsIgnoreCase(prefix.getComment(), prefixSearchKey)
+                || containsIgnoreCase(prefix.getAiComment(), prefixSearchKey));
+    }
+
+    private static boolean isPrefixNameMatch(RedisKeyPrefix prefix, String prefixSearchKey) {
+        return StringUtils.defaultString(prefix.getName()).startsWith(prefixSearchKey);
+    }
+
+    private static boolean containsIgnoreCase(String value, String searchKey) {
+        return StringUtils.containsIgnoreCase(StringUtils.defaultString(value), searchKey);
+    }
+
+    private Comparator<RedisKeyPrefix> buildPrefixSearchComparator(String prefixSearchKey, String sortField,
+                                                                    boolean reverse) {
+        Comparator<RedisKeyPrefix> comparator;
+        if ("keyCount".equals(sortField)) {
+            comparator = Comparator.comparing(
+                    RedisKeyPrefix::getKeyCount,
+                    Comparator.nullsLast(Long::compareTo));
+        } else {
+            comparator = Comparator.comparing(
+                    prefix -> StringUtils.defaultString(prefix.getName()),
+                    String::compareTo);
+        }
+        if (reverse) {
+            comparator = comparator.reversed();
+        }
+        return Comparator.comparingInt((RedisKeyPrefix prefix) -> isPrefixNameMatch(prefix, prefixSearchKey) ? 0 : 1)
+                .thenComparing(comparator)
+                .thenComparing(prefix -> StringUtils.defaultString(prefix.getName()));
     }
 
     /**

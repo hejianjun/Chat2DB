@@ -3,6 +3,7 @@ package ai.chat2db.server.domain.core.impl;
 import java.util.List;
 import java.util.Map;
 
+import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -38,5 +39,76 @@ class RedisKeyPrefixServiceImplTest {
         Assertions.assertFalse(prefixes.containsKey("use"));
         Assertions.assertFalse(prefixes.containsKey("single:"));
         Assertions.assertFalse(prefixes.containsKey("a:b:"));
+    }
+
+    @Test
+    void prefixSearchShouldNormalizeWildcardAndMatchOnlyLeadingPrefix() {
+        String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("vehicle:basicinfo:*");
+
+        Assertions.assertEquals("vehicle:basicinfo:", searchKey);
+        Assertions.assertTrue(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("vehicle:basicinfo:")
+                        .build(),
+                searchKey,
+                true));
+        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("test:vehicle:basicinfo:")
+                        .comment("vehicle:basicinfo:")
+                        .build(),
+                searchKey,
+                true));
+        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("basicinfo:item:")
+                        .build(),
+                searchKey,
+                true));
+    }
+
+    @Test
+    void normalPrefixSearchShouldStillMatchComments() {
+        String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("车辆基础");
+
+        Assertions.assertTrue(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("vehicle:basicinfo:")
+                        .comment("车辆基础信息缓存")
+                        .build(),
+                searchKey,
+                false));
+        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("vehicle:basicinfo:")
+                        .comment("车辆基础信息缓存")
+                        .build(),
+                searchKey,
+                true));
+        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("vehicle:basicinfo:")
+                        .comment("车型状态缓存")
+                        .build(),
+                searchKey,
+                false));
+    }
+
+    @Test
+    void normalPrefixSearchShouldPrioritizeLeadingPrefixBeforeCommentMatches() {
+        String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("vehicle:basicinfo");
+
+        Assertions.assertTrue(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("vehicle:basicinfo:")
+                        .build(),
+                searchKey,
+                false));
+        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+                RedisKeyPrefix.builder()
+                        .name("basicinfo:item:")
+                        .build(),
+                searchKey,
+                false));
     }
 }
