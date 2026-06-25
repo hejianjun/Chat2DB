@@ -118,14 +118,28 @@ const formatRedisKeyCount = (count?: number) => {
   return count.toLocaleString();
 };
 
+const isRedisDatabaseNode = (treeNodeData: ITreeNode) =>
+  treeNodeData.treeNodeType === TreeNodeType.DATABASE &&
+  treeNodeData.extraParams?.databaseType === DatabaseTypeCode.REDIS;
+
+const getRedisDatabaseMetaText = (treeNodeData: ITreeNode) => {
+  if (!isRedisDatabaseNode(treeNodeData)) {
+    return undefined;
+  }
+  const redisKeyCount = formatRedisKeyCount(treeNodeData.count);
+  const metadata = [redisKeyCount ? `${redisKeyCount} keys` : undefined, treeNodeData.comment].filter(Boolean);
+  return metadata.length ? metadata.join(' · ') : undefined;
+};
+
 const getTreeNodeTooltipTitle = (treeNodeData: ITreeNode) => {
   const redisKeyCount = formatRedisKeyCount(treeNodeData.count);
-  if (
-    treeNodeData.treeNodeType === TreeNodeType.DATABASE &&
-    treeNodeData.extraParams?.databaseType === DatabaseTypeCode.REDIS &&
-    redisKeyCount
-  ) {
-    return `Key 数量：${redisKeyCount}`;
+  if (isRedisDatabaseNode(treeNodeData) && (redisKeyCount || treeNodeData.comment)) {
+    return (
+      <>
+        {redisKeyCount && <div>Key 数量：{redisKeyCount}</div>}
+        {treeNodeData.comment && <div>注释：{treeNodeData.comment}</div>}
+      </>
+    );
   }
   return treeNodeData.comment;
 };
@@ -635,6 +649,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
     };
     const dropdownsItems: any = rightClickMenu.map(buildMenuItem);
     const tooltipTitle = getTreeNodeTooltipTitle(treeNodeData);
+    const redisDatabaseMetaText = getRedisDatabaseMetaText(treeNodeData);
     return (
       <Dropdown
         trigger={['contextMenu']}
@@ -680,7 +695,8 @@ const TreeNode = memo((props: TreeNodeIProps) => {
                 </div>
                 <div className={styles.contentText}>
                   <div className={styles.name} dangerouslySetInnerHTML={{ __html: treeNodeData.name }} />
-                  {treeNodeData.treeNodeType === TreeNodeType.COLUMN && (
+                  {redisDatabaseMetaText && <div className={styles.type}>{redisDatabaseMetaText}</div>}
+                  {!redisDatabaseMetaText && treeNodeData.treeNodeType === TreeNodeType.COLUMN && (
                     <div className={styles.type}>
                       {/* 转小写 */}
                       {treeNodeData.columnType?.toLowerCase()}
