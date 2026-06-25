@@ -7,4 +7,8 @@ import lombok.Data;
 public class KeyPrefixQueryRequest extends DataSourceBaseRequest {
 
     private String searchKey;
+
+    private String sortField;
+
+    private String sortOrder;
 }

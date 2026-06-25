@@ -9,6 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import ai.chat2db.server.domain.api.model.MetadataSnapshot;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefixBuildStatus;
 import ai.chat2db.server.domain.api.param.RedisKeyPrefixQueryParam;
@@ -50,6 +51,8 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     private static final String STATUS_DONE = "DONE";
     /** 本轮刷新失败 */
     private static final String STATUS_FAILED = "FAILED";
+    /** Redis 前缀搜索默认按前缀名升序展示。 */
+    private static final String DEFAULT_SORT_FIELD = "name";
 
     /** 每扫描到指定数量的 key 后，将当前聚合结果刷新到 Lucene，控制长时间扫描时的内存增长。 */
     private static final long FLUSH_KEY_THRESHOLD = 50000L;
@@ -80,8 +83,10 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     @Override
     public List<RedisKeyPrefix> search(RedisKeyPrefixQueryParam param) {
         LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(param.getDataSourceId());
+        String sortField = normalizeSortField(param.getSortField());
+        boolean reverse = "descend".equalsIgnoreCase(param.getSortOrder());
         List<RedisKeyPrefix> prefixes = luceneMgr.search(param, param.getLastDocId(),
-                QueryParser.escape(StringUtils.defaultString(param.getSearchKey())));
+                QueryParser.escape(StringUtils.defaultString(param.getSearchKey())), sortField, reverse);
         RedisKeyPrefixBuildStatus status = getStatus(param.getDataSourceId(), param.getDatabaseName());
         boolean building = STATUS_RUNNING.equals(status.getStatus());
         prefixes.forEach(prefix -> prefix.setBuilding(building));
@@ -158,13 +163,20 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      */
     @Override
     public RedisKeyPrefixBuildStatus getStatus(Long dataSourceId, String databaseName) {
-        return statusMap.getOrDefault(buildStatusKey(dataSourceId, databaseName),
-                RedisKeyPrefixBuildStatus.builder()
-                        .status(STATUS_IDLE)
-                        .cursor("0")
-                        .scannedCount(0L)
-                        .prefixCount(0L)
-                        .build());
+        RedisKeyPrefixBuildStatus memoryStatus = statusMap.get(buildStatusKey(dataSourceId, databaseName));
+        if (memoryStatus != null) {
+            return memoryStatus;
+        }
+        RedisKeyPrefixBuildStatus snapshotStatus = querySnapshotStatus(dataSourceId, databaseName);
+        if (snapshotStatus != null) {
+            return snapshotStatus;
+        }
+        return RedisKeyPrefixBuildStatus.builder()
+                .status(STATUS_IDLE)
+                .cursor("0")
+                .scannedCount(0L)
+                .prefixCount(0L)
+                .build();
     }
 
     /**
@@ -342,6 +354,51 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             metadataSnapshotService.upsertCount(dataSourceId, MetadataSnapshotService.TYPE_REDIS_PREFIX,
                     redisPrefixObjectKey, databaseName, null, databaseName, prefixCount, null, status, errorMessage);
         });
+    }
+
+    private RedisKeyPrefixBuildStatus querySnapshotStatus(Long dataSourceId, String databaseName) {
+        String redisKeyObjectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_REDIS_KEY,
+                databaseName, null, databaseName);
+        String redisPrefixObjectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_REDIS_PREFIX,
+                databaseName, null, databaseName);
+        MetadataSnapshot redisKeySnapshot = metadataSnapshotService.get(dataSourceId,
+                MetadataSnapshotService.TYPE_REDIS_KEY, redisKeyObjectKey);
+        MetadataSnapshot redisPrefixSnapshot = metadataSnapshotService.get(dataSourceId,
+                MetadataSnapshotService.TYPE_REDIS_PREFIX, redisPrefixObjectKey);
+        if (redisKeySnapshot == null && redisPrefixSnapshot == null) {
+            return null;
+        }
+        String status = redisPrefixSnapshot == null ? redisKeySnapshot.getStatus() : redisPrefixSnapshot.getStatus();
+        return RedisKeyPrefixBuildStatus.builder()
+                .status(toBuildStatus(status))
+                .cursor("0")
+                .scannedCount(redisKeySnapshot == null ? 0L : redisKeySnapshot.getObjectCount())
+                .prefixCount(redisPrefixSnapshot == null ? 0L : redisPrefixSnapshot.getObjectCount())
+                .updatedAt(redisPrefixSnapshot == null || redisPrefixSnapshot.getRefreshedAt() == null
+                        ? null : redisPrefixSnapshot.getRefreshedAt().toString())
+                .errorMessage(redisPrefixSnapshot == null ? null : redisPrefixSnapshot.getErrorMessage())
+                .build();
+    }
+
+    private String toBuildStatus(String snapshotStatus) {
+        if (MetadataSnapshotService.STATUS_REFRESHING.equals(snapshotStatus)) {
+            return STATUS_RUNNING;
+        }
+        if (MetadataSnapshotService.STATUS_READY.equals(snapshotStatus)
+                || MetadataSnapshotService.STATUS_EMPTY.equals(snapshotStatus)) {
+            return STATUS_DONE;
+        }
+        if (MetadataSnapshotService.STATUS_FAILED.equals(snapshotStatus)) {
+            return STATUS_FAILED;
+        }
+        return STATUS_IDLE;
+    }
+
+    private String normalizeSortField(String sortField) {
+        if ("keyCount".equals(sortField)) {
+            return "keyCount";
+        }
+        return DEFAULT_SORT_FIELD;
     }
 
     /**

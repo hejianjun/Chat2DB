@@ -49,6 +49,7 @@ const SEARCH_MODE_PREFIX = 'prefix';
 const RUNNING_STATUS = 'RUNNING';
 const DONE_STATUS = 'DONE';
 const PREFIX_STATUS_POLL_INTERVAL = 3000;
+const DEFAULT_PREFIX_SORT = { field: 'displayName', order: 'ascend' as const };
 
 interface IHashFieldRow {
   id: string;
@@ -154,6 +155,8 @@ const RedisDataView = memo((props: IProps) => {
         databaseName: uniqueData.databaseName,
         searchKey: keyword,
         refresh,
+        sortField: 'name',
+        sortOrder: 'ascend',
       })
       .then((items) => {
         const list = items || [];
@@ -689,6 +692,7 @@ const RedisDataView = memo((props: IProps) => {
         dataIndex: 'displayName',
         width: '28%',
         sorter: true,
+        sortOrder: sortInfo?.field === 'displayName' ? sortInfo.order : undefined,
         render: (text, record) => {
           if (record.isGroup) {
             return (
@@ -769,7 +773,7 @@ const RedisDataView = memo((props: IProps) => {
         render: (ttl, record) => (record.isGroup ? null : formatTtl(ttl)),
       },
     ],
-    [],
+    [sortInfo],
   );
 
   // 表格排序变化回调，三次点击循环：升序 → 降序 → 取消
@@ -807,7 +811,7 @@ const RedisDataView = memo((props: IProps) => {
           onChange={(value) => {
             const nextMode = String(value);
             setSearchMode(nextMode);
-            setSortInfo(null);
+            setSortInfo(nextMode === SEARCH_MODE_PREFIX ? DEFAULT_PREFIX_SORT : null);
             if (nextMode === SEARCH_MODE_PREFIX) {
               searchPrefixes(searchKey);
             }

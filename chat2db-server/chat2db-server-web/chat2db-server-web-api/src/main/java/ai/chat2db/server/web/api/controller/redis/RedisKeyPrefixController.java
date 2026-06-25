@@ -43,6 +43,8 @@ public class RedisKeyPrefixController {
                 .schemaName(request.getSchemaName())
                 .searchKey(request.getSearchKey())
                 .refresh(request.isRefresh())
+                .sortField(request.getSortField())
+                .sortOrder(request.getSortOrder())
                 .build();
         List<RedisKeyPrefix> list = redisKeyPrefixService.search(param);
         return ListResult.of(list);

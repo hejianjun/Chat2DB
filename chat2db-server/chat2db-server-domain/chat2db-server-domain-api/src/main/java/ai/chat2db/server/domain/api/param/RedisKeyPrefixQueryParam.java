@@ -32,6 +32,10 @@ public class RedisKeyPrefixQueryParam extends PageQueryParam implements BaseMode
 
     private boolean refresh;
 
+    private String sortField;
+
+    private String sortOrder;
+
     @Override
     public String getTableName() {
         return null;

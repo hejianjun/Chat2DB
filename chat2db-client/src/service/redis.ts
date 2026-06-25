@@ -30,6 +30,8 @@ export interface IRedisKeyPrefixSearchParams {
   databaseName?: string;
   searchKey?: string;
   refresh?: boolean;
+  sortField?: 'name' | 'keyCount';
+  sortOrder?: 'ascend' | 'descend';
 }
 
 export interface IRedisKeyPrefixCommentUpdateParams {
