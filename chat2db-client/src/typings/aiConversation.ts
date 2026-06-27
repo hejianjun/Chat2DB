@@ -16,9 +16,7 @@ export interface IAiMessage {
   messageId: string;
   role: 'user' | 'assistant';
   content: string;
-  thinking?: string | null;
   sequenceNo: number;
-  gmtCreate?: string;
 }
 
 export interface IAiConversationDetail {

@@ -71,6 +71,7 @@ public class Dbutils {
     }
 
     private static SqlSessionFactory sqlSessionFactory;
+    private static DataSource dataSource;
 
     static {
         try {
@@ -101,7 +102,7 @@ public class Dbutils {
         globalConfig.setIdentifierGenerator(new DefaultIdentifierGenerator());
         //设置超类mapper
         globalConfig.setSuperMapperClass(BaseMapper.class);
-        DataSource dataSource = initDataSource();
+        dataSource = initDataSource();
         Environment environment = new Environment("1", new JdbcTransactionFactory(), dataSource);
         configuration.setEnvironment(environment);
         //设置数据源
@@ -112,6 +113,13 @@ public class Dbutils {
         initFlyway(dataSource);
         //创建session
 
+    }
+
+    /**
+     * Exposes the same datasource used by MyBatis and Flyway to integrations that need direct JDBC access.
+     */
+    public static DataSource getDataSource() {
+        return dataSource;
     }
 
     private static void initFlyway(DataSource dataSource) {

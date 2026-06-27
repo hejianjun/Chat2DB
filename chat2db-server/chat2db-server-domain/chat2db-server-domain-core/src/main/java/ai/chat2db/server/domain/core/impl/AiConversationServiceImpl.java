@@ -1,7 +1,6 @@
 package ai.chat2db.server.domain.core.impl;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -14,18 +13,15 @@ import ai.chat2db.server.domain.api.model.AiMessage;
 import ai.chat2db.server.domain.api.model.DataSource;
 import ai.chat2db.server.domain.api.param.ai.AiConversationCreateParam;
 import ai.chat2db.server.domain.api.param.ai.AiConversationQueryParam;
-import ai.chat2db.server.domain.api.param.ai.AiMessageSaveParam;
+import ai.chat2db.server.domain.api.service.AiConversationMemoryStore;
 import ai.chat2db.server.domain.api.service.AiConversationService;
 import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.domain.core.converter.AiConversationConverter;
 import ai.chat2db.server.domain.core.util.PermissionUtils;
 import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.domain.repository.entity.AiConversationDO;
-import ai.chat2db.server.domain.repository.entity.AiMessageDO;
 import ai.chat2db.server.domain.repository.mapper.AiConversationMapper;
-import ai.chat2db.server.domain.repository.mapper.AiMessageMapper;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
-import ai.chat2db.server.tools.common.exception.DataNotFoundException;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -35,7 +31,6 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AiConversationServiceImpl implements AiConversationService {
@@ -50,15 +45,14 @@ public class AiConversationServiceImpl implements AiConversationService {
         return Dbutils.getMapper(AiConversationMapper.class);
     }
 
-    private AiMessageMapper getMessageMapper() {
-        return Dbutils.getMapper(AiMessageMapper.class);
-    }
-
     @Autowired
     private AiConversationConverter converter;
 
     @Autowired
     private DataSourceService dataSourceService;
+
+    @Autowired
+    private AiConversationMemoryStore memoryStore;
 
     @Override
     public String create(AiConversationCreateParam param) {
@@ -114,45 +108,7 @@ public class AiConversationServiceImpl implements AiConversationService {
                 .eq(AiConversationDO::getConversationId, conversationId)
                 .set(AiConversationDO::getStatus, STATUS_DELETED)
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void deleteMessageWithPermission(String conversationId, String messageId, Long userId) {
-        AiConversation conv = findActiveConversationWithPermission(conversationId);
-        if (conv == null || StringUtils.isBlank(messageId)) {
-            return;
-        }
-        getMessageMapper().delete(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .eq(AiMessageDO::getMessageId, messageId)
-        );
-        normalizeMessagesAndConversation(conversationId);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void truncateMessagesFromWithPermission(String conversationId, String messageId, Long userId) {
-        AiConversation conv = findActiveConversationWithPermission(conversationId);
-        if (conv == null || StringUtils.isBlank(messageId)) {
-            return;
-        }
-        AiMessageDO anchor = getMessageMapper().selectOne(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .eq(AiMessageDO::getMessageId, messageId)
-                .last("LIMIT 1")
-        );
-        if (anchor == null || anchor.getSequenceNo() == null) {
-            return;
-        }
-        getMessageMapper().delete(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .ge(AiMessageDO::getSequenceNo, anchor.getSequenceNo())
-        );
-        normalizeMessagesAndConversation(conversationId);
+        memoryStore.clear(conversationId);
     }
 
     @Override
@@ -200,12 +156,7 @@ public class AiConversationServiceImpl implements AiConversationService {
         }
         PermissionUtils.checkBaseQueryPermission(conversation.getUserId());
 
-        List<AiMessageDO> messageDOS = getMessageMapper().selectList(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .orderByAsc(AiMessageDO::getSequenceNo)
-        );
-        List<AiMessage> messages = converter.do2MessageDto(messageDOS);
+        List<AiMessage> messages = memoryStore.get(conversationId);
 
         if (conversation.getDataSourceId() != null) {
             DataSource dataSource = dataSourceService.queryExistent(conversation.getDataSourceId(), null);
@@ -237,91 +188,17 @@ public class AiConversationServiceImpl implements AiConversationService {
     }
 
     @Override
-    public void appendMessage(AiMessageSaveParam param) {
-        if (param == null || StringUtils.isBlank(param.getConversationId())) {
+    public void updateAfterMessageTurn(String conversationId, String assistantContent) {
+        if (StringUtils.isBlank(conversationId) || StringUtils.isBlank(assistantContent)) {
             return;
         }
-        AiMessageDO messageDO = converter.saveParam2do(param);
-        if (messageDO.getGmtCreate() == null) {
-            messageDO.setGmtCreate(LocalDateTime.now());
-        }
-        getMessageMapper().insert(messageDO);
-    }
-
-    @Override
-    public void appendMessageTurn(String conversationId,
-                                   Long userId,
-                                   String userMessageId,
-                                   String userContent,
-                                   String assistantMessageId,
-                                   String assistantContent,
-                                   String assistantThinking,
-                                   String promptType,
-                                   String sqlExtracted) {
-        if (StringUtils.isBlank(conversationId) || StringUtils.isBlank(userContent)
-            || StringUtils.isBlank(assistantContent)) {
-            return;
-        }
-
-        AiConversationDO conv = getConversationMapper().selectOne(
-            new LambdaQueryWrapper<AiConversationDO>()
-                .eq(AiConversationDO::getConversationId, conversationId)
-                .last("LIMIT 1")
-        );
-        if (conv == null) {
-            return;
-        }
-        if (STATUS_DELETED.equals(conv.getStatus())) {
-            return;
-        }
-
-        int nextSeq = (conv.getMessageCount() == null ? 0 : conv.getMessageCount());
-
-        AiMessageDO userMsg = new AiMessageDO();
-        userMsg.setConversationId(conversationId);
-        userMsg.setUserId(userId);
-        userMsg.setMessageId(userMessageId);
-        userMsg.setRole("user");
-        userMsg.setContent(userContent);
-        userMsg.setPromptType(promptType);
-        userMsg.setSequenceNo(nextSeq);
-        userMsg.setGmtCreate(LocalDateTime.now());
-        getMessageMapper().insert(userMsg);
-
-        AiMessageDO assistantMsg = new AiMessageDO();
-        assistantMsg.setConversationId(conversationId);
-        assistantMsg.setUserId(userId);
-        assistantMsg.setMessageId(assistantMessageId);
-        assistantMsg.setRole("assistant");
-        assistantMsg.setContent(assistantContent);
-        assistantMsg.setThinking(assistantThinking);
-        assistantMsg.setPromptType(promptType);
-        assistantMsg.setSqlExtracted(sqlExtracted);
-        assistantMsg.setSequenceNo(nextSeq + 1);
-        assistantMsg.setGmtCreate(LocalDateTime.now());
-        getMessageMapper().insert(assistantMsg);
-
+        int messageCount = memoryStore.get(conversationId).size();
         getConversationMapper().update(null,
             new LambdaUpdateWrapper<AiConversationDO>()
                 .eq(AiConversationDO::getConversationId, conversationId)
-                .set(AiConversationDO::getMessageCount, nextSeq + 2)
+                .set(AiConversationDO::getMessageCount, messageCount)
                 .set(AiConversationDO::getLastMessagePreview, buildMessagePreview(assistantContent))
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
-    }
-
-    @Override
-    public List<AiMessage> listRecentMessages(String conversationId, int limit) {
-        if (StringUtils.isBlank(conversationId) || limit <= 0) {
-            return Collections.emptyList();
-        }
-        List<AiMessageDO> recent = getMessageMapper().selectList(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .orderByDesc(AiMessageDO::getSequenceNo)
-                .last("LIMIT " + limit)
-        );
-        Collections.reverse(recent);
-        return converter.do2MessageDto(recent);
     }
 
     private void enforceQuota(Long userId) {
@@ -358,44 +235,6 @@ public class AiConversationServiceImpl implements AiConversationService {
             new LambdaUpdateWrapper<AiConversationDO>()
                 .in(AiConversationDO::getId, ids)
                 .set(AiConversationDO::getStatus, STATUS_ARCHIVED)
-                .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
-    }
-
-    private AiConversation findActiveConversationWithPermission(String conversationId) {
-        AiConversation conv = findByConversationId(conversationId);
-        if (conv == null || STATUS_DELETED.equals(conv.getStatus())) {
-            return null;
-        }
-        PermissionUtils.checkOperationPermission(conv.getUserId());
-        return conv;
-    }
-
-    private void normalizeMessagesAndConversation(String conversationId) {
-        List<AiMessageDO> messages = getMessageMapper().selectList(
-            new LambdaQueryWrapper<AiMessageDO>()
-                .eq(AiMessageDO::getConversationId, conversationId)
-                .orderByAsc(AiMessageDO::getSequenceNo)
-                .orderByAsc(AiMessageDO::getId)
-        );
-        for (int i = 0; i < messages.size(); i++) {
-            AiMessageDO message = messages.get(i);
-            if (message.getSequenceNo() != null && message.getSequenceNo() == i) {
-                continue;
-            }
-            getMessageMapper().update(null,
-                new LambdaUpdateWrapper<AiMessageDO>()
-                    .eq(AiMessageDO::getId, message.getId())
-                    .set(AiMessageDO::getSequenceNo, i));
-            message.setSequenceNo(i);
-        }
-
-        AiMessageDO lastMessage = messages.isEmpty() ? null : messages.get(messages.size() - 1);
-        String preview = lastMessage == null ? null : buildMessagePreview(lastMessage.getContent());
-        getConversationMapper().update(null,
-            new LambdaUpdateWrapper<AiConversationDO>()
-                .eq(AiConversationDO::getConversationId, conversationId)
-                .set(AiConversationDO::getMessageCount, messages.size())
-                .set(AiConversationDO::getLastMessagePreview, preview)
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
     }
 

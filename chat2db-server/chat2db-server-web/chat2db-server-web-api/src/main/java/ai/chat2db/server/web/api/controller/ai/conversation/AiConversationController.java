@@ -92,17 +92,4 @@ public class AiConversationController {
         return ActionResult.isSuccess();
     }
 
-    @DeleteMapping("/{conversationId}/messages/{messageId}")
-    public ActionResult deleteMessage(@PathVariable("conversationId") String conversationId,
-                                      @PathVariable("messageId") String messageId) {
-        aiConversationService.deleteMessageWithPermission(conversationId, messageId, ContextUtils.getUserId());
-        return ActionResult.isSuccess();
-    }
-
-    @PostMapping("/{conversationId}/messages/{messageId}/truncate")
-    public ActionResult truncateMessagesFrom(@PathVariable("conversationId") String conversationId,
-                                             @PathVariable("messageId") String messageId) {
-        aiConversationService.truncateMessagesFromWithPermission(conversationId, messageId, ContextUtils.getUserId());
-        return ActionResult.isSuccess();
-    }
 }

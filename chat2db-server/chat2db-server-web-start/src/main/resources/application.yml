@@ -42,6 +42,11 @@ spring:
     serialization:
       write-dates-as-timestamps: true
   ai:
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: never
     mcp:
       server:
         annotation-scanner:

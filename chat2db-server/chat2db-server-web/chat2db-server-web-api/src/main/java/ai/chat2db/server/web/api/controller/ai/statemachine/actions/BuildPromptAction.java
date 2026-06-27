@@ -1,7 +1,5 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
-import ai.chat2db.server.domain.api.model.AiMessage;
-import ai.chat2db.server.domain.api.service.AiConversationService;
 import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -10,22 +8,16 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
 
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptBuilder;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptContext;
-import ai.chat2db.server.web.api.controller.ai.prompt.PreviousSqlResolver;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
 
 /**
  * 构建提示词动作
@@ -34,19 +26,11 @@ import java.util.List;
 @Slf4j
 public class BuildPromptAction extends BaseChatAction {
 
-    private static final int MAX_HISTORY_MESSAGES = 6;
-
     @Autowired
     private PromptBuilder promptBuilder;
 
     @Autowired
     private DataSourceService dataSourceService;
-
-    @Autowired
-    private AiConversationService aiConversationService;
-
-    @Autowired
-    private PreviousSqlResolver previousSqlResolver;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -65,21 +49,13 @@ public class BuildPromptAction extends BaseChatAction {
             String schemaDdl = chatContext.getSchemaDdl();
 
             PromptType promptType = determinePromptType(request);
-            log.info("[BuildPromptAction] Building prompt, uid: {}, promptType: {}, isRevision: {}, messageLength: {}",
-                    chatContext.getUid(), promptType, request.getIsRevision(),
+            log.info("[BuildPromptAction] Building prompt, uid: {}, promptType: {}, messageLength: {}",
+                    chatContext.getUid(), promptType,
                     StringUtils.length(request.getMessage()));
 
             String sourceFields = extractSourceFields(request.getExt());
-            String history = request.getHistory();
-            String previousSql = request.getPreviousSql();
             String dataSourceType = dataSourceService.queryDatabaseType(request.getDataSourceId());
             String redisKeyPrefixContext = isRedisCommandPrompt(promptType, dataSourceType) ? schemaDdl : "暂无";
-            if (PromptType.NL_2_SQL == promptType && Boolean.TRUE.equals(request.getIsRevision())) {
-                if (StringUtils.isBlank(history) && StringUtils.isNotBlank(request.getConversationId())) {
-                    history = loadHistoryFromDb(request.getConversationId());
-                }
-                previousSql = previousSqlResolver.resolve(request);
-            }
 
             PromptContext promptContext = PromptContext.builder()
                     .promptType(promptType)
@@ -92,12 +68,12 @@ public class BuildPromptAction extends BaseChatAction {
                     .sourceFields(sourceFields)
                     .redisKeyPrefixContext(redisKeyPrefixContext)
                     .conversationId(request.getConversationId())
-                    .history(history)
-                    .previousSql(previousSql)
-                    .isRevision(request.getIsRevision())
                     .build();
 
             String builtPrompt = promptBuilder.context(promptContext).build();
+            if (StringUtils.isNotBlank(request.getMessage())) {
+                builtPrompt = builtPrompt.replace(request.getMessage(), "用户请求见单独的 user message。");
+            }
             chatContext.setBuiltPrompt(builtPrompt);
             log.info("[BuildPromptAction] Prompt built, uid: {}, promptLength: {}",
                     chatContext.getUid(), StringUtils.length(builtPrompt));
@@ -123,29 +99,6 @@ public class BuildPromptAction extends BaseChatAction {
             return false;
         }
         return PromptType.NL_2_SQL == promptType || PromptType.REDIS_NL_2_COMMAND == promptType;
-    }
-
-    private String loadHistoryFromDb(String conversationId) {
-        try {
-            List<AiMessage> recent = aiConversationService.listRecentMessages(conversationId, MAX_HISTORY_MESSAGES);
-            if (recent == null || recent.isEmpty()) {
-                return null;
-            }
-            JSONArray array = new JSONArray();
-            for (AiMessage msg : recent) {
-                if ("assistant".equals(msg.getRole())) {
-                    continue;
-                }
-                JSONObject obj = new JSONObject();
-                obj.put("role", msg.getRole());
-                obj.put("content", msg.getContent());
-                array.add(obj);
-            }
-            return JSON.toJSONString(array);
-        } catch (Exception e) {
-            log.warn("[BuildPromptAction] Failed to load history for {}: {}", conversationId, e.getMessage());
-            return null;
-        }
     }
 
     private PromptType determinePromptType(ChatQueryRequest request) {

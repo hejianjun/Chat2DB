@@ -179,7 +179,7 @@ public class PromptBuilderImpl implements PromptBuilder {
             filledTemplate = filledTemplate.replace("{original_sql}", Objects.toString(originalSql, ""));
         }
 
-        return appendRevisionContextIfNeeded(filledTemplate, context);
+        return filledTemplate;
     }
 
     private boolean isRedisDataSource(PromptContext context) {

@@ -15,6 +15,8 @@ import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -34,26 +36,32 @@ public class AiChatConfig {
     private static final String DEFAULT_OPENAI_BASE_URL = "https://api.openai.com";
     private static final String DEFAULT_COMPLETIONS_PATH = "/v1/chat/completions";
     private static final Pattern VERSION_PATH_PATTERN = Pattern.compile(".*/v\\d+(?:\\.\\d+)?/?$");
+    private static final int DEFAULT_CONTEXT_WINDOW_TOKENS = 32768;
+    private static final double HISTORY_BUDGET_RATIO = 0.25;
 
     @Autowired
     private ConfigService configService;
+
+    @Autowired
+    private ChatMemoryRepository chatMemoryRepository;
 
     public ChatClient createChatClient(PromptType promptType) {
         ModelRuntimeConfig runtimeConfig = loadModelRuntimeConfig();
         boolean useFastModel = promptType != null && promptType.isSimpleTask()
                 && runtimeConfig.fastModel != null && runtimeConfig.fastService != null;
         if (useFastModel) {
-            return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true);
+            return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true, false);
         }
-        return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false);
+        boolean enableMemory = promptType == null || !promptType.isSimpleTask();
+        return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false, enableMemory);
     }
 
     public ChatClient createFastChatClient() {
         ModelRuntimeConfig runtimeConfig = loadModelRuntimeConfig();
         if (runtimeConfig.fastModel != null && runtimeConfig.fastService != null) {
-            return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true);
+            return createChatClientByModel(runtimeConfig.fastService, runtimeConfig.fastModel, true, false);
         }
-        return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false);
+        return createChatClientByModel(runtimeConfig.defaultService, runtimeConfig.defaultModel, false, false);
     }
 
     public ChatResponse testModelService(String provider, String apiHost, String completionsPath, String apiKey,
@@ -65,13 +73,16 @@ public class AiChatConfig {
         service.setApiKey(apiKey);
         ModelItem modelItem = new ModelItem();
         modelItem.setModel(model);
-        return createChatClientByModel(service, modelItem, true)
+        return createChatClientByModel(service, modelItem, true, false)
                 .prompt("ping")
                 .call()
                 .chatResponse();
     }
 
-    private ChatClient createChatClientByModel(ModelServiceConfig service, ModelItem modelItem, boolean fastMode) {
+    private ChatClient createChatClientByModel(ModelServiceConfig service,
+                                               ModelItem modelItem,
+                                               boolean fastMode,
+                                               boolean enableMemory) {
         AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(service.getProvider());
         if (aiSqlSourceEnum == null) {
             aiSqlSourceEnum = AiSqlSourceEnum.OPENAI;
@@ -88,7 +99,7 @@ public class AiChatConfig {
                     .anthropicApi(anthropicApi)
                     .defaultOptions(options)
                     .build();
-            return ChatClient.builder(chatModel).build();
+            return buildChatClient(chatModel, modelItem, enableMemory);
         }
 
         OpenAiEndpoint endpoint = resolveOpenAiEndpoint(service.getApiHost(), service.getCompletionsPath());
@@ -116,7 +127,24 @@ public class AiChatConfig {
                 .openAiApi(openAiApi)
                 .defaultOptions(options)
                 .build();
-        return ChatClient.builder(chatModel).build();
+        return buildChatClient(chatModel, modelItem, enableMemory);
+    }
+
+    private ChatClient buildChatClient(org.springframework.ai.chat.model.ChatModel chatModel,
+                                       ModelItem modelItem,
+                                       boolean enableMemory) {
+        ChatClient.Builder builder = ChatClient.builder(chatModel);
+        if (enableMemory) {
+            // Reserve most of the model context for schema DDL, the current request, and the generated answer.
+            int contextWindowTokens = modelItem.getContextWindowTokens() == null
+                    || modelItem.getContextWindowTokens() <= 0
+                    ? DEFAULT_CONTEXT_WINDOW_TOKENS
+                    : modelItem.getContextWindowTokens();
+            int historyBudget = Math.max(1, (int) (contextWindowTokens * HISTORY_BUDGET_RATIO));
+            TokenWindowChatMemory chatMemory = new TokenWindowChatMemory(chatMemoryRepository, historyBudget);
+            builder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build());
+        }
+        return builder.build();
     }
 
     private ModelRuntimeConfig loadModelRuntimeConfig() {
@@ -231,6 +259,7 @@ public class AiChatConfig {
     private static class ModelItem {
         private String id;
         private String model;
+        private Integer contextWindowTokens;
     }
 
     @Data

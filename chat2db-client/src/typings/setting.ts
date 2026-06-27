@@ -48,6 +48,7 @@ export interface IModelItem {
   id?: string;
   name: string;
   model: string;
+  contextWindowTokens?: number;
 }
 
 export interface IModelServiceConfig {

@@ -303,7 +303,6 @@ export default memo((props: {
                   ? [{ id: 'preview', role: 'assistant' as const, content: item.lastMessagePreview }]
                   : [],
                 currentContent: '',
-                currentThinking: '',
                 title: item.title,
                 dataSourceId: item.dataSourceId,
                 databaseName: item.databaseName,

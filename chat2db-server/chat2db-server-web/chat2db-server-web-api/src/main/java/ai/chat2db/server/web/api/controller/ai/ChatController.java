@@ -109,9 +109,13 @@ public class ChatController {
         ChatClient chatClient = aiChatConfig.createChatClient(promptType);
 
         LoginUser loginUser = ContextUtils.getLoginUser();
+        boolean isSimpleTask = promptType != null && promptType.isSimpleTask();
+        if (!isSimpleTask
+                && aiConversationService.getDetail(sessionKey, loginUser == null ? null : loginUser.getId()) == null) {
+            throw new ParamBusinessException("conversationId");
+        }
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
 
-        boolean isSimpleTask = promptType != null && promptType.isSimpleTask();
         boolean firstTurn = !isSimpleTask && isFirstTurnOfConversation(queryRequest, loginUser);
 
         ChatContext ctx = ChatContext.builder()

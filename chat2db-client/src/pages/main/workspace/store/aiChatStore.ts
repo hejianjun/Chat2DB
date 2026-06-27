@@ -19,9 +19,7 @@ export interface IChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  thinking?: string;
   promptType?: string;
-  sqlExtracted?: string | null;
   sequenceNo?: number;
 }
 
@@ -31,7 +29,6 @@ export interface AiChatSession {
   state: ChatStateType;
   messages: IChatMessage[];
   currentContent: string;
-  currentThinking: string;
   selectedTables?: string[];
   schemaInfo?: string;
   explainResult?: { sql: string; plan: string[][]; formatted: string; success: boolean };
@@ -67,9 +64,6 @@ interface ILastRequest {
   tableNames?: string[] | null;
   ext?: string;
   conversationId?: string;
-  history?: string;
-  previousSql?: string | null;
-  isRevision?: boolean;
 }
 
 interface IAiChatStore {
@@ -83,7 +77,7 @@ interface IAiChatStore {
 
   createSession: (sessionId: string, initial?: Partial<AiChatSession>) => void;
   updateState: (sessionId: string, state: ChatStateType) => void;
-  appendContent: (sessionId: string, content: string, thinking?: string) => void;
+  appendContent: (sessionId: string, content: string) => void;
   addMessage: (sessionId: string, message: IChatMessage) => void;
   setSelectedTables: (sessionId: string, tables: string[]) => void;
   setSchemaInfo: (sessionId: string, ddl: string) => void;
@@ -94,8 +88,6 @@ interface IAiChatStore {
   resetCurrentContent: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
-  deleteMessage: (sessionId: string, messageId: string) => Promise<void>;
-  truncateMessagesFrom: (sessionId: string, messageId: string) => Promise<void>;
   switchToSession: (sessionId: string) => void;
   startNewConversation: (boundInfo?: {
     dataSourceId?: number | null;
@@ -171,7 +163,6 @@ export const useAiChatStore = create<IAiChatStore>()(
             state: 'IDLE',
             messages: [],
             currentContent: '',
-            currentThinking: '',
             createdAt: now,
             updatedAt: now,
             ...initial,
@@ -216,7 +207,7 @@ export const useAiChatStore = create<IAiChatStore>()(
         });
       },
 
-      appendContent: (sessionId: string, content: string, thinking?: string) => {
+      appendContent: (sessionId: string, content: string) => {
         set((state) => {
           const session = state.sessions[sessionId];
           if (!session) {
@@ -228,7 +219,6 @@ export const useAiChatStore = create<IAiChatStore>()(
               [sessionId]: {
                 ...session,
                 currentContent: session.currentContent + (content || ''),
-                currentThinking: session.currentThinking + (thinking || ''),
                 updatedAt: Date.now(),
               },
             },
@@ -344,7 +334,6 @@ export const useAiChatStore = create<IAiChatStore>()(
               [sessionId]: {
                 ...session,
                 currentContent: '',
-                currentThinking: '',
                 updatedAt: Date.now(),
               },
             },
@@ -389,67 +378,6 @@ export const useAiChatStore = create<IAiChatStore>()(
         } catch (e) {
           console.error('[AiChatStore] delete failed:', e);
         }
-      },
-
-      deleteMessage: async (sessionId: string, messageId: string) => {
-        const shouldSyncRemote = !get().sessions[sessionId]?.transient;
-        if (shouldSyncRemote) {
-          await aiConversationService.deleteAiConversationMessage({ conversationId: sessionId, messageId });
-        }
-        set((state) => {
-          const session = state.sessions[sessionId];
-          if (!session) {
-            return state;
-          }
-          const messages = normalizeMessages(session.messages.filter((item) => item.id !== messageId));
-          return {
-            sessions: {
-              ...state.sessions,
-              [sessionId]: {
-                ...session,
-                messages,
-                currentContent: '',
-                currentThinking: '',
-                updatedAt: Date.now(),
-              },
-            },
-            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
-          };
-        });
-      },
-
-      truncateMessagesFrom: async (sessionId: string, messageId: string) => {
-        const shouldSyncRemote = !get().sessions[sessionId]?.transient;
-        if (shouldSyncRemote) {
-          await aiConversationService.truncateAiConversationMessages({ conversationId: sessionId, messageId });
-        }
-        set((state) => {
-          const session = state.sessions[sessionId];
-          if (!session) {
-            return state;
-          }
-          const anchorIndex = session.messages.findIndex((item) => item.id === messageId);
-          if (anchorIndex < 0) {
-            return state;
-          }
-          const messages = normalizeMessages(session.messages.slice(0, anchorIndex));
-          return {
-            sessions: {
-              ...state.sessions,
-              [sessionId]: {
-                ...session,
-                messages,
-                currentContent: '',
-                currentThinking: '',
-                explainResult: undefined,
-                error: undefined,
-                state: 'COMPLETED',
-                updatedAt: Date.now(),
-              },
-            },
-            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
-          };
-        });
       },
 
       switchToSession: (sessionId: string) => {
@@ -554,9 +482,7 @@ export const useAiChatStore = create<IAiChatStore>()(
             id: m.messageId,
             role: m.role,
             content: m.content,
-            thinking: m.thinking || undefined,
             sequenceNo: m.sequenceNo,
-            sqlExtracted: undefined,
           })));
           const existing = state.sessions[conversationId];
           const now = Date.now();
@@ -565,7 +491,6 @@ export const useAiChatStore = create<IAiChatStore>()(
             state: 'COMPLETED',
             messages: localMessages,
             currentContent: '',
-            currentThinking: '',
             title: conversation.title,
             dataSourceId: conversation.dataSourceId,
             databaseName: conversation.databaseName,

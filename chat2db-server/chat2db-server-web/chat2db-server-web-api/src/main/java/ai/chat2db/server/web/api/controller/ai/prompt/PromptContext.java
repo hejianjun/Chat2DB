@@ -66,17 +66,13 @@ public class PromptContext {
     private String conversationId;
 
     /**
-     * 最近几轮对话历史，JSON 字符串
+     * Legacy fields retained only for binary compatibility. ChatMemory now supplies history.
      */
+    @Deprecated
     private String history;
-
-    /**
-     * 上一次 AI 输出的 SQL
-     */
+    @Deprecated
     private String previousSql;
-
-    /**
-     * 是否为基于上一次 SQL 的修正请求
-     */
+    @Deprecated
     private Boolean isRevision;
+
 }

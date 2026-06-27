@@ -33,22 +33,10 @@ export const deleteAiConversation = createRequest<{ conversationId: string }, vo
   { method: 'delete' },
 );
 
-export const deleteAiConversationMessage = createRequest<{ conversationId: string; messageId: string }, void>(
-  '/api/ai/conversation/:conversationId/messages/:messageId',
-  { method: 'delete' },
-);
-
-export const truncateAiConversationMessages = createRequest<{ conversationId: string; messageId: string }, void>(
-  '/api/ai/conversation/:conversationId/messages/:messageId/truncate',
-  { method: 'post' },
-);
-
 export default {
   createAiConversation,
   queryAiConversations,
   getAiConversation,
   renameAiConversation,
   deleteAiConversation,
-  deleteAiConversationMessage,
-  truncateAiConversationMessages,
 };

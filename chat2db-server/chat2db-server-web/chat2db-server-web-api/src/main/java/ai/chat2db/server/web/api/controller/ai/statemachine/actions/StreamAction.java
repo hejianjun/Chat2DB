@@ -1,14 +1,9 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
-import java.util.Map;
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import ai.chat2db.server.domain.api.service.AiConversationMemoryStore;
 import ai.chat2db.server.domain.api.service.AiConversationService;
-import ai.chat2db.server.tools.common.model.LoginUser;
-import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,16 +32,14 @@ import reactor.core.scheduler.Schedulers;
 @Slf4j
 public class StreamAction extends BaseChatAction {
 
-    private static final Pattern SQL_CODE_BLOCK = Pattern.compile("```sql\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-    private static final Pattern GENERIC_CODE_BLOCK = Pattern.compile("```\\s*([\\s\\S]*?)```");
-    private static final Pattern SQL_KEYWORDS = Pattern.compile("\\b(select|insert|update|delete|create|alter|drop)\\b",
-            Pattern.CASE_INSENSITIVE);
-
     @Autowired
     private PromptValidator promptValidator;
 
     @Autowired
     private AiConversationService aiConversationService;
+
+    @Autowired
+    private AiConversationMemoryStore memoryStore;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -74,7 +67,10 @@ public class StreamAction extends BaseChatAction {
                     ctx.getUid(), prompt == null ? 0 : prompt.length());
 
             Flux<ChatResponse> flux = ctx.getChatClient().prompt()
-                    .user(prompt)
+                    .system(prompt)
+                    .user(ctx.getRequest().getMessage())
+                    .advisors(advisor -> advisor.param(
+                            ChatMemory.CONVERSATION_ID, ctx.getRequest().getConversationId()))
                     .stream()
                     .chatResponse();
             flux.publishOn(Schedulers.boundedElastic())
@@ -105,16 +101,9 @@ public class StreamAction extends BaseChatAction {
         Generation generation = chatResponse.getResult();
 
         String content = generation.getOutput().getText();
-        String thinking = extractThinkingContent(generation);
-
         if (content != null && !content.isEmpty()) {
             data.put("content", content);
             appendContent(ctx, content);
-        }
-        if (thinking != null && !thinking.isEmpty()) {
-            data.put("thinking", thinking);
-            appendThinking(ctx, thinking);
-            log.debug("[StreamAction] Thinking content: {}", thinking);
         }
 
         if (!data.isEmpty()) {
@@ -136,41 +125,12 @@ public class StreamAction extends BaseChatAction {
         ctx.setCurrentContent(current == null ? content : current + content);
     }
 
-    private synchronized void appendThinking(ChatContext ctx, String thinking) {
-        String current = ctx.getCurrentThinking();
-        ctx.setCurrentThinking(current == null ? thinking : current + thinking);
-    }
-
-    /**
-     * 从生成结果中提取思考内容
-     */
-    private String extractThinkingContent(Generation generation) {
-        ChatGenerationMetadata metadata = generation.getMetadata();
-        if (metadata.containsKey("thinking")) {
-            Object thinkingObj = metadata.get("thinking");
-            if (thinkingObj instanceof String) {
-                return (String) thinkingObj;
-            } else if (thinkingObj != null) {
-                return thinkingObj.toString();
-            }
-        } else {
-            Map<String, Object> outputMetadata = generation.getOutput().getMetadata();
-            if (outputMetadata.containsKey("reasoningContent")) {
-                return outputMetadata.get("reasoningContent").toString();
-            } else if (outputMetadata.containsKey("reasoning_content")) {
-                return outputMetadata.get("reasoning_content").toString();
-            } else if (outputMetadata.containsKey("reasoning_details")) {
-                return outputMetadata.get("reasoning_details").toString();
-            }
-        }
-        return null;
-    }
-
     /**
      * 处理流式错误
      */
     private void handleStreamError(ChatContext ctx, Throwable error, StateContext<ChatState, ChatEvent> context) {
         log.error("[StreamAction] Stream error for uid: {}", ctx.getUid(), error);
+        memoryStore.discardIncompleteTurn(ctx.getRequest().getConversationId());
         if (!ctx.isCancelled()) {
             sendError(ctx.getSseEmitter(), "AI 调用失败：" + error.getMessage());
         }
@@ -211,11 +171,8 @@ public class StreamAction extends BaseChatAction {
             return;
         }
         String conversationId = request.getConversationId();
-        String userContent = request.getMessage();
         String assistantContent = ctx.getCurrentContent();
-        String thinking = ctx.getCurrentThinking();
         if (conversationId == null || conversationId.isEmpty()
-                || userContent == null || userContent.isEmpty()
                 || assistantContent == null || assistantContent.isEmpty()) {
             return;
         }
@@ -223,51 +180,14 @@ public class StreamAction extends BaseChatAction {
             log.debug("[StreamAction] Skip persist for transient prompt, uid: {}", ctx.getUid());
             return;
         }
-        LoginUser loginUser = ctx.getLoginUser();
-        Long userId = loginUser != null ? loginUser.getId() : null;
-        String promptType = request.getPromptType();
-        String sqlExtracted = extractSql(assistantContent);
-        String userMessageId = ctx.getUserMessageId() != null ? ctx.getUserMessageId() : UUID.randomUUID().toString();
-        String assistantMessageId = ctx.getAssistantMessageId() != null
-                ? ctx.getAssistantMessageId()
-                : UUID.randomUUID().toString();
-
         buildContext(ctx);
         try {
-            aiConversationService.appendMessageTurn(
-                    conversationId,
-                    userId,
-                    userMessageId,
-                    userContent,
-                    assistantMessageId,
-                    assistantContent,
-                    thinking,
-                    promptType,
-                    sqlExtracted
-            );
+            aiConversationService.updateAfterMessageTurn(conversationId, assistantContent);
         } catch (Exception e) {
             log.error("[StreamAction] Failed to persist AI conversation turn for uid: {}", ctx.getUid(), e);
         } finally {
             removeContext();
         }
-    }
-
-    private String extractSql(String content) {
-        if (content == null) {
-            return null;
-        }
-        Matcher sqlMatcher = SQL_CODE_BLOCK.matcher(content);
-        if (sqlMatcher.find()) {
-            return sqlMatcher.group(1).trim();
-        }
-        Matcher codeMatcher = GENERIC_CODE_BLOCK.matcher(content);
-        if (codeMatcher.find()) {
-            String code = codeMatcher.group(1).trim();
-            if (SQL_KEYWORDS.matcher(code).find()) {
-                return code;
-            }
-        }
-        return null;
     }
 
     private boolean isSimpleTask(String promptType) {

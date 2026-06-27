@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Form, Input, Modal, Select, Space, Table, message } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Modal, Select, Space, Table, message } from 'antd';
 import configService from '@/service/config';
 import { AIType } from '@/typings/ai';
 import { IDefaultModelConfig, IModelItem, IModelServiceConfig } from '@/typings/setting';
@@ -232,6 +232,9 @@ export default function SettingAI(props: IProps) {
                       rules={[{ required: true, message: '模型ID必填' }]}
                     >
                       <Input placeholder="模型ID，如 gpt-4o-mini" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'contextWindowTokens']}>
+                      <InputNumber min={1024} step={1024} placeholder="上下文窗口，默认 32768" />
                     </Form.Item>
                     <Button danger onClick={() => remove(field.name)}>
                       删除
