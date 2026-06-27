@@ -110,6 +110,9 @@ public class ConfigController {
             if (StringUtils.isBlank(modelItem.getId())) {
                 modelItem.setId(UUID.randomUUID().toString());
             }
+            if (modelItem.getContextWindowTokens() != null && modelItem.getContextWindowTokens() <= 0) {
+                modelItem.setContextWindowTokens(null);
+            }
         }
         target.setModelList(modelList);
 
