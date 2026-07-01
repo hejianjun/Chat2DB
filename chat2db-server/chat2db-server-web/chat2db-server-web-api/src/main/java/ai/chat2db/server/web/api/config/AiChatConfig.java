@@ -22,7 +22,9 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import javax.annotation.concurrent.Immutable;
 import java.net.URI;
@@ -89,7 +91,10 @@ public class AiChatConfig {
         }
 
         if (aiSqlSourceEnum == AiSqlSourceEnum.ANTHROPIC) {
-            AnthropicApi anthropicApi = AnthropicApi.builder().apiKey(service.getApiKey()).build();
+            AnthropicApi anthropicApi = AnthropicApi.builder()
+                    .apiKey(service.getApiKey())
+                    .webClientBuilder(createLoggingWebClientBuilder())
+                    .build();
             AnthropicChatOptions options = AnthropicChatOptions.builder()
                     .model(modelItem.getModel())
                     .temperature(fastMode ? 0.5 : 0.7)
@@ -107,6 +112,7 @@ public class AiChatConfig {
                 .baseUrl(endpoint.baseUrl)
                 .completionsPath(endpoint.completionsPath)
                 .apiKey(service.getApiKey())
+                .webClientBuilder(createLoggingWebClientBuilder())
                 .build();
         Map<String, Object> extraBody = new HashMap<>();
         if (StringUtils.contains(modelItem.getModel(), "qwen")) {
@@ -145,6 +151,11 @@ public class AiChatConfig {
             builder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build());
         }
         return builder.build();
+    }
+
+    private WebClient.Builder createLoggingWebClientBuilder() {
+        return WebClient.builder()
+                .clientConnector(new LlmHttpLoggingConnector(new ReactorClientHttpConnector()));
     }
 
     private ModelRuntimeConfig loadModelRuntimeConfig() {
