@@ -24,6 +24,7 @@ import {
   IRedisKeyPrefixCommentResult,
   IFieldMappingResult,
   IDataExpressionResult,
+  isConversationalSqlPromptType,
   isSimpleTaskPromptType,
 } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
@@ -504,8 +505,7 @@ export default memo<IProps>(() => {
   }, [boundInfo, currentSession?.selectedTables, syncSelectedTables]);
 
   const sendAiChatInternal = useCallback(
-    async (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', info: typeof boundInfo, ext?: string) => {
-      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, info });
+    async (messageText: string, requestedPromptType: IAiChatPromptType, info: typeof boundInfo, ext?: string) => {
       if (!messageText.trim()) {
         message.warning('请输入问题');
         return;
@@ -520,7 +520,13 @@ export default memo<IProps>(() => {
       const existingSessionId = storeState.currentSessionId;
       const existingSession = existingSessionId ? storeState.sessions[existingSessionId] : null;
       const previousRequest = storeState.lastRequest;
+      const promptType =
+        requestedPromptType === 'NL_2_SQL' && existingSession?.promptType
+          ? (existingSession.promptType as IAiChatPromptType)
+          : requestedPromptType;
+      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, info });
       const isSimpleTask = isSimpleTaskPromptType(promptType);
+      const isConversationalTask = isConversationalSqlPromptType(promptType);
       const isSameConnection =
         existingSession
           ? existingSession.dataSourceId === info.dataSourceId &&
@@ -530,23 +536,23 @@ export default memo<IProps>(() => {
             (previousRequest.dataSourceId === info.dataSourceId &&
               normalizeNullableText(previousRequest.databaseName) === normalizeNullableText(info.databaseName) &&
               normalizeNullableText(previousRequest.schemaName) === normalizeNullableText(info.schemaName));
-      const canReuseNl2SqlConversation =
-        !isSimpleTask &&
-        promptType === 'NL_2_SQL' &&
+      const canReuseConversation =
+        isConversationalTask &&
         isSameConnection &&
         !!existingSessionId &&
         !!existingSession &&
         existingSession.messages.length > 0 &&
+        (!existingSession.promptType || existingSession.promptType === promptType) &&
         !isActiveState(existingSession.state);
       const canUseEmptyConversation =
-        !isSimpleTask &&
+        isConversationalTask &&
         promptType === 'NL_2_SQL' &&
         isSameConnection &&
         !!existingSessionId &&
         !!existingSession &&
         existingSession.messages.length === 0 &&
         !isActiveState(existingSession.state);
-      const shouldReuseConversation = canReuseNl2SqlConversation || canUseEmptyConversation;
+      const shouldReuseConversation = canReuseConversation || canUseEmptyConversation;
       const requestTableNames =
         shouldReuseConversation &&
         (!info.tableNames || info.tableNames.length === 0) &&
@@ -567,6 +573,7 @@ export default memo<IProps>(() => {
           schemaName: info.schemaName,
           selectedTables: requestTableNames || undefined,
           title: sessionTitle,
+          promptType,
           transient: isSimpleTask,
         });
         if (!isSimpleTask) {

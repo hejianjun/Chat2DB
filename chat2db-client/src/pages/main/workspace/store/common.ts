@@ -31,6 +31,19 @@ export const isSimpleTaskPromptType = (promptType?: string | null): boolean => {
   return SIMPLE_TASK_PROMPT_TYPES.includes(promptType as (typeof SIMPLE_TASK_PROMPT_TYPES)[number]);
 };
 
+export const CONVERSATIONAL_SQL_PROMPT_TYPES = [
+  'NL_2_SQL',
+  'SQL_EXPLAIN',
+  'SQL_OPTIMIZER',
+  'SQL_2_SQL',
+] as const;
+
+export const isConversationalSqlPromptType = (promptType?: string | null): boolean => {
+  return CONVERSATIONAL_SQL_PROMPT_TYPES.includes(
+    promptType as (typeof CONVERSATIONAL_SQL_PROMPT_TYPES)[number],
+  );
+};
+
 export interface IColumnComment {
   column_name: string;
   comment: string;

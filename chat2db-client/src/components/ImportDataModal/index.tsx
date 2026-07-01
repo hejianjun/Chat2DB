@@ -32,7 +32,7 @@ const ImportDataModal = () => {
   const [importProgress, setImportProgress] = useState<number>(0);
   const [importModalVisible, setImportModalVisible] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskSubscriptionRef = useRef<(() => void) | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const executedCallbackRef = useRef<IImportDataModalParams['executedCallback']>();
 
@@ -222,21 +222,17 @@ const ImportDataModal = () => {
   };
 
   const startImportPolling = (taskId: number) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const task = await taskService.getTask({ id: taskId });
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      onMessage: (task) => {
         if (task) {
           const processedCount = parseInt(task.taskProgress || '0', 10);
           setImportProgress(processedCount);
           addLog(`Progress: ${processedCount} rows imported`);
 
           if (task.taskStatus === 'FINISH') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             addLog('Import completed successfully');
             message.success(i18n('common.text.importSuccess'));
             setImporting(false);
@@ -246,8 +242,7 @@ const ImportDataModal = () => {
               setOpen(false);
             }, 2000);
           } else if (task.taskStatus === 'ERROR') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             let errorMsg = i18n('common.text.importFailed');
             if (task.content) {
               errorMsg = task.content;
@@ -257,21 +252,19 @@ const ImportDataModal = () => {
             setImporting(false);
           }
         }
-      } catch (error: any) {
-        clearInterval(pollingRef.current!);
-        pollingRef.current = null;
-        addLog(`Polling error: ${error.message}`);
+      },
+      onError: (error: any) => {
+        taskSubscriptionRef.current = null;
+        addLog(`Task subscription error: ${error.message || error}`);
         message.error(i18n('common.text.importFailed'));
         setImporting(false);
-      }
-    }, 1000);
+      },
+    });
   };
 
   const handleClose = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = null;
     setImportModalVisible(false);
     if (!importing) {
       setOpen(false);

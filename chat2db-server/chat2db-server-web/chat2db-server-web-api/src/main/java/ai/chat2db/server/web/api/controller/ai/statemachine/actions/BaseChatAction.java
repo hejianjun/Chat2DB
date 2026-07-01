@@ -13,6 +13,7 @@ import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.server.tools.common.util.LogUtils;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
@@ -20,12 +21,37 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 public abstract class BaseChatAction implements Action<ChatState, ChatEvent> {
 
     protected ChatContext getChatContext(StateContext<ChatState, ChatEvent> context) {
         return (ChatContext) context.getExtendedState().getVariables().get("chatContext");
+    }
+
+    protected <T> Flux<T> propagateTrace(Flux<T> publisher, ChatContext ctx) {
+        if (ctx == null || ctx.getTraceId() == null) {
+            return publisher;
+        }
+        return publisher.contextWrite(context -> context.put(LogUtils.TRACE_ID, ctx.getTraceId()));
+    }
+
+    protected <T> Mono<T> propagateTrace(Mono<T> publisher, ChatContext ctx) {
+        if (ctx == null || ctx.getTraceId() == null) {
+            return publisher;
+        }
+        return publisher.contextWrite(context -> context.put(LogUtils.TRACE_ID, ctx.getTraceId()));
+    }
+
+    protected void restoreTrace(ChatContext ctx) {
+        if (ctx == null || ctx.getTraceId() == null) {
+            return;
+        }
+        MDC.put(LogUtils.TRACE_ID, ctx.getTraceId());
+        LogUtils.setTraceId(ctx.getTraceId());
     }
 
     protected void buildContext(ChatContext ctx) {
@@ -46,6 +72,8 @@ public abstract class BaseChatAction implements Action<ChatState, ChatEvent> {
         Dbutils.removeSession();
         ContextUtils.removeContext();
         Chat2DBContext.removeContext();
+        MDC.remove(LogUtils.TRACE_ID);
+        LogUtils.removeTraceId();
     }
 
     protected void sendStateEvent(SseEmitter emitter, ChatState state, String message) {

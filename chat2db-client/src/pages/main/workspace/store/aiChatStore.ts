@@ -37,6 +37,7 @@ export interface AiChatSession {
   databaseName?: string | null;
   schemaName?: string | null;
   title?: string | null;
+  promptType?: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -44,6 +45,7 @@ export interface AiChatSession {
 export interface IConversationSummary {
   conversationId: string;
   title?: string | null;
+  promptType?: string | null;
   dataSourceId?: number | null;
   dataSourceName?: string | null;
   databaseName?: string | null;
@@ -416,6 +418,7 @@ export const useAiChatStore = create<IAiChatStore>()(
                 const summary: IConversationSummary = {
                   conversationId: created.conversationId,
                   title: created.title ?? '新对话',
+                  promptType: created.promptType,
                   dataSourceId: created.dataSourceId ?? null,
                   dataSourceName: created.dataSourceName ?? null,
                   databaseName: created.databaseName ?? null,
@@ -492,6 +495,7 @@ export const useAiChatStore = create<IAiChatStore>()(
             messages: localMessages,
             currentContent: '',
             title: conversation.title,
+            promptType: conversation.promptType,
             dataSourceId: conversation.dataSourceId,
             databaseName: conversation.databaseName,
             schemaName: conversation.schemaName,

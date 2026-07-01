@@ -44,8 +44,10 @@ public class StreamAction extends BaseChatAction {
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
         ChatContext ctx = getChatContext(context);
+        restoreTrace(ctx);
         if (ctx.isCancelled()) {
             log.info("[StreamAction] Skip cancelled request, uid: {}", ctx.getUid());
+            removeContext();
             return;
         }
 
@@ -55,9 +57,10 @@ public class StreamAction extends BaseChatAction {
             log.warn("[StreamAction] Prompt exceeds max length, uid: {}, promptLength: {}",
                     ctx.getUid(), prompt == null ? 0 : prompt.length());
             sendError(ctx.getSseEmitter(), "提示语超出最大长度");
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
-            ).subscribe();
+            ), ctx).subscribe();
+            removeContext();
             return;
         }
 
@@ -73,7 +76,7 @@ public class StreamAction extends BaseChatAction {
                             ChatMemory.CONVERSATION_ID, ctx.getRequest().getConversationId()))
                     .stream()
                     .chatResponse();
-            flux.publishOn(Schedulers.boundedElastic())
+            propagateTrace(flux.publishOn(Schedulers.boundedElastic()), ctx)
                     .doOnNext(chatResponse -> processChatResponse(ctx, chatResponse))
                     .doOnError(error -> handleStreamError(ctx, error, context))
                     .doOnComplete(() -> handleStreamComplete(ctx, context))
@@ -82,9 +85,11 @@ public class StreamAction extends BaseChatAction {
         } catch (Exception e) {
             log.error("[StreamAction] Start streaming failed for uid: {}", ctx.getUid(), e);
             sendError(ctx.getSseEmitter(), "启动 AI 流式调用失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.AI_CALL_FAILED).build())
-            ).subscribe();
+            ), ctx).subscribe();
+        } finally {
+            removeContext();
         }
     }
 

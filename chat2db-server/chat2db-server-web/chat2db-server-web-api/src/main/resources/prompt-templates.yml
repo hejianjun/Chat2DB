@@ -14,7 +14,6 @@ prompts:
       # {schema}
       #
       #
-      ### SQL input: {message}
 
   # SQL 解释
   sql_explain:
@@ -28,7 +27,6 @@ prompts:
       # {schema}
       #
       #
-      ### SQL input: {message}
 
   # SQL 优化
   sql_optimizer:
@@ -44,7 +42,6 @@ prompts:
       ### SQL Execution Plan (EXPLAIN):
       # {explain_plan}
       #
-      ### SQL input: {message}
 
   # SQL 转换
   sql_2_sql:
@@ -57,8 +54,6 @@ prompts:
       #
       # {schema}
       #
-      #
-      ### SQL input: {message}
       #
       ### 目标 SQL 类型：{target_sql_type}
 

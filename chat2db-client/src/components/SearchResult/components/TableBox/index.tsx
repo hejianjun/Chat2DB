@@ -158,7 +158,7 @@ export default function TableBox(props: ITableProps) {
   const [columnResize, setColumnResize] = useState<number[]>([0]);
   const [exportProgress, setExportProgress] = useState<number>(0);
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
-  const exportPollingRef = React.useRef<NodeJS.Timeout | null>(null);
+  const exportSubscriptionRef = React.useRef<(() => void) | null>(null);
 
   const handleExportSQLResult = async (exportType: ExportTypeEnum, exportSize: ExportSizeEnum) => {
     const params: IExportParams = {
@@ -182,35 +182,31 @@ export default function TableBox(props: ITableProps) {
   };
 
   const startExportPolling = (taskId: number) => {
-    if (exportPollingRef.current) {
-      clearInterval(exportPollingRef.current);
-    }
-
-    exportPollingRef.current = setInterval(async () => {
-      try {
-        const task: ITask = await taskService.getTask({ id: taskId });
+    exportSubscriptionRef.current?.();
+    exportSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      fallbackInterval: 500,
+      onMessage: (task: ITask) => {
         if (task) {
           const processedCount = parseInt(task.taskProgress || '0', 10);
           setExportProgress(processedCount);
 
           if (task.taskStatus === 'FINISH') {
-            clearInterval(exportPollingRef.current!);
-            exportPollingRef.current = null;
+            exportSubscriptionRef.current = null;
             downloadExportFile(taskId);
           } else if (task.taskStatus === 'ERROR') {
-            clearInterval(exportPollingRef.current!);
-            exportPollingRef.current = null;
+            exportSubscriptionRef.current = null;
             message.error(i18n('common.text.exportFailed'));
             setExportModalVisible(false);
           }
         }
-      } catch (error) {
-        clearInterval(exportPollingRef.current!);
-        exportPollingRef.current = null;
+      },
+      onError: () => {
+        exportSubscriptionRef.current = null;
         message.error(i18n('common.text.exportFailed'));
         setExportModalVisible(false);
-      }
-    }, 500);
+      },
+    });
   };
 
   const downloadExportFile = (taskId: number) => {
@@ -1183,10 +1179,8 @@ export default function TableBox(props: ITableProps) {
         footer={null}
         closable={false}
         onCancel={() => {
-          if (exportPollingRef.current) {
-            clearInterval(exportPollingRef.current);
-            exportPollingRef.current = null;
-          }
+          exportSubscriptionRef.current?.();
+          exportSubscriptionRef.current = null;
           setExportModalVisible(false);
         }}
         width={400}

@@ -28,6 +28,7 @@ public class AiConversationDO implements Serializable {
     private String conversationId;
     private Long userId;
     private String title;
+    private String promptType;
     private Long dataSourceId;
     private String databaseName;
     private String schemaName;

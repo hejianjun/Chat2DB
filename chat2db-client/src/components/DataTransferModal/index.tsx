@@ -42,7 +42,7 @@ const DataTransferModal = memo(() => {
   const [transferring, setTransferring] = useState(false);
   const [transferProgress, setTransferProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskSubscriptionRef = useRef<(() => void) | null>(null);
   const lastTaskContentRef = useRef<string>('');
   const executedCallbackRef = useRef<IDataTransferModalParams['executedCallback']>();
 
@@ -163,13 +163,10 @@ const DataTransferModal = memo(() => {
   };
 
   const startPolling = (taskId: number) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const task = await taskService.getTask({ id: taskId });
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      onMessage: (task) => {
         const processedCount = parseInt(task.taskProgress || '0', 10);
         setTransferProgress(processedCount);
         if (task.content && task.content !== lastTaskContentRef.current) {
@@ -177,34 +174,30 @@ const DataTransferModal = memo(() => {
           addLog(task.content);
         }
         if (task.taskStatus === 'FINISH') {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
+          taskSubscriptionRef.current = null;
           addLog('Transfer completed successfully');
           message.success('数据传输成功');
           setTransferring(false);
           executedCallbackRef.current?.();
         } else if (task.taskStatus === 'ERROR') {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
+          taskSubscriptionRef.current = null;
           addLog(`Error: ${task.content || '数据传输失败'}`);
           message.error(task.content || '数据传输失败');
           setTransferring(false);
         }
-      } catch (error: any) {
-        clearInterval(pollingRef.current!);
-        pollingRef.current = null;
-        addLog(`Polling error: ${error.message}`);
+      },
+      onError: (error: any) => {
+        taskSubscriptionRef.current = null;
+        addLog(`Task subscription error: ${error.message || error}`);
         message.error('数据传输失败');
         setTransferring(false);
-      }
-    }, 1000);
+      },
+    });
   };
 
   const handleClose = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = null;
     if (!transferring) {
       setOpen(false);
     }

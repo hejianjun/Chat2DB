@@ -10,6 +10,7 @@ public class AiConversationVO {
     private Long id;
     private String conversationId;
     private String title;
+    private String promptType;
     private Long dataSourceId;
     private String dataSourceName;
     private String databaseName;

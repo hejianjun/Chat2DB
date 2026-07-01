@@ -32,6 +32,7 @@ public class LogOncePerRequestFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(LogUtils.TRACE_ID);
+            LogUtils.removeTraceId();
         }
     }
 }

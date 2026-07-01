@@ -164,7 +164,7 @@ const DataGenerationModal: React.FC = () => {
   const [rowCount, setRowCount] = useState(100);
   const [guessLoading, setGuessLoading] = useState(false);
   const tableInfoRef = useRef<IDataGenerationModalParams | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskSubscriptionRef = useRef<(() => void) | null>(null);
 
   const addLog = (log: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -249,10 +249,8 @@ const DataGenerationModal: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
+      taskSubscriptionRef.current?.();
+      taskSubscriptionRef.current = null;
     };
   }, []);
 
@@ -378,20 +376,16 @@ const DataGenerationModal: React.FC = () => {
   };
 
   const startPolling = (taskId: number) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const task = await taskService.getTask({ id: taskId });
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      onMessage: (task) => {
         if (task) {
           const progress = parseInt(task.taskProgress || '0', 10);
           setTaskProgress(progress);
 
           if (task.taskStatus === 'FINISH') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             setTaskStatus('FINISH');
             addLog(`数据生成完成，共 ${rowCount} 行`);
             message.success('数据生成完成');
@@ -401,8 +395,7 @@ const DataGenerationModal: React.FC = () => {
               setOpen(false);
             }, 2000);
           } else if (task.taskStatus === 'ERROR') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             setTaskStatus('ERROR');
             let errorMsg = '数据生成失败';
             if (task.content) {
@@ -415,17 +408,17 @@ const DataGenerationModal: React.FC = () => {
             addLog(`进度: ${progress}%`);
           }
         }
-      } catch {
-        addLog('查询任务状态失败');
-      }
-    }, 1000);
+      },
+      onError: () => {
+        taskSubscriptionRef.current = null;
+        addLog('订阅任务状态失败');
+      },
+    });
   };
 
   const handleCloseProgress = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = null;
     if (!generating) {
       setProgressVisible(false);
     }

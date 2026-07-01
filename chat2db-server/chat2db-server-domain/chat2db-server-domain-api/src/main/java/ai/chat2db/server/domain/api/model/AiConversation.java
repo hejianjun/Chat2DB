@@ -17,6 +17,7 @@ public class AiConversation {
     private String conversationId;
     private Long userId;
     private String title;
+    private String promptType;
     private Long dataSourceId;
     private String dataSourceName;
     private String databaseName;

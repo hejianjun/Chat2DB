@@ -18,6 +18,13 @@ export interface ITask {
   content?: string;
 }
 
+interface ISubscribeTaskParams {
+  id: number;
+  onMessage: (task: ITask) => void;
+  onError?: (error: any) => void;
+  fallbackInterval?: number;
+}
+
 export interface IExportResultDataParams {
   sql: string;
   originalSql: string;
@@ -174,12 +181,75 @@ const executeSqlFile = (params: IExecuteSqlFileParams): Promise<number> => {
     });
 };
 
+const subscribeTask = ({ id, onMessage, onError, fallbackInterval = 1000 }: ISubscribeTaskParams) => {
+  let stopped = false;
+  let pollingTimer: NodeJS.Timeout | null = null;
+  let eventSource: EventSource | null = null;
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+
+  const stop = () => {
+    stopped = true;
+    stopPolling();
+    eventSource?.close();
+    eventSource = null;
+  };
+
+  const handleTask = (task: ITask) => {
+    if (stopped) {
+      return;
+    }
+    onMessage(task);
+    if (task.taskStatus === 'FINISH' || task.taskStatus === 'ERROR') {
+      stop();
+    }
+  };
+
+  const startPolling = () => {
+    stopPolling();
+    pollingTimer = setInterval(async () => {
+      try {
+        handleTask(await getTask({ id }));
+      } catch (error) {
+        stop();
+        onError?.(error);
+      }
+    }, fallbackInterval);
+  };
+
+  if (typeof EventSource === 'undefined') {
+    startPolling();
+    return stop;
+  }
+
+  eventSource = new EventSource(`${window._BaseURL}/api/task/subscribe/${id}`, { withCredentials: true });
+  eventSource.addEventListener('task', (event) => {
+    handleTask(JSON.parse(event.data));
+  });
+  eventSource.onerror = () => {
+    if (stopped) {
+      return;
+    }
+    eventSource?.close();
+    eventSource = null;
+    startPolling();
+  };
+
+  return stop;
+};
+
 export default {
   exportResultData,
   exportSchemaDoc,
   importData,
   executeSqlFile,
   getTask,
+  subscribeTask,
   getTaskList,
   cleanupTasks,
   previewFileHeaders,

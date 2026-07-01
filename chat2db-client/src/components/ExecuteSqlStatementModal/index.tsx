@@ -25,7 +25,7 @@ const ExecuteSqlStatementModal = () => {
   const [importing, setImporting] = useState<boolean>(false);
   const [logs, setLogs] = useState<string[]>([]);
   const executedCallbackRef = useRef<IExecuteSqlStatementModalParams['executedCallback']>();
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskSubscriptionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -82,12 +82,10 @@ const ExecuteSqlStatementModal = () => {
   };
 
   const startPolling = (taskId: number, totalCount: number) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-    pollingRef.current = setInterval(async () => {
-      try {
-        const task = await taskService.getTask({ id: taskId });
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      onMessage: (task) => {
         const latestProcessedCount = parseInt(task.taskProgress || '0', 10) || 0;
         setProcessedCount(latestProcessedCount);
         setProgress((prev) => {
@@ -102,36 +100,32 @@ const ExecuteSqlStatementModal = () => {
             : `Progress: ${latestProcessedCount} statements executed`,
         );
         if (task.taskStatus === 'FINISH') {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
+          taskSubscriptionRef.current = null;
           setImporting(false);
           setProgress(100);
           addLog('Execute completed successfully');
           message.success(i18n('common.text.importSuccess'));
           executedCallbackRef.current?.();
         } else if (task.taskStatus === 'ERROR') {
-          clearInterval(pollingRef.current!);
-          pollingRef.current = null;
+          taskSubscriptionRef.current = null;
           setImporting(false);
           const errorMsg = task.content || i18n('common.text.importFailed');
           addLog(`Error: ${errorMsg}`);
           message.error(errorMsg);
         }
-      } catch (error: any) {
-        clearInterval(pollingRef.current!);
-        pollingRef.current = null;
+      },
+      onError: (error: any) => {
+        taskSubscriptionRef.current = null;
         setImporting(false);
-        addLog(`Polling error: ${error.message}`);
+        addLog(`Task subscription error: ${error.message || error}`);
         message.error(i18n('common.text.importFailed'));
-      }
-    }, 1000);
+      },
+    });
   };
 
   const handleClose = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = null;
     if (!importing) {
       setOpen(false);
     }

@@ -102,6 +102,19 @@ public class LogUtils {
     }
 
     /**
+     * Sets the trace ID for the current thread.
+     *
+     * @param traceId trace ID propagated from the calling thread
+     */
+    public static void setTraceId(String traceId) {
+        if (StringUtils.isBlank(traceId)) {
+            TRACE_ID_THREAD_LOCAL.remove();
+            return;
+        }
+        TRACE_ID_THREAD_LOCAL.set(traceId);
+    }
+
+    /**
      * Remove the trace ID
      *
      * @return

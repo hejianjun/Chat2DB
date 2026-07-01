@@ -35,8 +35,10 @@ public class BuildPromptAction extends BaseChatAction {
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
         ChatContext chatContext = getChatContext(context);
+        restoreTrace(chatContext);
         if (chatContext.isCancelled()) {
             log.info("[BuildPromptAction] Skip cancelled request, uid: {}", chatContext.getUid());
+            removeContext();
             return;
         }
 
@@ -79,16 +81,16 @@ public class BuildPromptAction extends BaseChatAction {
                     chatContext.getUid(), StringUtils.length(builtPrompt));
             log.info("[BuildPromptAction] Prompt content, uid: {}:\n{}", chatContext.getUid(), builtPrompt);
 
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILT).build())
-            ).subscribe();
+            ), chatContext).subscribe();
         } catch (Exception e) {
             log.error("[BuildPromptAction] Build prompt failed for uid: {}", chatContext.getUid(), e);
             sendError(chatContext.getSseEmitter(),
                     "构建提示失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.PROMPT_BUILD_FAILED).build())
-            ).subscribe();
+            ), chatContext).subscribe();
         } finally {
             removeContext();
         }

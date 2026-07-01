@@ -42,11 +42,13 @@ public class ExplainAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
-        log.info("[ExplainAction] execute called");
         ChatContext ctx = getChatContext(context);
+        restoreTrace(ctx);
+        log.info("[ExplainAction] execute called");
         
         if (ctx.isCancelled()) {
             log.info("[ExplainAction] cancelled, returning");
+            removeContext();
             return;
         }
 
@@ -164,8 +166,9 @@ public class ExplainAction extends BaseChatAction {
     }
 
     private void triggerEvent(StateContext<ChatState, ChatEvent> context, ChatEvent event) {
-        context.getStateMachine().sendEvent(
+        ChatContext chatContext = getChatContext(context);
+        propagateTrace(context.getStateMachine().sendEvent(
             Mono.just(MessageBuilder.withPayload(event).build())
-        ).subscribe();
+        ), chatContext).subscribe();
     }
 }

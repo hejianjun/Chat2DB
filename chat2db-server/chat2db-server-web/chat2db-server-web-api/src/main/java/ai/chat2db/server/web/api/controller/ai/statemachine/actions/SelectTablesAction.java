@@ -44,11 +44,13 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
-        log.info("[SelectTablesAction] execute called");
         ChatContext ctx = getChatContext(context);
+        restoreTrace(ctx);
+        log.info("[SelectTablesAction] execute called");
         log.info("[SelectTablesAction] uid: {}, cancelled: {}", ctx.getUid(), ctx.isCancelled());
         if (ctx.isCancelled()) {
             log.info("[SelectTablesAction] cancelled, returning");
+            removeContext();
             return;
         }
 
@@ -68,15 +70,15 @@ public class SelectTablesAction extends BaseChatAction {
             }
 
             log.info("[SelectTablesAction] Sending AUTO_SELECT_DONE event for uid: {}", ctx.getUid());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_DONE).build())
-            ).subscribe();
+            ), ctx).subscribe();
         } catch (Exception e) {
             log.error("[SelectTablesAction] Auto select tables failed for uid: {}", ctx.getUid(), e);
             sendError(ctx.getSseEmitter(), "选表失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.AUTO_SELECT_FAILED).build())
-            ).subscribe();
+            ), ctx).subscribe();
         } finally {
             removeContext();
         }

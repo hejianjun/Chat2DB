@@ -118,8 +118,7 @@ public class PromptTemplateRegistry {
                         "#\n" +
                         "# {schema}\n" +
                         "#\n" +
-                        "#\n" +
-                        "### SQL input: {message}")
+                        "#")
                 .build();
     }
 }

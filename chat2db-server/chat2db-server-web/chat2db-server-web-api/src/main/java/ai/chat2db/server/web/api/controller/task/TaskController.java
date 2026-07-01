@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -33,6 +34,9 @@ public class TaskController {
 
     @Autowired
     private TaskService taskService;
+
+    @Autowired
+    private TaskSseService taskSseService;
 
 
     @GetMapping("/list")
@@ -49,6 +53,20 @@ public class TaskController {
     public DataResult<Task> get(@PathVariable Long id) {
         Task task = taskService.get(id);
         return DataResult.of(task);
+    }
+
+    @GetMapping(path = "/subscribe/{id}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribe(@PathVariable Long id) {
+        Task task = taskService.get(id);
+        if (task == null) {
+            log.error("task is null");
+            throw new RuntimeException("task is null");
+        }
+        if (!ContextUtils.getUserId().equals(task.getUserId())) {
+            log.error("task is not belong to user");
+            throw new RuntimeException("task is not belong to user");
+        }
+        return taskSseService.subscribe(task);
     }
 
     @PostMapping("/cleanup")

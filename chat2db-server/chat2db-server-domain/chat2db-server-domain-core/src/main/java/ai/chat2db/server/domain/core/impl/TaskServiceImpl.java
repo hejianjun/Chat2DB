@@ -6,6 +6,7 @@ import ai.chat2db.server.domain.api.model.Task;
 import ai.chat2db.server.domain.api.param.TaskCreateParam;
 import ai.chat2db.server.domain.api.param.TaskPageParam;
 import ai.chat2db.server.domain.api.param.TaskUpdateParam;
+import ai.chat2db.server.domain.api.service.TaskEventPublisher;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.core.converter.TaskConverter;
 import ai.chat2db.server.domain.repository.MapperUtils;
@@ -36,6 +37,9 @@ public class TaskServiceImpl implements TaskService {
     @Autowired
     private TaskConverter taskConverter;
 
+    @Autowired(required = false)
+    private TaskEventPublisher taskEventPublisher;
+
     @Override
     public Long create(TaskCreateParam param) {
         TaskDO taskDO = taskConverter.todo(param);
@@ -54,7 +58,9 @@ public class TaskServiceImpl implements TaskService {
         taskDO.setDownloadUrl(param.getDownloadUrl());
         taskDO.setContent(param.getContent());
         MapperUtils.getTaskMapper().updateById(taskDO);
-        
+        if (taskEventPublisher != null) {
+            taskEventPublisher.publish(get(param.getId()));
+        }
     }
 
     @Override

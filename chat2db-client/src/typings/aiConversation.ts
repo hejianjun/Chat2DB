@@ -1,6 +1,7 @@
 export interface IAiConversation {
   conversationId: string;
   title?: string | null;
+  promptType?: string | null;
   dataSourceId?: number | null;
   dataSourceName?: string | null;
   databaseName?: string | null;

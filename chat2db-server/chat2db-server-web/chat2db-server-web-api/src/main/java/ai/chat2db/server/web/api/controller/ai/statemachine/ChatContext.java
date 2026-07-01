@@ -15,6 +15,7 @@ import lombok.Data;
 @Builder
 public class ChatContext {
     private String uid;
+    private String traceId;
     private ChatQueryRequest request;
     private SseEmitter sseEmitter;
     private ChatClient chatClient;

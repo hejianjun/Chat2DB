@@ -45,11 +45,13 @@ public class FetchSchemaAction extends BaseChatAction {
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
-        log.info("[FetchSchemaAction] execute called");
         ChatContext ctx = getChatContext(context);
+        restoreTrace(ctx);
+        log.info("[FetchSchemaAction] execute called");
         log.info("[FetchSchemaAction] uid: {}, cancelled: {}", ctx.getUid(), ctx.isCancelled());
         if (ctx.isCancelled()) {
             log.info("[FetchSchemaAction] cancelled, returning");
+            removeContext();
             return;
         }
 
@@ -69,15 +71,15 @@ public class FetchSchemaAction extends BaseChatAction {
             }
 
             log.info("[FetchSchemaAction] Sending SCHEMA_FETCHED event for uid: {}", ctx.getUid());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.SCHEMA_FETCHED).build())
-            ).subscribe();
+            ), ctx).subscribe();
         } catch (Exception e) {
             log.error("[FetchSchemaAction] Fetch schema failed for uid: {}", ctx.getUid(), e);
             sendError(ctx.getSseEmitter(), "获取表结构失败：" + e.getMessage());
-            context.getStateMachine().sendEvent(
+            propagateTrace(context.getStateMachine().sendEvent(
                     Mono.just(MessageBuilder.withPayload(ChatEvent.FETCH_SCHEMA_FAILED).build())
-            ).subscribe();
+            ), ctx).subscribe();
         } finally {
             removeContext();
         }

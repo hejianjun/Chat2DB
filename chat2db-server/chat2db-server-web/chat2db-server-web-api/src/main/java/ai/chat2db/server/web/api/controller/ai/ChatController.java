@@ -34,6 +34,7 @@ import ai.chat2db.server.tools.common.exception.ParamBusinessException;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.server.tools.common.util.LogUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.config.AiChatConfig;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
@@ -45,6 +46,7 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -120,6 +122,7 @@ public class ChatController {
 
         ChatContext ctx = ChatContext.builder()
                 .uid(sessionKey)
+                .traceId(MDC.get(LogUtils.TRACE_ID))
                 .request(queryRequest)
                 .sseEmitter(sseEmitter)
                 .chatClient(chatClient)
@@ -147,11 +150,15 @@ public class ChatController {
         log.info("[ChatController] Session stored with conversationId: {}, activeSessions size: {}, activeContexts size: {}",
                 sessionKey, activeSessions.size(), activeContexts.size());
 
-        stateMachine.startReactively().subscribe();
+        stateMachine.startReactively()
+                .contextWrite(reactorContext -> reactorContext.put(LogUtils.TRACE_ID, ctx.getTraceId()))
+                .subscribe();
         ChatEvent initialEvent = determineInitialEvent(queryRequest);
         stateMachine.sendEvent(
                 Mono.just(MessageBuilder.withPayload(initialEvent).build())
-        ).subscribe();
+        )
+                .contextWrite(reactorContext -> reactorContext.put(LogUtils.TRACE_ID, ctx.getTraceId()))
+                .subscribe();
 
         return sseEmitter;
     }

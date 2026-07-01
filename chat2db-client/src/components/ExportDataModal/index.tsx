@@ -19,7 +19,7 @@ const ExportDataModal = () => {
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskSubscriptionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -74,21 +74,17 @@ const ExportDataModal = () => {
   };
 
   const startExportPolling = (taskId: number) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
-
-    pollingRef.current = setInterval(async () => {
-      try {
-        const task: ITask = await taskService.getTask({ id: taskId });
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = taskService.subscribeTask({
+      id: taskId,
+      onMessage: (task: ITask) => {
         if (task) {
           const processedCount = parseInt(task.taskProgress || '0', 10);
           setExportProgress(processedCount);
           addLog(`Progress: ${processedCount} rows exported`);
 
           if (task.taskStatus === 'FINISH') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             addLog('Export completed successfully');
             downloadExportFile(taskId);
             message.success(i18n('workspace.table.export.success'));
@@ -98,8 +94,7 @@ const ExportDataModal = () => {
               setOpen(false);
             }, 2000);
           } else if (task.taskStatus === 'ERROR') {
-            clearInterval(pollingRef.current!);
-            pollingRef.current = null;
+            taskSubscriptionRef.current = null;
             let errorMsg = i18n('workspace.table.export.failed');
             if (task.content) {
               errorMsg = task.content;
@@ -109,14 +104,14 @@ const ExportDataModal = () => {
             setExporting(false);
           }
         }
-      } catch (error) {
-        clearInterval(pollingRef.current!);
-        pollingRef.current = null;
-        addLog(`Polling error: ${error}`);
+      },
+      onError: (error) => {
+        taskSubscriptionRef.current = null;
+        addLog(`Task subscription error: ${error}`);
         message.error(i18n('workspace.table.export.failed'));
         setExporting(false);
-      }
-    }, 1000);
+      },
+    });
   };
 
   const downloadExportFile = (taskId: number) => {
@@ -130,10 +125,8 @@ const ExportDataModal = () => {
   };
 
   const handleClose = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    taskSubscriptionRef.current?.();
+    taskSubscriptionRef.current = null;
     setExportModalVisible(false);
     if (!exporting) {
       setOpen(false);
