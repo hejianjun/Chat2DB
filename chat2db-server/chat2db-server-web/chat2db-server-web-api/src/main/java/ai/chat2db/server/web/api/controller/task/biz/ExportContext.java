@@ -1,6 +1,7 @@
 package ai.chat2db.server.web.api.controller.task.biz;
 
 import com.alibaba.druid.DbType;
+import ai.chat2db.spi.model.ExecuteResult;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,4 +17,5 @@ public class ExportContext {
     private String tableName;
     private Long taskId;
     private Consumer<Integer> progressUpdater;
+    private ExecuteResult cachedResult;
 }

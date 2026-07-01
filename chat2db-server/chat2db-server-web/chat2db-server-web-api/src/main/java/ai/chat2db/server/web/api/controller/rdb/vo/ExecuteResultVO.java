@@ -115,6 +115,11 @@ public class ExecuteResultVO {
     private Long duration;
 
     /**
+     * Operation log id associated with this execution.
+     */
+    private Long operationLogId;
+
+    /**
      * 返回结果是否可以编辑
      */
     private boolean canEdit;

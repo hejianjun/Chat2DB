@@ -273,7 +273,9 @@ const getDeprecatedTableList = createRequest<IGetTableListParams, ITable[]>('/ap
 const getDMLCount = createRequest<IExecuteSqlParams, number>('/api/rdb/dml/count', { method: 'post' });
 
 export interface IExportParams extends IExecuteSqlParams {
+  sql: string;
   originalSql: string;
+  operationLogId?: number;
   exportType: ExportTypeEnum;
   exportSize: ExportSizeEnum;
 }

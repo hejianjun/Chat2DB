@@ -20,6 +20,7 @@ export interface ITableHeaderItem {
 }
 
 export interface IManageResultData {
+  operationLogId?: number;
   statementIndex?: number;
   statementStartLine?: number;
   statementEndLine?: number;

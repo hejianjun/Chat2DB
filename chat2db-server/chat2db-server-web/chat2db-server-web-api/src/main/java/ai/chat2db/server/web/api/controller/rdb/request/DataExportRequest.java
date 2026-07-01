@@ -24,6 +24,11 @@ public class DataExportRequest extends DataSourceBaseRequest {
     private String originalSql;
 
     /**
+     * Operation log id used to restore the current page result.
+     */
+    private Long operationLogId;
+
+    /**
      * export type
      *
      * @see ExportTypeEnum

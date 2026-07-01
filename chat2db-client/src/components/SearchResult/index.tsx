@@ -33,6 +33,7 @@ interface IProps {
   viewTable?: boolean;
   isActive?: boolean;
   onLocateStatement?: (result: IManageResultData) => void;
+  initialResult?: IManageResultData;
 }
 
 const defaultResultConfig: IResultConfig = {
@@ -58,7 +59,9 @@ export const Context = createContext<IContext>({} as any);
 
 export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) => {
   const { className, sql, executeSqlParams, concealTabHeader, viewTable, isActive } = props;
-  const [resultDataList, setResultDataList] = useState<IManageResultData[]>();
+  const [resultDataList, setResultDataList] = useState<IManageResultData[]>(
+    props.initialResult ? [{ ...props.initialResult, uuid: uuidV4() }] : undefined,
+  );
   const [tableLoading, setTableLoading] = useState(false);
   const controllerRef = useRef<AbortController>();
   const [activeTabId, setActiveTabId] = useState<string>('');

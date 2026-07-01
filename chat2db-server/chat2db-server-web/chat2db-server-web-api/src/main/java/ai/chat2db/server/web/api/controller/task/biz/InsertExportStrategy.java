@@ -66,4 +66,31 @@ public class InsertExportStrategy extends AbstractExportStrategy {
     public boolean supports(String exportType) {
         return "INSERT".equalsIgnoreCase(exportType);
     }
+
+    @Override
+    protected void doExportCached(ai.chat2db.spi.model.ExecuteResult result, ExportContext exportContext) {
+        try (PrintWriter printWriter = new PrintWriter(exportContext.getFile(), StandardCharsets.UTF_8)) {
+            List<SQLIdentifierExpr> headerList = new ArrayList<>(result.getHeaderList().size());
+            result.getHeaderList().forEach(header -> headerList.add(new SQLIdentifierExpr(header.getName())));
+            List<List<String>> rows = result.getDataList();
+            if (rows == null) {
+                rows = java.util.Collections.emptyList();
+            }
+            for (List<String> row : rows) {
+                SQLInsertStatement statement = new SQLInsertStatement();
+                statement.setDbType(exportContext.getDbType());
+                statement.setTableSource(new SQLExprTableSource(exportContext.getTableName()));
+                statement.getColumns().addAll(headerList);
+                SQLInsertStatement.ValuesClause values = new SQLInsertStatement.ValuesClause();
+                row.forEach(values::addValue);
+                statement.setValues(values);
+                printWriter.println(SQLUtils.toSQLString(
+                        statement, exportContext.getDbType(), INSERT_FORMAT_OPTION) + ";");
+            }
+            updateProgress(rows.size(), exportContext);
+        } catch (IOException e) {
+            throw new ai.chat2db.server.tools.base.excption.BusinessException(
+                    "dataSource.exportError", new Object[]{e.getMessage()}, e);
+        }
+    }
 }

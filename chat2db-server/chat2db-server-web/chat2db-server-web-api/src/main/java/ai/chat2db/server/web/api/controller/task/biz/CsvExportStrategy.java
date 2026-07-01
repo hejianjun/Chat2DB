@@ -15,6 +15,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class CsvExportStrategy extends AbstractExportStrategy {
@@ -56,5 +57,30 @@ public class CsvExportStrategy extends AbstractExportStrategy {
     @Override
     public boolean supports(String exportType) {
         return "CSV".equalsIgnoreCase(exportType);
+    }
+
+    @Override
+    protected void doExportCached(ai.chat2db.spi.model.ExecuteResult result, ExportContext exportContext) {
+        ExcelWrapper excelWrapper = new ExcelWrapper();
+        try {
+            List<String> headerNames = result.getHeaderList().stream()
+                    .map(ai.chat2db.spi.model.Header::getName)
+                    .collect(Collectors.toList());
+            ExcelWriterBuilder builder = EasyExcel.write(exportContext.getFile())
+                    .charset(java.nio.charset.StandardCharsets.UTF_8)
+                    .excelType(ExcelTypeEnum.CSV)
+                    .head(EasyCollectionUtils.toList(headerNames, name -> Lists.newArrayList(name)));
+            excelWrapper.setExcelWriter(builder.build());
+            excelWrapper.setWriteSheet(EasyExcel.writerSheet(0).build());
+            List<List<String>> rows = result.getDataList() == null ? Lists.newArrayList() : result.getDataList();
+            if (!rows.isEmpty()) {
+                excelWrapper.getExcelWriter().write(rows, excelWrapper.getWriteSheet());
+            }
+            updateProgress(rows.size(), exportContext);
+        } finally {
+            if (excelWrapper.getExcelWriter() != null) {
+                excelWrapper.getExcelWriter().finish();
+            }
+        }
     }
 }

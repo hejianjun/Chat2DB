@@ -1,7 +1,7 @@
 import createRequest from "./base";
 // import { IPageResponse,IPageParams,IHistoryRecord, IWindowTab, ISavedConsole } from '@/types';
 import { DatabaseTypeCode, ConsoleStatus } from '@/constants'
-import { ICreateConsole, IConsole, IPageResponse, IPageParams } from '@/typings';
+import { ICreateConsole, IConsole, IManageResultData, IPageResponse, IPageParams } from '@/typings';
 
 export interface IGetSavedListParams extends IPageParams {
   tabOpened?: 'y' | 'n';
@@ -97,6 +97,11 @@ const createHistory = createRequest<ISaveBasicInfo, void>('/api/operation/log/cr
 
 const getHistoryList = createRequest<IGetHistoryListParams, IPageResponse<IHistoryRecord>>('/api/operation/log/list', {});
 
+const getHistoryResult = createRequest<{ id: number }, IManageResultData | null>(
+  '/api/operation/log/:id/result',
+  { method: 'get' },
+);
+
 export default {
   getConsoleList,
   updateSavedConsole,
@@ -104,5 +109,6 @@ export default {
   createConsole,
   deleteSavedConsole,
   createHistory,
-  getWindowTab
+  getWindowTab,
+  getHistoryResult,
 }

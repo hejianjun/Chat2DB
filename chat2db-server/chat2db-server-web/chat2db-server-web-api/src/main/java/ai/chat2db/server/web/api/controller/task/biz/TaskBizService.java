@@ -4,6 +4,7 @@ import ai.chat2db.server.domain.api.enums.*;
 import ai.chat2db.server.domain.api.param.*;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.domain.api.service.TaskService;
+import ai.chat2db.server.domain.core.cache.QueryResultCache;
 import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
@@ -41,6 +42,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
@@ -62,6 +64,9 @@ public class TaskBizService {
     @Autowired
     private SchemaDocExportStrategyFactory schemaDocExportStrategyFactory;
 
+    @Autowired
+    private QueryResultCache queryResultCache;
+
     public DataResult<Long> exportResultData(DataExportRequest request) {
         String sql = ExportSizeEnum.CURRENT_PAGE.getCode().equals(request.getExportSize()) ? request.getSql() : request.getOriginalSql();
         Assert.notBlank(sql, "dataSource.sqlEmpty");
@@ -73,10 +78,11 @@ public class TaskBizService {
 
         LoginUser loginUser = ContextUtils.getLoginUser();
         ConnectInfo connectInfo = Chat2DBContext.getConnectInfo().copy();
+        ai.chat2db.spi.model.ExecuteResult cachedResult = getCachedResult(request, sql, connectInfo);
 
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
-            doExportStreaming(sql, file, dbType, tableName, request.getExportType(), dataResult.getData());
+            doExportStreaming(sql, file, dbType, tableName, request.getExportType(), dataResult.getData(), cachedResult);
         }).whenComplete((aVoid, throwable) -> {
             updateStatus(dataResult.getData(), file, throwable);
             removeContext();
@@ -168,7 +174,8 @@ public class TaskBizService {
         taskService.updateStatus(updateParam);
     }
 
-    private void doExportStreaming(String sql, File file, DbType dbType, String tableName, String exportType, Long taskId) {
+    private void doExportStreaming(String sql, File file, DbType dbType, String tableName, String exportType,
+                                   Long taskId, ai.chat2db.spi.model.ExecuteResult cachedResult) {
         ExportStrategy strategy = exportStrategyFactory.getStrategy(exportType);
 
         ExportContext exportContext = ExportContext.builder()
@@ -177,10 +184,29 @@ public class TaskBizService {
                 .dbType(dbType)
                 .tableName(tableName)
                 .taskId(taskId)
+                .cachedResult(cachedResult)
                 .progressUpdater(count -> updateProgressCount(taskId, count))
                 .build();
 
         strategy.exportData(exportContext);
+    }
+
+    private ai.chat2db.spi.model.ExecuteResult getCachedResult(
+            DataExportRequest request, String sql, ConnectInfo connectInfo) {
+        if (!ExportSizeEnum.CURRENT_PAGE.getCode().equals(request.getExportSize())
+                || request.getOperationLogId() == null
+                || (!"HIVE".equalsIgnoreCase(connectInfo.getDbType())
+                && !"DLC".equalsIgnoreCase(connectInfo.getDbType()))) {
+            return null;
+        }
+        QueryResultCache.CachedQueryResult cached = queryResultCache.get(request.getOperationLogId());
+        if (cached == null
+                || !Objects.equals(cached.getUserId(), ContextUtils.getUserId())
+                || !Objects.equals(cached.getDataSourceId(), request.getDataSourceId())
+                || !Objects.equals(cached.getSql(), sql)) {
+            return null;
+        }
+        return cached.getResult();
     }
 
     private void updateProgressCount(Long taskId, int processedCount) {

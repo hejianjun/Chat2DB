@@ -18,6 +18,10 @@ public abstract class AbstractExportStrategy implements ExportStrategy {
 
     @Override
     public void exportData(ExportContext exportContext) {
+        if (exportContext.getCachedResult() != null) {
+            doExportCached(exportContext.getCachedResult(), exportContext);
+            return;
+        }
         DefaultValueHandler valueHandler = new DefaultValueHandler();
         Connection connection = Chat2DBContext.getConnection();
 
@@ -49,6 +53,9 @@ public abstract class AbstractExportStrategy implements ExportStrategy {
     protected abstract void doExport(ResultSet rs, ResultSetMetaData metaData, List<String> headerNames,
                                      int columnCount, DefaultValueHandler valueHandler,
                                      ExportContext exportContext) throws SQLException;
+
+    protected abstract void doExportCached(ai.chat2db.spi.model.ExecuteResult result,
+                                           ExportContext exportContext);
 
     protected void updateProgress(int processedCount, ExportContext exportContext) {
         exportContext.getProgressUpdater().accept(processedCount);

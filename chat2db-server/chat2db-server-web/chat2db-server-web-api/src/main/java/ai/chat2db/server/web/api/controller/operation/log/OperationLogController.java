@@ -1,11 +1,13 @@
 package ai.chat2db.server.web.api.controller.operation.log;
 
 import java.util.List;
+import java.util.Objects;
 
 import ai.chat2db.server.domain.api.model.OperationLog;
 import ai.chat2db.server.domain.api.param.operation.OperationLogCreateParam;
 import ai.chat2db.server.domain.api.param.operation.OperationLogPageQueryParam;
 import ai.chat2db.server.domain.api.service.OperationLogService;
+import ai.chat2db.server.domain.core.cache.QueryResultCache;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.web.WebPageResult;
@@ -14,10 +16,13 @@ import ai.chat2db.server.web.api.controller.operation.log.converter.OperationLog
 import ai.chat2db.server.web.api.controller.operation.log.request.OperationLogCreateRequest;
 import ai.chat2db.server.web.api.controller.operation.log.request.OperationLogQueryRequest;
 import ai.chat2db.server.web.api.controller.operation.log.vo.OperationLogVO;
+import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
+import ai.chat2db.server.web.api.controller.rdb.vo.ExecuteResultVO;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,6 +43,12 @@ public class OperationLogController {
 
     @Autowired
     private OperationLogWebConverter operationLogWebConverter;
+
+    @Autowired
+    private QueryResultCache queryResultCache;
+
+    @Autowired
+    private RdbWebConverter rdbWebConverter;
 
     /**
      * 查询执行记录
@@ -66,5 +77,16 @@ public class OperationLogController {
         return DataResult.of(operationLogService.create(param));
     }
 
+    /**
+     * Restore a recent cached query result without executing the SQL again.
+     */
+    @GetMapping("/{id}/result")
+    public DataResult<ExecuteResultVO> result(@PathVariable Long id) {
+        QueryResultCache.CachedQueryResult cachedResult = queryResultCache.get(id);
+        if (cachedResult == null || !Objects.equals(ContextUtils.getUserId(), cachedResult.getUserId())) {
+            return DataResult.of(null);
+        }
+        return DataResult.of(rdbWebConverter.dto2vo(cachedResult.getResult()));
+    }
 
 }

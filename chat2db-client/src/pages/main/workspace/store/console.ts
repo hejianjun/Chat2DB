@@ -80,7 +80,9 @@ export const createConsole = (params: ICreateConsoleParams) => {
       return;
     }
     useWorkspaceStore.setState({ createConsoleLoading: true });
-    historyService.createConsole(newConsole).then((res) => {
+    const savedConsole = { ...newConsole };
+    delete savedConsole.initialResult;
+    historyService.createConsole(savedConsole).then((res) => {
       const newConsoleItem: IConsole = {
         id: res,
         name: newConsole.name,

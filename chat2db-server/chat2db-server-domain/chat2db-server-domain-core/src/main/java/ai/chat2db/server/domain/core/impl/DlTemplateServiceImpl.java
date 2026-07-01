@@ -5,14 +5,17 @@ import ai.chat2db.server.domain.api.param.operation.OperationLogCreateParam;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.domain.api.service.OperationLogService;
 import ai.chat2db.server.domain.api.service.TableService;
+import ai.chat2db.server.domain.core.cache.QueryResultCache;
 import ai.chat2db.server.domain.core.converter.CommandConverter;
 import ai.chat2db.server.domain.core.util.MetaNameUtils;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.excption.BusinessException;
+import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
 import ai.chat2db.spi.CommandExecutor;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.ValueHandler;
+import ai.chat2db.spi.enums.SqlTypeEnum;
 import ai.chat2db.spi.model.*;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
@@ -55,6 +58,9 @@ public class DlTemplateServiceImpl implements DlTemplateService {
     @Autowired
     private CommandConverter commandConverter;
 
+    @Autowired
+    private QueryResultCache queryResultCache;
+
     @Override
     public List<ExecuteResult> execute(DlExecuteParam param) {
         CommandExecutor executor = Chat2DBContext.getMetaData().getCommandExecutor();
@@ -67,7 +73,9 @@ public class DlTemplateServiceImpl implements DlTemplateService {
                         param.getDatabaseName());
                 executeResult.setHeaderList(headers);
             }
-            addOperationLog(executeResult);
+            Long operationLogId = addOperationLog(executeResult);
+            executeResult.setOperationLogId(operationLogId);
+            cacheQueryResult(executeResult, operationLogId);
         }
         return results;
     }
@@ -313,18 +321,18 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         }
     }
 
-    private void addOperationLog(ExecuteResult executeResult) {
-        addOperationLog(executeResult, null, null);
+    private Long addOperationLog(ExecuteResult executeResult) {
+        return addOperationLog(executeResult, null, null);
     }
 
-    private void addOperationLog(ExecuteResult executeResult, String status, String extendInfo) {
+    private Long addOperationLog(ExecuteResult executeResult, String status, String extendInfo) {
         if (executeResult == null) {
-            return;
+            return null;
         }
         try {
             ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
             if (DataSourceTypeEnum.REDIS.getCode().equals(connectInfo.getDbType())) {
-                return;
+                return null;
             }
             OperationLogCreateParam createParam = new OperationLogCreateParam();
             createParam.setDdl(executeResult.getSql());
@@ -337,9 +345,22 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             createParam.setOperationRows(
                     executeResult.getUpdateCount() != null ? Long.valueOf(executeResult.getUpdateCount()) : null);
             createParam.setExtendInfo(extendInfo);
-            operationLogService.create(createParam);
+            return operationLogService.create(createParam);
         } catch (Exception e) {
             log.error("addOperationLog error:", e);
+            return null;
         }
+    }
+
+    private void cacheQueryResult(ExecuteResult executeResult, Long operationLogId) {
+        ConnectInfo connectInfo = Chat2DBContext.getConnectInfo();
+        String dbType = connectInfo.getDbType();
+        boolean supported = "HIVE".equalsIgnoreCase(dbType) || "DLC".equalsIgnoreCase(dbType);
+        if (!supported || operationLogId == null || !Boolean.TRUE.equals(executeResult.getSuccess())
+                || !SqlTypeEnum.SELECT.getCode().equalsIgnoreCase(executeResult.getSqlType())) {
+            return;
+        }
+        queryResultCache.put(operationLogId, ContextUtils.getUserId(), connectInfo.getDataSourceId(),
+                executeResult.getSql(), executeResult);
     }
 }

@@ -5,7 +5,7 @@ import DraggableContainer from '@/components/DraggableContainer';
 import ConsoleEditor, { IConsoleRef } from '@/components/ConsoleEditor';
 import SearchResult, { ISearchResultRef } from '@/components/SearchResult';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
-import { IBoundInfo } from '@/typings';
+import { IBoundInfo, IManageResultData } from '@/typings';
 import { registerConsoleEditor, unregisterConsoleEditor } from './consoleEditorRegistry';
 import { registerSearchResult, unregisterSearchResult } from './searchResultRegistry';
 
@@ -14,6 +14,7 @@ interface IProps {
   initDDL: string;
   // 异步加载 sql
   loadSQL: () => Promise<string>;
+  initialResult?: IManageResultData;
 }
 
 const SQLExecute = memo<IProps>((props) => {
@@ -77,6 +78,7 @@ const SQLExecute = memo<IProps>((props) => {
             isActive={activeConsoleId === boundInfo.consoleId}
             ref={searchResultRef}
             executeSqlParams={boundInfo}
+            initialResult={props.initialResult}
             onLocateStatement={(result) => {
               consoleRef.current?.editorRef?.locateStatement(
                 result.statementStartLine || 1,

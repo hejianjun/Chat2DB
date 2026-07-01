@@ -425,6 +425,7 @@ const WorkspaceTabs = memo(() => {
         }}
         initDDL={uniqueData.ddl}
         loadSQL={loadSQL}
+        initialResult={uniqueData.initialResult}
       />
     );
   };

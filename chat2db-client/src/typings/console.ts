@@ -1,5 +1,6 @@
 import { ConsoleStatus, DatabaseTypeCode, WorkspaceTabType, ConsoleOpenedStatus } from '@/constants';
 import { IConnectionEnv } from './connection';
+import { IManageResultData } from './database';
 
 export interface ICreateConsoleParams { 
   name?: string;
@@ -11,6 +12,7 @@ export interface ICreateConsoleParams {
   schemaName?: string;
   operationType?: WorkspaceTabType;
   loadSQL?: () => Promise<string>;
+  initialResult?: IManageResultData;
 }
 
 // 控制台详情

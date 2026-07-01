@@ -165,6 +165,7 @@ export default function TableBox(props: ITableProps) {
       ...(props.executeSqlParams || {}),
       sql: queryResultData.sql,
       originalSql: queryResultData.originalSql,
+      operationLogId: queryResultData.operationLogId,
       exportType,
       exportSize,
     };

@@ -57,7 +57,13 @@ export default memo<IProps>((props) => {
     copy(text || '');
   }
 
-  const openSql = (data: IDatasource) => {
+  const openSql = async (data: IDatasource) => {
+    let initialResult = null;
+    try {
+      initialResult = data.id ? await historyService.getHistoryResult({ id: data.id }) : null;
+    } catch (error) {
+      console.warn('Failed to restore cached query result', error);
+    }
     createConsole({
       ddl: data.ddl || '',
       dataSourceId: data.dataSourceId!,
@@ -65,6 +71,7 @@ export default memo<IProps>((props) => {
       databaseType: data.type!,
       databaseName: data.databaseName!,
       schemaName: data.schemaName!,
+      initialResult: initialResult || undefined,
       // operationType: WorkspaceTabType,
     })
   }
