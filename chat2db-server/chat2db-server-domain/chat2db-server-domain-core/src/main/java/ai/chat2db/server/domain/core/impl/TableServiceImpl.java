@@ -385,7 +385,10 @@ public class TableServiceImpl implements TableService {
             tableColumnMap = getTableColumns((LuceneIndexManager) luceneMgr, param, tables);
         }
         MetaData metaSchema = Chat2DBContext.getMetaData();
-        Connection connection = Chat2DBContext.getConnection();
+        Connection connection = null;
+        if (Boolean.TRUE.equals(selector.getColumnList()) || Boolean.TRUE.equals(selector.getIndexList())) {
+            connection = Chat2DBContext.getConnection();
+        }
         for (Table table : tables) {
             if (Boolean.TRUE.equals(selector.getColumnList())) {
                 table.setColumnList(tableColumnMap.getOrDefault(table.getName(), Collections.emptyList()));
