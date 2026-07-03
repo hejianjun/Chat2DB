@@ -26,6 +26,8 @@ prompts:
       #
       # {schema}
       #
+      ### SQL Execution Plan (EXPLAIN):
+      # {explain_plan}
       #
 
   # SQL 优化

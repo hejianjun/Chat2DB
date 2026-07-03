@@ -28,7 +28,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * 执行EXPLAIN动作
- * 仅在SQL_OPTIMIZER类型时执行，失败时静默降级
+ * 在 SQL_OPTIMIZER 和 SQL_EXPLAIN 类型时执行，失败时静默降级
  */
 @Component
 @Slf4j
@@ -55,8 +55,7 @@ public class ExplainAction extends BaseChatAction {
         ChatQueryRequest request = ctx.getRequest();
         PromptType promptType = determinePromptType(request);
         
-        // 只对 SQL_OPTIMIZER 执行 EXPLAIN
-        if (promptType != PromptType.SQL_OPTIMIZER) {
+        if (promptType != PromptType.SQL_OPTIMIZER && promptType != PromptType.SQL_EXPLAIN) {
             log.info("[ExplainAction] Skip EXPLAIN for promptType: {}", promptType);
             triggerEvent(context, ChatEvent.EXPLAIN_NOT_NEEDED);
             return;
@@ -64,8 +63,8 @@ public class ExplainAction extends BaseChatAction {
 
         sendStateEvent(ctx.getSseEmitter(), ChatState.EXECUTING_EXPLAIN, "正在分析执行计划...");
 
-        boolean explainFirst = CollectionUtils.isEmpty(request.getTableNames())
-                && StringUtils.isBlank(ctx.getSchemaDdl());
+        boolean schemaMissing = StringUtils.isBlank(ctx.getSchemaDdl());
+        boolean tablesMissing = CollectionUtils.isEmpty(request.getTableNames());
         buildContext(ctx);
         try {
             if (StringUtils.isNotBlank(ctx.getExplainResult())) {
@@ -77,7 +76,7 @@ public class ExplainAction extends BaseChatAction {
             String sql = extractSql(request.getMessage());
             if (sql == null) {
                 log.warn("[ExplainAction] No SQL found in message");
-                triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_NOT_NEEDED);
+                triggerAfterExplainFailure(context, schemaMissing, tablesMissing);
                 return;
             }
 
@@ -92,7 +91,7 @@ public class ExplainAction extends BaseChatAction {
                 sendExplainToClient(ctx.getSseEmitter(), result);
                 log.info("[ExplainAction] EXPLAIN executed successfully");
 
-                if (explainFirst) {
+                if (schemaMissing && tablesMissing) {
                     List<String> tableNames = ExplainTableNameExtractor.extractTableNames(sql, result);
                     if (CollectionUtils.isNotEmpty(tableNames)) {
                         ctx.getRequest().setTableNames(tableNames);
@@ -104,18 +103,31 @@ public class ExplainAction extends BaseChatAction {
                         log.info("[ExplainAction] No tables extracted from EXPLAIN, fallback to SelectTablesAction");
                         triggerEvent(context, ChatEvent.EXPLAIN_TABLES_NOT_SELECTED);
                     }
+                } else if (schemaMissing) {
+                    triggerEvent(context, ChatEvent.EXPLAIN_TABLES_SELECTED);
                 } else {
                     triggerEvent(context, ChatEvent.EXPLAIN_EXECUTED);
                 }
             } else {
                 log.warn("[ExplainAction] EXPLAIN execution failed: {}", result.getErrorMessage());
-                triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_FAILED);
+                triggerAfterExplainFailure(context, schemaMissing, tablesMissing);
             }
         } catch (Exception e) {
             log.warn("[ExplainAction] EXPLAIN failed, will skip silently", e);
-            triggerEvent(context, explainFirst ? ChatEvent.EXPLAIN_TABLES_NOT_SELECTED : ChatEvent.EXPLAIN_FAILED);
+            triggerAfterExplainFailure(context, schemaMissing, tablesMissing);
         } finally {
             removeContext();
+        }
+    }
+
+    private void triggerAfterExplainFailure(StateContext<ChatState, ChatEvent> context,
+                                            boolean schemaMissing, boolean tablesMissing) {
+        if (!schemaMissing) {
+            triggerEvent(context, ChatEvent.EXPLAIN_FAILED);
+        } else if (tablesMissing) {
+            triggerEvent(context, ChatEvent.EXPLAIN_TABLES_NOT_SELECTED);
+        } else {
+            triggerEvent(context, ChatEvent.EXPLAIN_TABLES_SELECTED);
         }
     }
 

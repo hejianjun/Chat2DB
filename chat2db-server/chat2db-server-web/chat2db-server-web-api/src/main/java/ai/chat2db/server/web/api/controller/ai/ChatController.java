@@ -227,7 +227,8 @@ public class ChatController {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
 
-        if (!hasTables && PromptType.SQL_OPTIMIZER.getCode().equals(promptType)) {
+        if (PromptType.SQL_OPTIMIZER.getCode().equals(promptType)
+                || PromptType.SQL_EXPLAIN.getCode().equals(promptType)) {
             return ChatEvent.EXPLAIN_TABLES_NOT_SELECTED;
         }
 
