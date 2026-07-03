@@ -7,22 +7,54 @@ import * as _ from 'lodash';
 import { IParseResult } from '../..';
 import { DefaultOpts, IMonacoVersion, IParserType } from './default-opts';
 import { createParserWorker } from './worker-factory';
-import {
-  ICompletionItem,
-  ITableInfo,
-  IJoinTableInfo,
-  reader,
-  ICursorInfo,
-  mysqlParser,
-} from '../sql-parser';
+import { ICompletionItem, ITableInfo, IJoinTableInfo, reader, ICursorInfo, mysqlParser } from '../sql-parser';
 
 const supportedMonacoEditorVersion = ['0.13.2', '0.15.6'];
 
-export function monacoSqlAutocomplete(
-  monaco: any,
-  editor: any,
-  opts?: Partial<DefaultOpts>,
-) {
+const getCurrentStatement = (value: string, cursorOffset: number) => {
+  const statements = value.slice(0, cursorOffset).split(';');
+  return statements[statements.length - 1] || '';
+};
+
+const getDdlCompletionItems = async (
+  statement: string,
+  opts: Partial<DefaultOpts>,
+): Promise<ICompletionItem[] | null> => {
+  const normalizedStatement = statement.replace(/\s+/g, ' ').trimStart();
+  if (!/^(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i.test(normalizedStatement)) {
+    return null;
+  }
+
+  const tableNameContext =
+    /^(?:ALTER|DROP|TRUNCATE)\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:[`"[\]\w.]+)?$/i.test(normalizedStatement) ||
+    /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+[`"[\]\w.]+\s+ON\s+(?:[`"[\]\w.]+)?$/i.test(normalizedStatement) ||
+    /^RENAME\s+TABLE\s+(?:[`"[\]\w.]+)?$/i.test(normalizedStatement);
+  if (tableNameContext) {
+    return opts.onSuggestTableNames?.() || [];
+  }
+
+  const alterTableMatch = normalizedStatement.match(/^ALTER\s+TABLE\s+([`"[\]\w.]+)\s+(.+)$/i);
+  if (alterTableMatch) {
+    const action = alterTableMatch[2];
+    const fieldContext =
+      /^(?:DROP\s+(?:COLUMN\s+)?|ALTER\s+(?:COLUMN\s+)?|MODIFY\s+(?:COLUMN\s+)?|CHANGE\s+(?:COLUMN\s+)?)(?:[`"[\]\w]*)$/i.test(
+        action,
+      );
+
+    if (fieldContext) {
+      const tableInfo: ITableInfo = {
+        tableName: { type: 'identifier', value: alterTableMatch[1] },
+        namespace: { type: 'identifier', value: '' },
+      };
+      return opts.onSuggestTableFields?.(tableInfo, '', {} as any) || [];
+    }
+  }
+
+  const inputValue = normalizedStatement.match(/([A-Z_][A-Z0-9_]*)$/i)?.[1] || '';
+  return opts.onSuggestFunctionName?.(inputValue) || [];
+};
+
+export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<DefaultOpts>) {
   opts = _.defaults(opts || {}, new DefaultOpts(monaco));
 
   if (supportedMonacoEditorVersion.indexOf(opts.monacoEditorVersion) === -1) {
@@ -37,33 +69,36 @@ export function monacoSqlAutocomplete(
   // Get parser info and show error.
   let currentParserPromise: any = null;
   let editVersion = 0;
-  
+
   // Initialize parser promise with current editor content
   const initParserPromise = () => {
     const model = editor.getModel();
     if (model) {
-      currentParserPromise = asyncParser(
-        editor.getValue(),
-        model.getOffsetAt(editor.getPosition()),
-        opts.parserType,
-      );
+      currentParserPromise = asyncParser(editor.getValue(), model.getOffsetAt(editor.getPosition()), opts.parserType);
     }
   };
-  
+
   // Initialize on first load
   initParserPromise();
-  
+
   const completionProvider = monaco.languages.registerCompletionItemProvider(opts.language, {
-    triggerCharacters:
-      ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
-    provideCompletionItems: async () => {
+    triggerCharacters: ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+    provideCompletionItems: async (model: any, position: any) => {
       const currentEditVersion = editVersion;
-      
+
+      const ddlCompletionItems = await getDdlCompletionItems(
+        getCurrentStatement(model.getValue(), model.getOffsetAt(position)),
+        opts,
+      );
+      if (ddlCompletionItems) {
+        return returnCompletionItemsByVersion(_.uniqBy(ddlCompletionItems, 'label'), opts.monacoEditorVersion);
+      }
+
       // If currentParserPromise is null, initialize it
       if (!currentParserPromise) {
         initParserPromise();
       }
-      
+
       const parseResult: IParseResult = await currentParserPromise;
 
       if (!parseResult) {
@@ -74,10 +109,7 @@ export function monacoSqlAutocomplete(
         return returnCompletionItemsByVersion([], opts.monacoEditorVersion);
       }
 
-      const cursorInfo = await reader.getCursorInfo(
-        parseResult.ast,
-        parseResult.cursorKeyPath,
-      );
+      const cursorInfo = await reader.getCursorInfo(parseResult.ast, parseResult.cursorKeyPath);
 
       const parserSuggestion = opts.pipeKeywords(parseResult.nextMatchings);
 
@@ -85,28 +117,22 @@ export function monacoSqlAutocomplete(
       if (!cursorInfo && parseResult.ast && parseResult.error) {
         const fallbackFields = await reader.getFieldsFromStatement(
           parseResult.ast,
-          [],  // 空的 cursorKeyPath
+          [], // 空的 cursorKeyPath
           opts.onSuggestTableFields,
         );
-        
+
         if (fallbackFields && fallbackFields.length > 0) {
           const uniqueFallbackFields = _.uniqBy(fallbackFields, 'label');
           const functionNames = await opts.onSuggestFunctionName('');
           const result = uniqueFallbackFields.concat(functionNames).concat(parserSuggestion);
           return returnCompletionItemsByVersion(result, opts.monacoEditorVersion);
         }
-        
-        return returnCompletionItemsByVersion(
-          parserSuggestion,
-          opts.monacoEditorVersion,
-        );
+
+        return returnCompletionItemsByVersion(parserSuggestion, opts.monacoEditorVersion);
       }
 
       if (!cursorInfo) {
-        return returnCompletionItemsByVersion(
-          parserSuggestion,
-          opts.monacoEditorVersion,
-        );
+        return returnCompletionItemsByVersion(parserSuggestion, opts.monacoEditorVersion);
       }
 
       switch (cursorInfo.type) {
@@ -128,13 +154,11 @@ export function monacoSqlAutocomplete(
             'groupPickerName',
           );
 
-          const functionNames = await opts.onSuggestFunctionName(
-            cursorInfo.token.value,
-          );
+          const functionNames = await opts.onSuggestFunctionName(cursorInfo.token.value);
 
           const result = uniqueFields
-            .concat(functionNames)  // 函数名
-            .concat(parserSuggestion)  // SQL 关键字
+            .concat(functionNames) // 函数名
+            .concat(parserSuggestion) // SQL 关键字
             .concat(
               groups
                 ? Object.keys(groups).map((groupName) => {
@@ -143,19 +167,15 @@ export function monacoSqlAutocomplete(
                 : [],
             );
 
-          return returnCompletionItemsByVersion(
-            result,
-            opts.monacoEditorVersion,
-          );
-          
+          return returnCompletionItemsByVersion(result, opts.monacoEditorVersion);
+
         case 'tableFieldAfterGroup':
           // 字段 . 后面的部分
-          const cursorRootStatementFieldsAfter =
-            await reader.getFieldsFromStatement(
-              parseResult.ast,
-              parseResult.cursorKeyPath as any,
-              opts.onSuggestTableFields,
-            );
+          const cursorRootStatementFieldsAfter = await reader.getFieldsFromStatement(
+            parseResult.ast,
+            parseResult.cursorKeyPath as any,
+            opts.onSuggestTableFields,
+          );
 
           // 去重并过滤
           const uniqueFieldsAfter = _.uniqBy(cursorRootStatementFieldsAfter, 'label');
@@ -168,50 +188,36 @@ export function monacoSqlAutocomplete(
             })
             .filter((field: any) => {
               // 过滤掉无效的补全项
-              return field && field.label && field.label.trim() !== '' && field.insertText && field.insertText.trim() !== '';
+              return (
+                field && field.label && field.label.trim() !== '' && field.insertText && field.insertText.trim() !== ''
+              );
             });
 
           // 字段排在最前面，关键字排在后面
           const sortedFields = [
-            ...filteredFields,  // 字段（sortText: B*）
-            ...parserSuggestion.filter(item => item.insertText && item.insertText.trim() !== ''),  // SQL 关键字（sortText: W*）
+            ...filteredFields, // 字段（sortText: B*）
+            ...parserSuggestion.filter((item) => item.insertText && item.insertText.trim() !== ''), // SQL 关键字（sortText: W*）
           ];
 
-          return returnCompletionItemsByVersion(
-            sortedFields,
-            opts.monacoEditorVersion,
-          );
-          
-        case 'joinTable':
-          const joinTableNames = await opts.onSuggestJoinTables(
-            cursorInfo as ICursorInfo<IJoinTableInfo>,
-          );
+          return returnCompletionItemsByVersion(sortedFields, opts.monacoEditorVersion);
 
-          return returnCompletionItemsByVersion(
-            joinTableNames.concat(parserSuggestion),
-            opts.monacoEditorVersion,
-          );
+        case 'joinTable':
+          const joinTableNames = await opts.onSuggestJoinTables(cursorInfo as ICursorInfo<IJoinTableInfo>);
+
+          return returnCompletionItemsByVersion(joinTableNames.concat(parserSuggestion), opts.monacoEditorVersion);
 
         case 'tableName':
-          const tableNames = await opts.onSuggestTableNames(
-            cursorInfo as ICursorInfo<ITableInfo>,
-          );
+          const tableNames = await opts.onSuggestTableNames(cursorInfo as ICursorInfo<ITableInfo>);
 
-          return returnCompletionItemsByVersion(
-            tableNames.concat(parserSuggestion),
-            opts.monacoEditorVersion,
-          );
+          return returnCompletionItemsByVersion(tableNames.concat(parserSuggestion), opts.monacoEditorVersion);
         case 'functionName':
           return opts.onSuggestFunctionName(cursorInfo.token.value);
         default:
-          return returnCompletionItemsByVersion(
-            parserSuggestion,
-            opts.monacoEditorVersion,
-          );
-}
+          return returnCompletionItemsByVersion(parserSuggestion, opts.monacoEditorVersion);
+      }
     },
   });
-  
+
   // Listen for content changes and update parser promise
   editor.onDidChangeModelContent((event: any) => {
     editVersion++;
@@ -221,11 +227,7 @@ export function monacoSqlAutocomplete(
       setTimeout(() => {
         const model = editor.getModel();
 
-        asyncParser(
-          editor.getValue(),
-          model.getOffsetAt(editor.getPosition()),
-          opts.parserType,
-        ).then((parseResult) => {
+        asyncParser(editor.getValue(), model.getOffsetAt(editor.getPosition()), opts.parserType).then((parseResult) => {
           resolve(parseResult);
 
           if (currentEditVersion !== editVersion) {
@@ -241,7 +243,7 @@ export function monacoSqlAutocomplete(
               .getValue()
               .replace(/((?:#|--)[\s\S]*?(?:\r?\n|$)|\/\*[\s\S]*?(?:\*\/|$))/g, '')
               .trim();
-            
+
             // Only show error if there's actual SQL content (not just comments)
             if (textWithoutComments.length > 0) {
               const newReason =
@@ -259,18 +261,10 @@ export function monacoSqlAutocomplete(
 
               const errorPosition = parseResult.error.token
                 ? {
-                    startLineNumber: model.getPositionAt(
-                      parseResult.error.token.position[0],
-                    ).lineNumber,
-                    startColumn: model.getPositionAt(
-                      parseResult.error.token.position[0],
-                    ).column,
-                    endLineNumber: model.getPositionAt(
-                      parseResult.error.token.position[1],
-                    ).lineNumber,
-                    endColumn:
-                      model.getPositionAt(parseResult.error.token.position[1])
-                        .column + 1,
+                    startLineNumber: model.getPositionAt(parseResult.error.token.position[0]).lineNumber,
+                    startColumn: model.getPositionAt(parseResult.error.token.position[0]).column,
+                    endLineNumber: model.getPositionAt(parseResult.error.token.position[1]).lineNumber,
+                    endColumn: model.getPositionAt(parseResult.error.token.position[1]).column + 1,
                   }
                 : {
                     startLineNumber: 0,
@@ -285,10 +279,7 @@ export function monacoSqlAutocomplete(
                 {
                   ...errorPosition,
                   message: newReason,
-                  severity: getSeverityByVersion(
-                    monaco,
-                    opts.monacoEditorVersion,
-                  ),
+                  severity: getSeverityByVersion(monaco, opts.monacoEditorVersion),
                 },
               ]);
             } else {
@@ -302,7 +293,7 @@ export function monacoSqlAutocomplete(
       });
     });
   });
-  
+
   // Register hover provider and store it for disposal
   const hoverProviderDisposable = monaco.languages.registerHoverProvider(opts.language, {
     provideHover: async (model: any, position: any) => {
@@ -312,10 +303,7 @@ export function monacoSqlAutocomplete(
         opts.parserType,
       );
 
-      const cursorInfo = await reader.getCursorInfo(
-        parseResult.ast,
-        parseResult.cursorKeyPath,
-      );
+      const cursorInfo = await reader.getCursorInfo(parseResult.ast, parseResult.cursorKeyPath);
 
       if (!cursorInfo) {
         return null as any;
@@ -331,10 +319,7 @@ export function monacoSqlAutocomplete(
             opts.onSuggestTableFields,
             parseResult.cursorKeyPath,
           );
-          contents = await opts.onHoverTableField(
-            cursorInfo.token.value,
-            extra,
-          );
+          contents = await opts.onHoverTableField(cursorInfo.token.value, extra);
           break;
         case 'tableFieldAfterGroup':
           const extraAfter = await reader.findFieldExtraInfo(
@@ -343,10 +328,7 @@ export function monacoSqlAutocomplete(
             opts.onSuggestTableFields,
             parseResult.cursorKeyPath,
           );
-          contents = await opts.onHoverTableField(
-            cursorInfo.token.value,
-            extraAfter,
-          );
+          contents = await opts.onHoverTableField(cursorInfo.token.value, extraAfter);
           break;
         case 'tableName':
           contents = await opts.onHoverTableName(cursorInfo as ICursorInfo);
@@ -392,11 +374,7 @@ const parserIndex = 0;
 const lastCompletionTime = 0;
 const COMPLETION_DEBOUNCE = 200; // 200ms 防抖
 
-const asyncParser = async (
-  text: string,
-  index: number,
-  parserType: IParserType,
-): Promise<IParseResult> => {
+const asyncParser = async (text: string, index: number, parserType: IParserType): Promise<IParseResult> => {
   // 开发环境直接使用同步解析
   try {
     const result = mysqlParser(text, index);
@@ -440,10 +418,7 @@ const asyncParser = async (
 //   }
 // };
 
-function returnCompletionItemsByVersion(
-  value: ICompletionItem[],
-  monacoVersion: IMonacoVersion,
-) {
+function returnCompletionItemsByVersion(value: ICompletionItem[], monacoVersion: IMonacoVersion) {
   switch (monacoVersion) {
     case '0.13.2':
       return value;

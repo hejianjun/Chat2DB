@@ -6,6 +6,50 @@ import redis from '@/constants/IntelliSense/redis';
 import sqlserver from '@/constants/IntelliSense/sqlserver';
 import { ILegacyDialectCompletion, ISqlDialectCompletion } from './types';
 
+const ddlKeywords = [
+  'CREATE',
+  'ALTER',
+  'DROP',
+  'TRUNCATE',
+  'RENAME',
+  'TABLE',
+  'VIEW',
+  'INDEX',
+  'DATABASE',
+  'SCHEMA',
+  'COLUMN',
+  'CONSTRAINT',
+  'PRIMARY KEY',
+  'FOREIGN KEY',
+  'REFERENCES',
+  'UNIQUE',
+  'DEFAULT',
+  'CHECK',
+  'ADD',
+  'CASCADE',
+  'RESTRICT',
+  'IF EXISTS',
+  'IF NOT EXISTS',
+];
+
+const commonDataTypes = [
+  'BIGINT',
+  'BOOLEAN',
+  'CHAR',
+  'DATE',
+  'DECIMAL',
+  'DOUBLE',
+  'FLOAT',
+  'INTEGER',
+  'NUMERIC',
+  'REAL',
+  'SMALLINT',
+  'TEXT',
+  'TIME',
+  'TIMESTAMP',
+  'VARCHAR',
+];
+
 const genericSqlCompletion: ISqlDialectCompletion = {
   type: 'GENERIC',
   keywords: [
@@ -42,6 +86,7 @@ const genericSqlCompletion: ISqlDialectCompletion = {
     'ELSE',
     'END',
     'WITH',
+    ...ddlKeywords,
   ],
   functions: [
     'COUNT',
@@ -69,7 +114,7 @@ const genericSqlCompletion: ISqlDialectCompletion = {
     'CURRENT_TIME',
     'CURRENT_TIMESTAMP',
   ],
-  dataTypes: [],
+  dataTypes: commonDataTypes,
   variables: [],
   operators: [],
 };
@@ -109,11 +154,12 @@ const normalizeWords = (words?: string[]) => {
 };
 
 const normalizeLegacyCompletion = (completion: ILegacyDialectCompletion): ISqlDialectCompletion => {
+  const supportsSqlDdl = completion.type !== DatabaseTypeCode.REDIS;
   return {
     type: completion.type,
-    keywords: normalizeWords(completion.keywords),
+    keywords: normalizeWords([...(completion.keywords || []), ...(supportsSqlDdl ? ddlKeywords : [])]),
     functions: normalizeWords(completion.functions),
-    dataTypes: [],
+    dataTypes: supportsSqlDdl ? commonDataTypes : [],
     variables: [],
     operators: [],
   };
