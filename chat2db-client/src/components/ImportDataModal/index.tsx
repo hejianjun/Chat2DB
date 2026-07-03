@@ -94,7 +94,7 @@ const ImportDataModal = () => {
       message: `请为表 ${params.tableName} 推荐字段映射方案`,
       promptType: 'NL_2_FIELD_MAPPING',
       ext: JSON.stringify({
-        sourceFields: previewData.headers.map(h => h.name),
+        sourceFields: previewData.fileHeaders,
       }),
       onMappingGenerated: handleMappingGenerated,
     });

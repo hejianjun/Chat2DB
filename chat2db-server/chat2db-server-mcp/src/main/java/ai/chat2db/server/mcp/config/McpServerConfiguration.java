@@ -3,7 +3,6 @@ package ai.chat2db.server.mcp.config;
 import java.util.List;
 
 import ai.chat2db.server.mcp.tool.DangerousSqlTools;
-import ai.chat2db.server.mcp.tool.DataSourceTools;
 import ai.chat2db.server.mcp.tool.ForeignKeyTools;
 import ai.chat2db.server.mcp.tool.MetadataTools;
 import ai.chat2db.server.mcp.tool.QueryTools;
@@ -25,11 +24,11 @@ import org.springframework.ai.mcp.annotation.spring.SyncMcpAnnotationProviders;
 public class McpServerConfiguration {
 
     @Bean
-    public List<McpServerFeatures.SyncToolSpecification> chat2dbMcpTools(DataSourceTools dataSourceTools,
-        MetadataTools metadataTools, QueryTools queryTools, DangerousSqlTools dangerousSqlTools,
+    public List<McpServerFeatures.SyncToolSpecification> chat2dbMcpTools(MetadataTools metadataTools,
+        QueryTools queryTools, DangerousSqlTools dangerousSqlTools,
         ForeignKeyTools foreignKeyTools, SchemaInsightTools schemaInsightTools) {
-        return SyncMcpAnnotationProviders.toolSpecifications(List.of(dataSourceTools, metadataTools, queryTools,
-            dangerousSqlTools, foreignKeyTools, schemaInsightTools));
+        return SyncMcpAnnotationProviders.toolSpecifications(List.of(metadataTools, queryTools, dangerousSqlTools,
+            foreignKeyTools, schemaInsightTools));
     }
 
     @Bean
