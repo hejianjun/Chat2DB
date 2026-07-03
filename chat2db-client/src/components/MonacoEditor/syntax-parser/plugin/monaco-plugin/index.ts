@@ -16,13 +16,80 @@ const getCurrentStatement = (value: string, cursorOffset: number) => {
   return statements[statements.length - 1] || '';
 };
 
+const isDdlStatement = (statement: string) => {
+  return /^(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i.test(statement.replace(/\s+/g, ' ').trimStart());
+};
+
+const ddlRootKeywords = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'];
+
+// Identify an unfinished root keyword such as CREAT or ALTE, but exclude the already completed keyword.
+const getDdlRootPrefix = (statement: string) => {
+  const inputValue = statement.trim().toUpperCase();
+  if (inputValue.length < 2 || !/^[A-Z]+$/.test(inputValue)) {
+    return null;
+  }
+  const hasMatchingKeyword = ddlRootKeywords.some(
+    (keyword) => keyword !== inputValue && keyword.startsWith(inputValue),
+  );
+  return hasMatchingKeyword ? inputValue : null;
+};
+
+// The bundled parser only understands SELECT statements, so DDL documents must bypass its diagnostics.
+const getDdlStatementType = (value: string) => {
+  const sqlWithoutComments = value.replace(/((?:#|--)[\s\S]*?(?:\r?\n|$)|\/\*[\s\S]*?(?:\*\/|$))/g, '');
+  const ddlStatement = sqlWithoutComments.split(';').find((statement) => isDdlStatement(statement));
+  const normalizedDdlStatement = ddlStatement?.replace(/\s+/g, ' ').trimStart();
+  return normalizedDdlStatement?.match(/^[A-Z]+/i)?.[0]?.toUpperCase() || null;
+};
+
+// Keep DDL navigation suggestions small and contextual instead of returning the entire dialect keyword list.
+const createDdlKeywordItems = (keywords: string[]): ICompletionItem[] => {
+  return keywords.map((keyword, index) => ({
+    label: keyword,
+    insertText: keyword,
+    sortText: `A${index.toString().padStart(2, '0')}`,
+    detail: '(DDL 关键字)',
+  }));
+};
+
+// Column definitions should prioritize data types after the column name.
+const getDataTypeCompletionItems = async (opts: Partial<DefaultOpts>) => {
+  const completionItems = (await opts.onSuggestFunctionName?.('')) || [];
+  return completionItems.filter((item) => item.detail === '(数据类型)');
+};
+
 const getDdlCompletionItems = async (
   statement: string,
   opts: Partial<DefaultOpts>,
 ): Promise<ICompletionItem[] | null> => {
   const normalizedStatement = statement.replace(/\s+/g, ' ').trimStart();
-  if (!/^(CREATE|ALTER|DROP|TRUNCATE|RENAME)\b/i.test(normalizedStatement)) {
+  const ddlRootPrefix = getDdlRootPrefix(normalizedStatement);
+  if (ddlRootPrefix) {
+    return createDdlKeywordItems(ddlRootKeywords.filter((keyword) => keyword.startsWith(ddlRootPrefix)));
+  }
+
+  if (!isDdlStatement(normalizedStatement)) {
     return null;
+  }
+
+  if (/^ALTER\s*$/i.test(normalizedStatement)) {
+    return createDdlKeywordItems(['TABLE', 'DATABASE', 'SCHEMA', 'VIEW', 'INDEX']);
+  }
+
+  if (/^CREATE\s*$/i.test(normalizedStatement)) {
+    return createDdlKeywordItems(['TABLE', 'VIEW', 'INDEX', 'UNIQUE INDEX', 'DATABASE', 'SCHEMA']);
+  }
+
+  if (/^DROP\s*$/i.test(normalizedStatement)) {
+    return createDdlKeywordItems(['TABLE', 'VIEW', 'INDEX', 'DATABASE', 'SCHEMA']);
+  }
+
+  if (/^TRUNCATE\s*$/i.test(normalizedStatement)) {
+    return createDdlKeywordItems(['TABLE']);
+  }
+
+  if (/^RENAME\s*$/i.test(normalizedStatement)) {
+    return createDdlKeywordItems(['TABLE']);
   }
 
   const tableNameContext =
@@ -34,8 +101,31 @@ const getDdlCompletionItems = async (
   }
 
   const alterTableMatch = normalizedStatement.match(/^ALTER\s+TABLE\s+([`"[\]\w.]+)\s+(.+)$/i);
+  const alterTableActionContext = normalizedStatement.match(/^ALTER\s+TABLE\s+([`"[\]\w.]+)\s+$/i);
+  if (alterTableActionContext) {
+    return createDdlKeywordItems([
+      'ADD COLUMN',
+      'DROP COLUMN',
+      'MODIFY COLUMN',
+      'CHANGE COLUMN',
+      'ALTER COLUMN',
+      'ADD CONSTRAINT',
+      'ADD INDEX',
+      'DROP INDEX',
+      'RENAME TO',
+    ]);
+  }
+
   if (alterTableMatch) {
     const action = alterTableMatch[2];
+    const dataTypeContext =
+      /^(?:(?:ADD|MODIFY)\s+(?:COLUMN\s+)?[`"[\]\w]+|CHANGE\s+(?:COLUMN\s+)?[`"[\]\w]+\s+[`"[\]\w]+|ALTER\s+(?:COLUMN\s+)?[`"[\]\w]+\s+TYPE)\s+$/i.test(
+        action,
+      );
+    if (dataTypeContext) {
+      return getDataTypeCompletionItems(opts);
+    }
+
     const fieldContext =
       /^(?:DROP\s+(?:COLUMN\s+)?|ALTER\s+(?:COLUMN\s+)?|MODIFY\s+(?:COLUMN\s+)?|CHANGE\s+(?:COLUMN\s+)?)(?:[`"[\]\w]*)$/i.test(
         action,
@@ -48,6 +138,10 @@ const getDdlCompletionItems = async (
       };
       return opts.onSuggestTableFields?.(tableInfo, '', {} as any) || [];
     }
+  }
+
+  if (/^CREATE\s+TABLE\b[\s\S]*(?:\(|,)\s*[`"[\]\w]+\s+$/i.test(normalizedStatement)) {
+    return getDataTypeCompletionItems(opts);
   }
 
   const inputValue = normalizedStatement.match(/([A-Z_][A-Z0-9_]*)$/i)?.[1] || '';
@@ -69,6 +163,7 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
   // Get parser info and show error.
   let currentParserPromise: any = null;
   let editVersion = 0;
+  let disposed = false;
 
   // Initialize parser promise with current editor content
   const initParserPromise = () => {
@@ -80,6 +175,10 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
 
   // Initialize on first load
   initParserPromise();
+  const initialModel = editor.getModel();
+  if (initialModel && getDdlStatementType(initialModel.getValue())) {
+    monaco.editor.setModelMarkers(initialModel, opts.language, []);
+  }
 
   const completionProvider = monaco.languages.registerCompletionItemProvider(opts.language, {
     triggerCharacters: ' $.:{}=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
@@ -223,18 +322,43 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
   });
 
   // Listen for content changes and update parser promise
-  editor.onDidChangeModelContent((event: any) => {
+  const contentChangeDisposable = editor.onDidChangeModelContent((event: any) => {
     editVersion++;
     const currentEditVersion = editVersion;
 
     currentParserPromise = new Promise((resolve) => {
       setTimeout(() => {
-        const model = editor.getModel();
+        if (disposed) {
+          resolve(null);
+          return;
+        }
 
-        asyncParser(editor.getValue(), model.getOffsetAt(editor.getPosition()), opts.parserType).then((parseResult) => {
+        const model = editor.getModel();
+        const cursorOffset = model.getOffsetAt(editor.getPosition());
+        const currentStatement = getCurrentStatement(model.getValue(), cursorOffset);
+
+        const ddlStatementType = getDdlStatementType(model.getValue());
+        const ddlRootPrefix = getDdlRootPrefix(currentStatement);
+        const completedDdlRoot = ddlRootKeywords.includes(currentStatement.trim().toUpperCase());
+        if (ddlStatementType || ddlRootPrefix) {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug(
+              `[SQL 自动补全][DDL] ${ddlStatementType || ddlRootPrefix} 跳过 SELECT 语法诊断并清除错误标记`,
+            );
+          }
+          monaco.editor.setModelMarkers(model, opts.language, []);
+          // Refresh suggestions when a root keyword changes context or when whitespace starts the next DDL clause.
+          if (ddlRootPrefix || completedDdlRoot || event.changes?.some((change: any) => /\s$/.test(change.text))) {
+            editor.trigger('ddl-autocomplete', 'editor.action.triggerSuggest', {});
+          }
+          resolve(null);
+          return;
+        }
+
+        asyncParser(editor.getValue(), cursorOffset, opts.parserType).then((parseResult) => {
           resolve(parseResult);
 
-          if (currentEditVersion !== editVersion) {
+          if (disposed || currentEditVersion !== editVersion) {
             return;
           }
 
@@ -301,6 +425,10 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
   // Register hover provider and store it for disposal
   const hoverProviderDisposable = monaco.languages.registerHoverProvider(opts.language, {
     provideHover: async (model: any, position: any) => {
+      if (isDdlStatement(getCurrentStatement(model.getValue(), model.getOffsetAt(position)))) {
+        return null;
+      }
+
       const parseResult: IParseResult = await asyncParser(
         editor.getValue(),
         model.getOffsetAt(position),
@@ -356,7 +484,9 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
   // Return disposable object
   return {
     dispose: () => {
+      disposed = true;
       completionProvider.dispose();
+      contentChangeDisposable.dispose();
       hoverProviderDisposable.dispose();
     },
   };
