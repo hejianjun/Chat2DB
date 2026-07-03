@@ -27,7 +27,6 @@ export const viewDDL = (treeNodeData) => {
   openModal({
     title: `DDL-${treeNodeData.name}`,
     width: '60%',
-    height: '60%',
     footer: false,
     content: (
       <div className={styles.monacoEditorBox}>

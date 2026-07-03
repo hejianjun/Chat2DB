@@ -80,7 +80,7 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
   const [form] = Form.useForm();
   const [editingData, setEditingData] = useState<IForeignKeyItemNew | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<any>(null);
 
   const isEditing = (record: IForeignKeyItemNew) => record.key === editingData?.key;
   const handleFieldsChange = (field: any) => {
@@ -338,7 +338,7 @@ const ForeignKeyList = forwardRef((props: IProps, ref: ForwardedRef<any>) => {
     setDataSource([...dataSource, newData]);
     edit(newData);
     setTimeout(() => {
-      tableRef.current?.scrollTo(0, tableRef.current?.scrollHeight + 100);
+      tableRef.current?.nativeElement.scrollTo(0, tableRef.current.nativeElement.scrollHeight + 100);
     }, 0);
   };
 

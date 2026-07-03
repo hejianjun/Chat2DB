@@ -73,7 +73,7 @@ export const initSchemaDiffStore = {
   migrationResult: null,
 };
 
-export const useSchemaDiffStore = createWithEqualityFn<ISchemaDiffStore>(
+export const useSchemaDiffStore = createWithEqualityFn<ISchemaDiffStore>()(
   devtools(() => initSchemaDiffStore),
   shallow,
 );

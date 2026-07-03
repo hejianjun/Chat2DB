@@ -102,7 +102,7 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
   const [form] = Form.useForm();
   const [editingData, setEditingData] = useState<IColumnItemNew | null>(null);
   const [editingConfig, setEditingConfig] = useState<IEditingConfig | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<any>(null);
 
   const isEditing = (record: IColumnItemNew) => record.key === editingData?.key;
 
@@ -453,7 +453,7 @@ const ColumnList = forwardRef((props: IProps, ref: ForwardedRef<IColumnListRef>)
     setDataSource([...dataSource, newData]);
     edit(newData);
     setTimeout(() => {
-      tableRef.current?.scrollTo(0, tableRef.current?.scrollHeight + 100);
+      tableRef.current?.nativeElement.scrollTo(0, tableRef.current.nativeElement.scrollHeight + 100);
     }, 0);
   };
 

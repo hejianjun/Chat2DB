@@ -42,6 +42,8 @@ const registerIntelliSenseView = (
       });
 
       const isViewContext = checkViewContext(lineContentUntilPosition);
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
       return {
         suggestions: (viewList || []).map((viewName) => {
@@ -55,7 +57,8 @@ const registerIntelliSenseView = (
             insertText: viewName,
             // range: monaco.Range.fromPositions(position),
             // documentation: tableName.comment,
-            sortText: isViewContext ? '01' : '08'
+            sortText: isViewContext ? '01' : '08',
+            range,
           };
         }),
       };

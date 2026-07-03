@@ -114,7 +114,7 @@ export function findNearestStatement(
         return value;
       }
     } else {
-      return value;
+      return value as ISelectStatement;
     }
   }
 
@@ -198,7 +198,7 @@ export async function getFieldsFromStatement(
   // console.log('[Reader] getFieldsFromStatement - 开始执行');
   
   const cursorInfo = await getCursorInfo(rootStatement, cursorKeyPath);
-  let cursorRootStatement = findNearestStatement(rootStatement, cursorKeyPath);
+  let cursorRootStatement: ISelectStatement | null = findNearestStatement(rootStatement, cursorKeyPath);
 
   // console.log('[Reader] getFieldsFromStatement - cursorRootStatement:', cursorRootStatement?.variant);
 
@@ -209,10 +209,8 @@ export async function getFieldsFromStatement(
       // 找到第一个 SELECT 语句
       const selectStatement = rootStatement.find(stmt => stmt?.variant === 'select');
       if (selectStatement) {
-        cursorRootStatement = selectStatement;
+        cursorRootStatement = selectStatement as ISelectStatement;
       }
-    } else if (rootStatement?.variant === 'select') {
-      cursorRootStatement = rootStatement;
     }
   }
 
@@ -430,7 +428,7 @@ async function getFieldsByFromClause(
           statementSelectFields = statementSelectFields.map(statementSelectField => {
             return {
               ...statementSelectField,
-              groupPickerName: _.get(ssFromStatement, 'alias.value'),
+              groupPickerName: String(_.get(ssFromStatement, 'alias.value')),
             };
           });
         }

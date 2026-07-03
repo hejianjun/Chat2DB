@@ -34,6 +34,7 @@ export interface ITreeNode {
   // 是否展开
   expanded?: boolean;
   parentId?: string;
+  parentPath?: string[];
   // 分页
   page?: number;
   pageSize?: number;

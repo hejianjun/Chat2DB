@@ -1,23 +1,28 @@
-import React, { memo } from 'react';
+import React, { memo, useRef } from 'react';
 import { Modal } from 'antd';
 import MonacoEditor, { IExportRefFunction } from '@/components/MonacoEditor';
 
-const TriggeredModal = memo<ITriggeredModal>(() => {
+interface IMonacoEditorModalProps {
+  title?: string;
+  open: boolean;
+  value?: string;
+  onCancel: () => void;
+}
+
+const MonacoEditorModal = memo<IMonacoEditorModalProps>(({ title = 'DDL', open, value = '', onCancel }) => {
+  const monacoEditorRef = useRef<IExportRefFunction>(null);
+
   return (
     <Modal
-      title={`${data.key}-DDL`}
-      open={monacoVerifyDialog}
+      title={title}
+      open={open}
       width="650px"
-      onCancel={() => {
-        setMonacoVerifyDialog(false);
-      }}
+      onCancel={onCancel}
       footer={false}
     >
-      <div className={styles.monacoEditorBox}>
-        <MonacoEditor id="edit-dialog" ref={monacoEditorRef} />
-      </div>
+      <MonacoEditor id="edit-dialog" ref={monacoEditorRef} defaultValue={value} />
     </Modal>
   );
 });
 
-export default TriggeredModal;
+export default MonacoEditorModal;

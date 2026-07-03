@@ -1,6 +1,6 @@
-import {useState, useEffect} from 'react';
+import { useEffect, useState } from 'react';
 import sqlService from '@/service/sql';
-import {IBoundInfo} from '../index'
+import { IBoundInfo } from '@/typings';
 
 interface IProps {
   boundInfo: IBoundInfo;
@@ -14,10 +14,10 @@ export const useModuleData = (props: IProps) => {
   useEffect(() => {
     const { dataSourceId, databaseName, schemaName } = boundInfo;
 
-    if( !databaseName && !schemaName){
+    if (!databaseName && !schemaName) {
       setTableNameList([]);
       setSelectedTables([]);
-      return
+      return;
     }
 
     sqlService
@@ -34,12 +34,12 @@ export const useModuleData = (props: IProps) => {
           setSelectedTables(tableNameListTemp.slice(0, 1));
         }
       });
-  }, []);
+  }, [boundInfo.dataSourceId, boundInfo.databaseName, boundInfo.schemaName, selectedTables.length]);
 
   return {
     selectedTables,
     setSelectedTables,
     tableNameList,
-    setTableNameList
-  }
-}
+    setTableNameList,
+  };
+};

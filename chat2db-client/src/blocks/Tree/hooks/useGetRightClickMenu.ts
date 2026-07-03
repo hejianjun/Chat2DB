@@ -1342,7 +1342,7 @@ export const getRightClickMenu = (props: IProps) => {
   return groupDataOperations(finalList);
 };
 
-const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: () => void) => {
+const deleteVirtualForeignKey = async (treeNode: ITreeNode, loadData: (params?: any) => void) => {
   const { dataSourceId, databaseName, schemaName, tableName } = treeNode.extraParams!;
   if (!databaseName) {
     message.error('数据库名称不能为空');

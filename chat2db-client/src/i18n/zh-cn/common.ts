@@ -76,7 +76,6 @@ export default {
   'common.text.importColumnMismatch': '文件列数与表字段数不一致',
   'common.text.importSuccess': '导入成功',
   'common.text.importing': '正在导入...',
-  'common.text.selectFile': '选择文件',
   'common.notification.detail': '查看详情',
   'common.notification.solution': '解决办法',
   'common.button.copyError': '复制错误报告',

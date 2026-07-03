@@ -52,10 +52,11 @@ const useCurdTableData = (props: IProps) => {
     let curRowNo: string | null = null;
     if (type === 'setCell' && (typeof _data === 'string' || _data === null)) {
       const [colId, rowId] = editingCell!;
+      const cellData = _data as string | null;
       curRowNo = rowId;
       newTableData.forEach((item) => {
         if (item[colNoCode] === rowId) {
-          item[colId] = _data;
+          (item as Record<string, string | null>)[colId] = cellData;
           newRowDataList = Object.keys(item).map((i) => item[i]);
         }
       });

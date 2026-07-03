@@ -137,7 +137,7 @@ export default function TableBox(props: ITableProps) {
   // 当前选中的行号
   const [curOperationRowNo, setCurOperationRowNo] = useState<Array<string> | null>(null);
   // 操作过的数据列表
-  const [updateData, setUpdateData] = useState<IUpdateData[] | []>([]);
+  const [updateData, setUpdateData] = useState<IUpdateData[]>([]);
   // 更新数据的sql
   const [updateDataSql, setUpdateDataSql] = useState<string | null>(null);
   // ExecuteSQL弹窗 初始化的错误信息

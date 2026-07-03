@@ -102,7 +102,7 @@ const GlobalLayout = () => {
       <App>
         <div className={styles.app}>
           {/* Open screen animation  */}
-          {(serviceStatus === ServiceStatus.PENDING || curUser === null) && <OpenScreenAnimation />}
+          {curUser === null && <OpenScreenAnimation />}
           <AppTitleBar className={styles.appTitleBar} />
           <div className={styles.appBody}>
             <Outlet />

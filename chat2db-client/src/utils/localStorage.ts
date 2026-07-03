@@ -3,7 +3,7 @@ import { ICurWorkspaceParams } from '@/typings/workspace';
 import { getCookie } from '@/utils';
 
 export function getLang(): LangType {
-  return (localStorage.getItem('lang') as LangType) || 'en-us';
+  return (localStorage.getItem('lang') as LangType) || LangType.EN_US;
 }
 
 export function setLang(lang: LangType) {

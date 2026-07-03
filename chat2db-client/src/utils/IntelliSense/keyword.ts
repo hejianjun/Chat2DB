@@ -4,7 +4,7 @@ import intelliSense from '@/constants/IntelliSense';
 import i18n from '@/i18n';
 
 /** 关键词 */
-const getSQLKeywords = (keywords: string[]) => {
+const getSQLKeywords = (keywords: string[], range: monaco.IRange) => {
   return keywords.map((key: any) => ({
     label: {
       label: key,
@@ -14,11 +14,12 @@ const getSQLKeywords = (keywords: string[]) => {
     kind: monaco.languages.CompletionItemKind.Text,
     insertText: key,
     sortText: '08',
+    range,
   }));
 };
 
 /** 函数 */
-const getSQLFunctions = (functions: string[]) => {
+const getSQLFunctions = (functions: string[], range: monaco.IRange) => {
   return functions.map((key: any) => ({
     label: {
       label: key,
@@ -29,6 +30,7 @@ const getSQLFunctions = (functions: string[]) => {
     // kind: monaco.languages.CompletionItemKind.Method,
     kind: monaco.languages.CompletionItemKind.Function,
     insertText: key,
+    range,
   }));
 };
 
@@ -47,14 +49,16 @@ const registerIntelliSenseKeyword = (databaseCode?: DatabaseTypeCode) => {
   intelliSenseKeyword = monaco.languages.registerCompletionItemProvider('sql', {
     triggerCharacters: [' ', '('], // 触发提示的字符
     provideCompletionItems: (model, position) => {
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
       // 获取所有的编辑器实例
       const commonIntelliSense = Object.values(intelliSense).find((v) => v.type === databaseCode);
 
       if (commonIntelliSense) {
         return {
           suggestions: [
-            ...getSQLKeywords(commonIntelliSense?.keywords),
-            ...getSQLFunctions(commonIntelliSense?.functions),
+            ...getSQLKeywords(commonIntelliSense?.keywords, range),
+            ...getSQLFunctions(commonIntelliSense?.functions, range),
           ],
         };
       } else {
@@ -62,8 +66,8 @@ const registerIntelliSenseKeyword = (databaseCode?: DatabaseTypeCode) => {
         if (!intelliSenseMySQL) return { suggestions: [] };
         return {
           suggestions: [
-            ...getSQLKeywords(intelliSenseMySQL?.keywords),
-            ...getSQLFunctions(intelliSenseMySQL?.functions),
+            ...getSQLKeywords(intelliSenseMySQL?.keywords, range),
+            ...getSQLFunctions(intelliSenseMySQL?.functions, range),
           ],
         };
       }

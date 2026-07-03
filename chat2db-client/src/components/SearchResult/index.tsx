@@ -14,7 +14,7 @@ import classnames from 'classnames';
 import Tabs, { ITabItem } from '@/components/Tabs';
 import Iconfont from '@/components/Iconfont';
 // import Output from '@/components/Output';
-import { IManageResultData, IResultConfig } from '@/typings';
+import { IManageResultData, IResultConfig, IVirtualFkSuggestion } from '@/typings';
 import TableBox from './components/TableBox';
 import StatusBar from './components/StatusBar';
 import styles from './index.less';
@@ -84,7 +84,7 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
   const handleAiFix = useCallback((originalSql: string, errorMessage: string) => {
     const params = executeSqlParamsRef.current;
     if (!params) {
-      message.warning(i18n('common.message.noConnection'));
+      message.warning(i18n('workspace.tips.noConnection'));
       return;
     }
 

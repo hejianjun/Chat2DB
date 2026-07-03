@@ -206,7 +206,7 @@ export default memo((props: IProps) => {
         .getTableDetails(params)
         .then((res) => {
           const newTableDetails = lodash.cloneDeep(res);
-          setTableDetails(newTableDetails || {});
+          setTableDetails(newTableDetails || ({} as IEditTableInfo));
           setOldTableDetails(res);
         })
         .finally(() => {

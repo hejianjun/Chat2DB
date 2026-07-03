@@ -49,17 +49,23 @@ export default memo<IProps>((props) => {
   }, [promptWord, isActive]);
 
   const registerPromptWord = () => {
-    const suggestions = promptWord.slice(1).map((item) => {
+    const buildRange = (model: monaco.editor.ITextModel, position: monaco.Position) => {
+      const word = model.getWordUntilPosition(position);
+      return new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
+    };
+
+    const buildSuggestions = (range: monaco.Range) => promptWord.slice(1).map((item) => {
       return {
         insertText: item.name,
         kind: monaco.languages.CompletionItemKind.Field,
         label: item.name,
+        range,
       };
     });
 
-    const provideCompletionItems: any = () => {
+    const provideCompletionItems = (model: monaco.editor.ITextModel, position: monaco.Position) => {
       return {
-        suggestions,
+        suggestions: buildSuggestions(buildRange(model, position)),
       };
     };
 
@@ -69,13 +75,15 @@ export default memo<IProps>((props) => {
     });
 
     keywordHintRef.current = monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: () => {
+      provideCompletionItems: (model, position) => {
+        const range = buildRange(model, position);
         return {
           suggestions: keywordHintList.map((item) => {
             return {
               insertText: item,
               kind: monaco.languages.CompletionItemKind.Keyword,
               label: item,
+              range,
             };
           }),
         };

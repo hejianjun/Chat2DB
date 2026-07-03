@@ -80,7 +80,7 @@ const ResultPanel: React.FC = memo(() => {
                   onChange={() => handleToggleSelect(td.tableName)}
                 />
                 <span className={classnames(styles.diffBadge, diffTypeClass[td.diffType])}>
-                  {i18n(diffTypeLabel[td.diffType])}
+                  {i18n(diffTypeLabel[td.diffType] as any)}
                 </span>
                 <span className={styles.tableItemName}>{td.tableName}</span>
               </div>

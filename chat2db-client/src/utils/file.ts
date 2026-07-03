@@ -31,7 +31,7 @@ export function downloadFile(url: string, params: any, options?: IDownloadOption
         const pump = (): Promise<void | { blob: Blob; filename: string }> =>
           reader.read().then(({ done, value }) => {
             if (done) {
-              const blob = new Blob(chunks);
+              const blob = new Blob(chunks as BlobPart[]);
               resolve({ blob, filename });
               return;
             }

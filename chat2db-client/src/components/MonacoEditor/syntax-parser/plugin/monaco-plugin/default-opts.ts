@@ -22,7 +22,9 @@ export class DefaultOpts {
     //
   };
 
-  public onSuggestTableNames?: (cursorInfo?: ICursorInfo<ITableInfo>) => Promise<ICompletionItem[]> = cursorInfo => {
+  public onSuggestTableNames?: (
+    cursorInfo?: ICursorInfo<{ tableInfo: ITableInfo }>,
+  ) => Promise<ICompletionItem[]> = cursorInfo => {
     return Promise.resolve(
       ['dt', 'b2b', 'tmall'].map(name => {
         return {
@@ -35,7 +37,9 @@ export class DefaultOpts {
     );
   };
 
-  public onSuggestJoinTables?: (joinInfo?: ICursorInfo<IJoinTableInfo>) => Promise<ICompletionItem[]> = joinInfo => {
+  public onSuggestJoinTables?: (
+    joinInfo?: ICursorInfo<{ joinTableInfo: IJoinTableInfo }>,
+  ) => Promise<ICompletionItem[]> = joinInfo => {
     // 默认实现：返回所有表（子类可以覆盖）
     return Promise.resolve(
       ['dt', 'b2b', 'tmall'].map(name => {

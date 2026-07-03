@@ -183,7 +183,7 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
             .filter((cursorRootStatementField: any) => {
               return (
                 cursorRootStatementField.groupPickerName ===
-                (cursorInfo as ICursorInfo<{ groupName: string }>).groupName
+                (cursorInfo as unknown as ICursorInfo<{ groupName: string }>).groupName
               );
             })
             .filter((field: any) => {
@@ -202,12 +202,16 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
           return returnCompletionItemsByVersion(sortedFields, opts.monacoEditorVersion);
 
         case 'joinTable':
-          const joinTableNames = await opts.onSuggestJoinTables(cursorInfo as ICursorInfo<IJoinTableInfo>);
+          const joinTableNames = await opts.onSuggestJoinTables(
+            cursorInfo as unknown as ICursorInfo<{ joinTableInfo: IJoinTableInfo }>,
+          );
 
           return returnCompletionItemsByVersion(joinTableNames.concat(parserSuggestion), opts.monacoEditorVersion);
 
         case 'tableName':
-          const tableNames = await opts.onSuggestTableNames(cursorInfo as ICursorInfo<ITableInfo>);
+          const tableNames = await opts.onSuggestTableNames(
+            cursorInfo as unknown as ICursorInfo<{ tableInfo: ITableInfo }>,
+          );
 
           return returnCompletionItemsByVersion(tableNames.concat(parserSuggestion), opts.monacoEditorVersion);
         case 'functionName':

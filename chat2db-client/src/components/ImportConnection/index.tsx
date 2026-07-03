@@ -78,7 +78,11 @@ const ImportConnection: React.FC<IImportConnectionProps> = ({ open, onClose, onC
         accept=".ncx,.dbp"
         beforeUpload={handleBeforeUpload}
         maxCount={1}
-        fileList={selectedFile ? [selectedFile] : []}
+        fileList={
+          selectedFile
+            ? [{ uid: selectedFile.name, name: selectedFile.name, status: 'done', originFileObj: selectedFile as any }]
+            : []
+        }
       >
         <Button icon={<UploadOutlined />}>{i18n('common.text.selectFile')}</Button>
       </Upload>

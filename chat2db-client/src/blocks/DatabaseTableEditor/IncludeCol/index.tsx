@@ -59,7 +59,7 @@ const IncludeCol = forwardRef((props: IProps, ref: ForwardedRef<IIncludeColRef>)
   const [form] = Form.useForm();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const isEditing = (record: IIndexIncludeColumnItem) => record.key === editingKey;
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<any>(null);
 
   useEffect(() => {
     if (includedColumnList.length) {
@@ -89,7 +89,7 @@ const IncludeCol = forwardRef((props: IProps, ref: ForwardedRef<IIncludeColRef>)
     setDataSource([...dataSource, newData]);
     edit(newData);
     setTimeout(() => {
-      tableRef.current?.scrollTo(0, tableRef.current?.scrollHeight + 100);
+      tableRef.current?.nativeElement.scrollTo(0, tableRef.current.nativeElement.scrollHeight + 100);
     }, 0);
   };
 

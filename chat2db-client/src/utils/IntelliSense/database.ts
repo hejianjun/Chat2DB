@@ -36,6 +36,8 @@ const registerIntelliSenseDatabase = (databaseName: Array<{ name: string; dataSo
         endColumn: position.column,
       });
       const isTableContext = checkTableContext(lineContentUntilPosition);
+      const word = model.getWordUntilPosition(position);
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
 
       return {
         suggestions: (databaseName || []).map(({ name, dataSourceName }) => ({
@@ -47,6 +49,7 @@ const registerIntelliSenseDatabase = (databaseName: Array<{ name: string; dataSo
           insertText: name,
           sortText: isTableContext ? '01' : '08',
           kind: monaco.languages.CompletionItemKind.Property,
+          range,
         })),
       };
     },

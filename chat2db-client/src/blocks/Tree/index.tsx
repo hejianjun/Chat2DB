@@ -239,15 +239,17 @@ const Tree = (props: IProps) => {
               dataSourceName: currentConnectionDetails.alias,
               databaseType: currentConnectionDetails.type,
               searchKey: searchValue,
+              pageNo: 1,
+              pageSize: 1000,
             },
             { signal },
           )
           .then((res) => {
             if (!signal.aborted && searchRequestIdRef.current === searchRequestId) {
-              const enrichedNodes = (res || []).map((node) => ({
+              const enrichedNodes: ITreeNode[] = (res || []).map((node) => ({
                 ...node,
-                treeNodeType: node.treeNodeType?.toLowerCase() || node.treeNodeType,
-                pretendNodeType: node.pretendNodeType?.toLowerCase() || node.pretendNodeType,
+                treeNodeType: (node.treeNodeType?.toLowerCase() || node.treeNodeType) as TreeNodeType,
+                pretendNodeType: (node.pretendNodeType?.toLowerCase() || node.pretendNodeType) as TreeNodeType,
                 extraParams: {
                   ...node.extraParams,
                   dataSourceId: currentConnectionDetails.id,
@@ -298,7 +300,7 @@ const Tree = (props: IProps) => {
     if (!flatNodes || flatNodes.length === 0) return [];
 
     const firstNode = flatNodes[0];
-    const baseExtraParams = firstNode.extraParams || {};
+    const baseExtraParams = firstNode.extraParams!;
 
     const map = new Map<string, ITreeNode>();
     const pathMap = new Map<string, ITreeNode>();

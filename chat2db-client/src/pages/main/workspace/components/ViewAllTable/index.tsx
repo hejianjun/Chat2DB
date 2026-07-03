@@ -708,7 +708,7 @@ export default memo<IProps>((props) => {
         <ExecuteSQL
           initSql={appendValue}
           databaseName={uniqueData.databaseName}
-          dataSourceId={uniqueData.dataSourceId}
+          dataSourceId={Number(uniqueData.dataSourceId)}
           schemaName={uniqueData.schemaName}
           databaseType={uniqueData.databaseType}
           executeSuccessCallBack={executeSuccessCallBack}

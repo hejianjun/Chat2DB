@@ -15,6 +15,8 @@ import createRequest from './base';
 
 export interface ITreeSearchParams extends IPageParams {
   dataSourceId: number;
+  dataSourceName?: string;
+  databaseType?: DatabaseTypeCode;
   databaseName?: string;
   schemaName?: string;
   searchKey?: string;
@@ -181,6 +183,8 @@ export interface IForeignKey {
   deleteRule: number; // 删除规则
   comment?: string; // 备注（可选）
   isNullable: boolean; // 是否允许为空
+  sourceType?: string;
+  editable?: boolean;
 }
 
 export interface ISchemaParams {

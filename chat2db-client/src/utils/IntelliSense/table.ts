@@ -63,6 +63,13 @@ const registerIntelliSenseTable = (
       // 获取触发提示的字符
       const match = lineContentUntilPosition.match(/\S+$/);
       const word = match ? match[0] : '';
+      const currentWord = model.getWordUntilPosition(position);
+      const range = new monaco.Range(
+        position.lineNumber,
+        currentWord.startColumn,
+        position.lineNumber,
+        currentWord.endColumn,
+      );
 
       return {
         suggestions: (tableList || []).map((tableName) => ({
@@ -76,6 +83,7 @@ const registerIntelliSenseTable = (
           // range: monaco.Range.fromPositions(position),
           // documentation: tableName.comment,
           sortText: isTableContext ? '01' : '08',
+          range,
           command: {
             id: 'addFieldList',
             title: 'addFieldList',

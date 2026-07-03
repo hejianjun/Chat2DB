@@ -32,17 +32,19 @@ interface IOption<T> {
   key: string;
   label: string;
   value: T;
+  type?: 'item';
 }
 
 const emptyOption = {
   key: '',
   label: '',
   value: '',
+  type: 'item' as const,
 };
 
 const SelectBoundInfo = memo((props: IProps) => {
   const { boundInfo, setBoundInfo } = props;
-  const { setSelectedTables, setTableNameList, isActive } = useContext(IntelligentEditorContext);
+  const { isActive } = useContext(IntelligentEditorContext);
   const connectionList = useConnectionStore((state) => state.connectionList);
   const [databaseNameList, setDatabaseNameList] = useState<IOption<string>[]>([emptyOption]);
   const [schemaList, setSchemaList] = useState<IOption<string>[]>([emptyOption]);
@@ -64,7 +66,7 @@ const SelectBoundInfo = memo((props: IProps) => {
         key: item.id.toString(),
         label: item.alias,
         value: item.id,
-        type: item.type,
+        databaseType: item.type,
       })) || []
     );
   }, [connectionList]);
@@ -141,6 +143,7 @@ const SelectBoundInfo = memo((props: IProps) => {
             key: item.name,
             label: item.name,
             value: item.name,
+            type: 'item' as const,
           };
         });
         if (!_databaseNameList.length) {
@@ -165,6 +168,7 @@ const SelectBoundInfo = memo((props: IProps) => {
           key: item.name,
           label: item.name,
           value: item.name,
+          type: 'item' as const,
         }));
         setSchemaList([emptyOption, ..._schemaList]);
       });
@@ -210,7 +214,7 @@ const SelectBoundInfo = memo((props: IProps) => {
       ...boundInfo,
       dataSourceId: currentData.value,
       dataSourceName: currentData.label,
-      databaseType: currentData.type,
+      databaseType: currentData.databaseType,
       databaseName: void 0,
       schemaName: void 0,
     });
@@ -219,7 +223,7 @@ const SelectBoundInfo = memo((props: IProps) => {
         id: boundInfo.consoleId,
         dataSourceId: currentData.value,
         dataSourceName: currentData.label,
-        type: currentData.type,
+        type: currentData.databaseType,
       });
     }
   };
@@ -308,7 +312,7 @@ const SelectBoundInfo = memo((props: IProps) => {
       {supportSchema && (
         <Dropdown
           menu={{
-            items: schemaList,
+            items: schemaList as any,
             onClick: changeSchema,
           }}
           trigger={['click']}

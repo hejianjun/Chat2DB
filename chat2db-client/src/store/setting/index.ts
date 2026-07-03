@@ -15,10 +15,11 @@ export interface ISettingState {
   holdingService: boolean;
 }
 
-const initSetting = {
+const initSetting: ISettingState = {
   remainingUse: undefined,
   aiConfig: {
-    aiSqlSource: AIType.CHAT2DBAI,
+    aiSqlSource: AIType.OPENAI,
+    apiKey: '',
   },
   hasWhite: false,
   holdingService: false,
@@ -59,9 +60,9 @@ export const updateAiWithWhite = (apiKey: string) => {
   });
 };
 
-export const fetchRemainingUse = (apiKey) => {
+export const fetchRemainingUse = (apiKey: string) => {
   const currentState = useSettingStore.getState();
-  if (!apiKey || currentState.aiConfig.aiSqlSource !== AIType.CHAT2DBAI) {
+  if (!apiKey || currentState.aiConfig.aiSqlSource !== AIType.OPENAI) {
     setRemainUse(undefined);
     return;
   }

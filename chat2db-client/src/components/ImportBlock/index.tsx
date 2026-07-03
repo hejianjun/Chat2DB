@@ -47,7 +47,14 @@ function ImportBlock(props: IImportBlockProps) {
           accept={accept}
           beforeUpload={handleBeforeUpload}
           maxCount={maxCount}
-          fileList={selectedFile ? [...selectedFile] : null}
+          fileList={
+            selectedFile?.map((file) => ({
+              uid: file.name,
+              name: file.name,
+              status: 'done',
+              originFileObj: file as any,
+            })) || []
+          }
         >
           <Button icon={<UploadOutlined />}>{i18n('common.text.selectFile')}</Button>
         </Upload>

@@ -1,6 +1,6 @@
 import { DatabaseTypeCode, OperationColumn, TreeNodeType } from '@/constants';
 import connectionService from '@/service/connection';
-import { IConnectionDetails, ITreeNode } from '@/typings';
+import { IConnectionListItem, ITreeNode } from '@/typings';
 import { v4 as uuid } from 'uuid';
 
 import mysqlServer from '@/service/sql';
@@ -232,7 +232,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
         connectionService
           .getList(p, options)
           .then((res) => {
-            const data: ITreeNode[] = res.data.map((t: IConnectionDetails) => {
+            const data: ITreeNode[] = res.data.map((t: IConnectionListItem) => {
               return {
                 uuid: uuid(),
                 key: t.id,
@@ -507,7 +507,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
         mysqlServer
           .getDeprecatedTableList(params, options)
           .then((res) => {
-            const deprecatedTables = Array.isArray(res) ? res : res?.data || [];
+            const deprecatedTables = res || [];
             const tableList: ITreeNode[] = deprecatedTables.map((t: any) => {
               return {
                 uuid: uuid(),
@@ -887,6 +887,10 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
           });
       });
     },
+    operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName, OperationColumn.Refresh],
+  },
+  [TreeNodeType.V_KEYS]: {
+    icon: '\ueac5',
     operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName, OperationColumn.Refresh],
   },
   [TreeNodeType.KEY]: {

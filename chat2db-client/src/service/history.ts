@@ -5,7 +5,8 @@ import { ICreateConsole, IConsole, IManageResultData, IPageResponse, IPageParams
 
 export interface IGetSavedListParams extends IPageParams {
   tabOpened?: 'y' | 'n';
-  status?: ConsoleStatus
+  status?: ConsoleStatus;
+  orderByCreateDesc?: boolean;
 }
 export interface IGetHistoryListParams extends IPageParams { 
   dataSourceId?: number;

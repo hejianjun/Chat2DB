@@ -2,7 +2,7 @@ import { notification } from 'antd';
 
 export default () => {
   notification.config({
-    placement: 'BottomRight',
+    placement: 'bottomRight',
     maxCount: 2,
     duration: null,
   });

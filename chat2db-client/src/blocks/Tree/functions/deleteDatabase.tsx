@@ -46,7 +46,7 @@ export const DeleteDatabaseModalContent = (params: {
       })
       .catch((error) => {
         console.error('Error deleting database:', error);
-        message.error(i18n('workspace.tree.delete.database.error') || 'Failed to delete database');
+        message.error('Failed to delete database');
       });
   };
 

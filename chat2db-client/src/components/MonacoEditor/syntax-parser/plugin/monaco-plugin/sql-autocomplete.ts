@@ -340,7 +340,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
     language: 'sql',
     parserType: effectiveParserType,
 
-    onSuggestTableNames: async (cursorInfo?: ICursorInfo<ITableInfo>) => {
+    onSuggestTableNames: async (cursorInfo?: ICursorInfo<{ tableInfo: ITableInfo }>) => {
       try {
         const data = await sqlService.getAllTableList({
           dataSourceId: boundInfo.dataSourceId,
@@ -368,7 +368,7 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
       }
     },
 
-    onSuggestJoinTables: async (cursorInfo?: ICursorInfo<IJoinTableInfo>) => {
+    onSuggestJoinTables: async (cursorInfo?: ICursorInfo<{ joinTableInfo: IJoinTableInfo }>) => {
       try {
         const joinInfo = cursorInfo?.joinTableInfo;
         if (!joinInfo || !joinInfo.currentTable) {
