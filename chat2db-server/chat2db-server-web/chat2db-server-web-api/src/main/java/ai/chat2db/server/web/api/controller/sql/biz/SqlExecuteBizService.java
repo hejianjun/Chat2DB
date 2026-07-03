@@ -29,15 +29,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 
 @Slf4j
 @Component
 public class SqlExecuteBizService {
+
+    private static final int PROGRESS_UPDATE_INTERVAL = 200;
+    private static final int MAX_ERROR_DETAILS = 20;
 
     @Autowired
     private TaskService taskService;
@@ -65,16 +69,19 @@ public class SqlExecuteBizService {
         }
 
         final File finalSafeFile = safeFile;
-        CompletableFuture.runAsync(() -> {
+        CompletableFuture.supplyAsync(() -> {
             buildContext(loginUser, connectInfo);
             try {
-                doExecuteSql(finalSafeFile, dataResult.getData());
+                return doExecuteSql(finalSafeFile, dataResult.getData(), request);
             } finally {
                 FileUtil.del(finalSafeFile);
             }
-        }).whenComplete((aVoid, throwable) -> {
-            updateTaskStatus(dataResult.getData(), throwable);
-            removeContext();
+        }).whenComplete((result, throwable) -> {
+            try {
+                updateTaskStatus(dataResult.getData(), result, throwable);
+            } finally {
+                removeContext();
+            }
         });
 
         return dataResult;
@@ -93,8 +100,7 @@ public class SqlExecuteBizService {
         return DataResult.of(taskId);
     }
 
-    private void doExecuteSql(File file, Long taskId) {
-        final AtomicInteger processedCount = new AtomicInteger(0);
+    private SqlExecutionResult doExecuteSql(File file, Long taskId, SqlFileExecuteRequest request) {
         Connection connection = Chat2DBContext.getConnection();
         boolean originalAutoCommit;
         try {
@@ -103,36 +109,22 @@ public class SqlExecuteBizService {
             throw new BusinessException("dataSource.importError", new Object[]{e.getMessage()}, e);
         }
 
-        try (Statement statement = connection.createStatement()) {
+        try {
             connection.setAutoCommit(false);
             List<SqlStatementItem> sqlStatements = readSqlStatements(file);
-            for (SqlStatementItem item : sqlStatements) {
-                String trimmedSql = item.getSql().trim();
-                if (StringUtils.isNotBlank(trimmedSql) && !trimmedSql.startsWith("--")) {
-                    statement.execute(trimmedSql);
-                    int count = processedCount.incrementAndGet();
-                    if (count % 200 == 0) {
-                        updateProgressCount(taskId, count);
-                    }
-                }
-            }
-            connection.commit();
-            updateProgressCount(taskId, processedCount.get());
+            int commitBatchSize = request.getCommitBatchSize() == null ? 0 : request.getCommitBatchSize();
+            return executeStatements(
+                    connection,
+                    sqlStatements,
+                    request.isSkipErrors(),
+                    commitBatchSize,
+                    count -> updateProgressCount(taskId, count)
+            );
+        } catch (BusinessException e) {
+            rollbackQuietly(connection);
+            throw e;
         } catch (Exception e) {
             rollbackQuietly(connection);
-            if (e instanceof SQLException sqlException) {
-                int failedIndex = processedCount.get() + 1;
-                throw new BusinessException(
-                        "dataSource.executeSqlErrorDetail",
-                        new Object[]{
-                                failedIndex,
-                                findStatementLine(file, failedIndex),
-                                sqlException.getMessage(),
-                                buildSqlSnippet(file, failedIndex)
-                        },
-                        e
-                );
-            }
             throw new BusinessException("dataSource.importError", new Object[]{e.getMessage()}, e);
         } finally {
             try {
@@ -140,6 +132,102 @@ public class SqlExecuteBizService {
             } catch (SQLException e) {
                 log.warn("restore autoCommit failed", e);
             }
+        }
+    }
+
+    SqlExecutionResult executeStatements(
+            Connection connection,
+            List<SqlStatementItem> sqlStatements,
+            boolean skipErrors,
+            int commitBatchSize,
+            IntConsumer progressConsumer) throws SQLException {
+        SqlExecutionResult result = new SqlExecutionResult();
+        int uncommittedSuccessCount = 0;
+
+        try (Statement statement = connection.createStatement()) {
+            for (int index = 0; index < sqlStatements.size(); index++) {
+                SqlStatementItem item = sqlStatements.get(index);
+                String trimmedSql = item.getSql().trim();
+                if (StringUtils.isBlank(trimmedSql) || trimmedSql.startsWith("--")) {
+                    continue;
+                }
+
+                int statementIndex = index + 1;
+                Savepoint savepoint = null;
+                boolean statementSkipped = false;
+                try {
+                    if (skipErrors) {
+                        savepoint = connection.setSavepoint();
+                    }
+                    statement.execute(trimmedSql);
+                    result.successCount++;
+                    uncommittedSuccessCount++;
+                } catch (SQLException e) {
+                    if (!skipErrors) {
+                        throw buildSqlExecutionException(statementIndex, item, e);
+                    }
+                    rollbackToSavepoint(connection, savepoint);
+                    result.skippedCount++;
+                    statementSkipped = true;
+                    result.addErrorDetail(new SqlErrorDetail(
+                            statementIndex,
+                            item.getStartLine(),
+                            e.getMessage(),
+                            buildSqlSnippet(item.getSql())
+                    ));
+                } finally {
+                    releaseSavepointQuietly(connection, savepoint);
+                }
+
+                result.processedCount++;
+                if (commitBatchSize > 0 && uncommittedSuccessCount >= commitBatchSize) {
+                    connection.commit();
+                    uncommittedSuccessCount = 0;
+                }
+                if (result.processedCount % PROGRESS_UPDATE_INTERVAL == 0 || statementSkipped) {
+                    progressConsumer.accept(result.processedCount);
+                }
+            }
+        }
+
+        if (uncommittedSuccessCount > 0) {
+            connection.commit();
+        }
+        progressConsumer.accept(result.processedCount);
+        return result;
+    }
+
+    private BusinessException buildSqlExecutionException(
+            int statementIndex,
+            SqlStatementItem item,
+            SQLException exception) {
+        return new BusinessException(
+                "dataSource.executeSqlErrorDetail",
+                new Object[]{
+                        statementIndex,
+                        item.getStartLine(),
+                        exception.getMessage(),
+                        buildSqlSnippet(item.getSql())
+                },
+                exception
+        );
+    }
+
+    private void rollbackToSavepoint(Connection connection, Savepoint savepoint) throws SQLException {
+        if (savepoint == null) {
+            throw new SQLException("The database did not create a savepoint for skipping the failed statement.");
+        }
+        connection.rollback(savepoint);
+    }
+
+    private void releaseSavepointQuietly(Connection connection, Savepoint savepoint) {
+        if (savepoint == null) {
+            return;
+        }
+        try {
+            connection.releaseSavepoint(savepoint);
+        } catch (SQLException e) {
+            log.debug("release savepoint failed", e);
         }
     }
 
@@ -151,35 +239,12 @@ public class SqlExecuteBizService {
         }
     }
 
-    private int findStatementLine(File file, int statementIndex) {
-        try {
-            List<SqlStatementItem> statements = readSqlStatements(file);
-            if (statementIndex <= 0 || statementIndex > statements.size()) {
-                return -1;
-            }
-            return statements.get(statementIndex - 1).getStartLine();
-        } catch (IOException ignore) {
-            return -1;
+    private String buildSqlSnippet(String sql) {
+        String snippet = sql.replaceAll("\\s+", " ").trim();
+        if (snippet.length() > 300) {
+            return snippet.substring(0, 300) + "...";
         }
-    }
-
-    private String buildSqlSnippet(File file, int statementIndex) {
-        try {
-            List<SqlStatementItem> statements = readSqlStatements(file);
-            if (statementIndex <= 0 || statementIndex > statements.size()) {
-                return "";
-            }
-            String sql = statements.get(statementIndex - 1).getSql();
-            sql = sql.replaceAll("\\s+", " ").trim();
-            if (sql.length() > 300) {
-                return sql.substring(0, 300) + "...";
-            }
-            return sql;
-        } catch (IOException ignore) {
-            return "";
-        } catch (Exception e) {
-            throw new BusinessException("dataSource.importError", new Object[]{e.getMessage()}, e);
-        }
+        return snippet;
     }
 
     private List<SqlStatementItem> readSqlStatements(File file) throws IOException {
@@ -211,11 +276,11 @@ public class SqlExecuteBizService {
         return statements;
     }
 
-    private static class SqlStatementItem {
+    static class SqlStatementItem {
         private final String sql;
         private final int startLine;
 
-        private SqlStatementItem(String sql, int startLine) {
+        SqlStatementItem(String sql, int startLine) {
             this.sql = sql;
             this.startLine = startLine;
         }
@@ -229,6 +294,49 @@ public class SqlExecuteBizService {
         }
     }
 
+    static class SqlExecutionResult {
+        private int processedCount;
+        private int successCount;
+        private int skippedCount;
+        private final List<SqlErrorDetail> errorDetails = new ArrayList<>();
+
+        private void addErrorDetail(SqlErrorDetail errorDetail) {
+            if (errorDetails.size() < MAX_ERROR_DETAILS) {
+                errorDetails.add(errorDetail);
+            }
+        }
+
+        int getProcessedCount() {
+            return processedCount;
+        }
+
+        int getSuccessCount() {
+            return successCount;
+        }
+
+        int getSkippedCount() {
+            return skippedCount;
+        }
+
+        List<SqlErrorDetail> getErrorDetails() {
+            return errorDetails;
+        }
+    }
+
+    static class SqlErrorDetail {
+        private final int statementIndex;
+        private final int startLine;
+        private final String message;
+        private final String sqlSnippet;
+
+        SqlErrorDetail(int statementIndex, int startLine, String message, String sqlSnippet) {
+            this.statementIndex = statementIndex;
+            this.startLine = startLine;
+            this.message = message;
+            this.sqlSnippet = sqlSnippet;
+        }
+    }
+
     private void updateProgressCount(Long taskId, int processedCount) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(taskId);
@@ -236,7 +344,7 @@ public class SqlExecuteBizService {
         taskService.updateStatus(updateParam);
     }
 
-    private void updateTaskStatus(Long id, Throwable throwable) {
+    private void updateTaskStatus(Long id, SqlExecutionResult result, Throwable throwable) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(id);
         if (throwable != null) {
@@ -249,8 +357,37 @@ public class SqlExecuteBizService {
             }
         } else {
             updateParam.setTaskStatus(TaskStatusEnum.FINISH.name());
+            if (result != null && result.getSkippedCount() > 0) {
+                updateParam.setContent(buildSkippedErrorSummary(result));
+            }
         }
         taskService.updateStatus(updateParam);
+    }
+
+    private String buildSkippedErrorSummary(SqlExecutionResult result) {
+        StringBuilder summary = new StringBuilder(I18nUtils.getMessage(
+                "dataSource.executeSqlSkippedSummary",
+                new Object[]{result.getSuccessCount(), result.getSkippedCount()}
+        ));
+        for (SqlErrorDetail errorDetail : result.getErrorDetails()) {
+            summary.append(System.lineSeparator()).append(I18nUtils.getMessage(
+                    "dataSource.executeSqlErrorDetail",
+                    new Object[]{
+                            errorDetail.statementIndex,
+                            errorDetail.startLine,
+                            errorDetail.message,
+                            errorDetail.sqlSnippet
+                    }
+            ));
+        }
+        int omittedCount = result.getSkippedCount() - result.getErrorDetails().size();
+        if (omittedCount > 0) {
+            summary.append(System.lineSeparator()).append(I18nUtils.getMessage(
+                    "dataSource.executeSqlSkippedErrorsOmitted",
+                    new Object[]{omittedCount}
+            ));
+        }
+        return summary.toString();
     }
 
     private void removeContext() {

@@ -47,7 +47,7 @@ public class SqlController {
     @PostMapping("/execute_file")
     public DataResult<Long> executeFile(
             @RequestPart("file") MultipartFile file,
-            @ModelAttribute SqlFileExecuteRequest request) {
+            @Valid @ModelAttribute SqlFileExecuteRequest request) {
         return sqlExecuteBizService.executeSqlFile(file, request);
     }
 

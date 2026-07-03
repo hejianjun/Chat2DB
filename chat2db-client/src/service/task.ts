@@ -60,6 +60,8 @@ export interface IExecuteSqlFileParams {
   dataSourceId?: number;
   databaseName?: string;
   schemaName?: string;
+  skipErrors?: boolean;
+  commitBatchSize?: number;
 }
 
 export interface ITableColumnInfo {
