@@ -259,7 +259,7 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
   const editorRef = useRef<IEditorIns>();
   const quickInputCommand = useRef<any>();
   const sqlAutocompleteDisposable = useRef<ISqlAutocompleteDisposable | null>(null);
-  const aiCompletionWidgetRef = useRef<monaco.editor.IContentWidget | null>(null);
+  const aiCompletionViewZoneIdsRef = useRef<string[]>([]);
   const aiCompletionDecorationsRef = useRef<string[]>([]);
   const statementDecorationsRef = useRef<string[]>([]);
   const [appTheme] = useTheme();
@@ -538,9 +538,11 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
       return;
     }
 
-    if (aiCompletionWidgetRef.current) {
-      editor.removeContentWidget(aiCompletionWidgetRef.current);
-      aiCompletionWidgetRef.current = null;
+    if (aiCompletionViewZoneIdsRef.current.length > 0) {
+      editor.changeViewZones((accessor) => {
+        aiCompletionViewZoneIdsRef.current.forEach((viewZoneId) => accessor.removeZone(viewZoneId));
+      });
+      aiCompletionViewZoneIdsRef.current = [];
     }
     aiCompletionDecorationsRef.current = editor.deltaDecorations(aiCompletionDecorationsRef.current, []);
   };
@@ -632,24 +634,6 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
     return decorations;
   };
 
-  const createDiffLine = (line: string, type: AiDiffLineType) => {
-    const row = document.createElement('div');
-    row.className =
-      type === 'remove' ? styles.aiDiffRemoveLine : type === 'add' ? styles.aiDiffAddLine : styles.aiDiffSameLine;
-
-    const markerNode = document.createElement('span');
-    markerNode.className = styles.aiDiffMarker;
-    markerNode.textContent = type === 'remove' ? '-' : type === 'add' ? '+' : ' ';
-
-    const codeNode = document.createElement('span');
-    codeNode.className = styles.aiDiffCode;
-    codeNode.textContent = line || ' ';
-
-    row.appendChild(markerNode);
-    row.appendChild(codeNode);
-    return row;
-  };
-
   const renderAiCompletionPreview = (editor: IEditorIns, completion: IProps['aiCompletion']) => {
     clearAiCompletionPreview(editor);
     if (!completion) {
@@ -657,43 +641,64 @@ function MonacoEditor(props: IProps, ref: ForwardedRef<IExportRefFunction>) {
     }
 
     const replaceRange = completion.replaceRange || completion.range;
-    const widgetNode = document.createElement('div');
-    widgetNode.className = styles.aiDiffWidget;
-    widgetNode.tabIndex = -1;
-
-    const headerNode = document.createElement('div');
-    headerNode.className = styles.aiDiffHeader;
-    headerNode.textContent = 'AI SQL suggestion';
-    widgetNode.appendChild(headerNode);
-
-    const bodyNode = document.createElement('div');
-    bodyNode.className = styles.aiDiffBody;
-
     const originalLines = (completion.originalText || '').split(/\r?\n/);
     const suggestionLines = completion.text.split(/\r?\n/);
     const diffLines = buildLineDiff(originalLines, suggestionLines);
-    diffLines.forEach(({ line, type }) => bodyNode.appendChild(createDiffLine(line, type)));
-    widgetNode.appendChild(bodyNode);
+    let originalLineNumber = replaceRange.startLineNumber;
+    let pendingAddedLines: string[] = [];
 
-    const widget: monaco.editor.IContentWidget = {
-      getId: () => `chat2db.aiDiff.${completion.id}`,
-      getDomNode: () => widgetNode,
-      getPosition: () => ({
-        position: {
-          lineNumber: replaceRange.endLineNumber,
-          column: replaceRange.endColumn,
-        },
-        preference: [monaco.editor.ContentWidgetPositionPreference.BELOW],
-      }),
+    const addGhostTextZone = (afterLineNumber: number) => {
+      if (pendingAddedLines.length === 0) {
+        return;
+      }
+
+      const domNode = document.createElement('div');
+      domNode.className = styles.aiGhostTextZone;
+      pendingAddedLines.forEach((line) => {
+        const row = document.createElement('div');
+        row.className = styles.aiGhostTextLine;
+
+        const markerNode = document.createElement('span');
+        markerNode.className = styles.aiGhostTextMarker;
+        markerNode.textContent = '+';
+
+        const codeNode = document.createElement('span');
+        codeNode.textContent = line || ' ';
+
+        row.appendChild(markerNode);
+        row.appendChild(codeNode);
+        domNode.appendChild(row);
+      });
+
+      const heightInLines = pendingAddedLines.length;
+      editor.changeViewZones((accessor) => {
+        aiCompletionViewZoneIdsRef.current.push(
+          accessor.addZone({
+            afterLineNumber,
+            heightInLines,
+            domNode,
+          }),
+        );
+      });
+      pendingAddedLines = [];
     };
 
-    aiCompletionWidgetRef.current = widget;
-    editor.addContentWidget(widget);
+    diffLines.forEach(({ line, type }) => {
+      if (type === 'add') {
+        pendingAddedLines.push(line);
+        return;
+      }
+
+      addGhostTextZone(originalLineNumber - 1);
+      originalLineNumber += 1;
+    });
+    addGhostTextZone(originalLineNumber - 1);
+
     aiCompletionDecorationsRef.current = editor.deltaDecorations(
       aiCompletionDecorationsRef.current,
       getRemovedLineDecorations(replaceRange, diffLines),
     );
-    editor.revealLineInCenterIfOutsideViewport(replaceRange.endLineNumber);
+    editor.revealLineInCenter(replaceRange.startLineNumber);
   };
 
   return <div ref={ref as any} id={`monaco-editor-${id}`} className={cs(className, styles.editorContainer)} />;

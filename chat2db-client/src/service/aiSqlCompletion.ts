@@ -35,6 +35,7 @@ const extractSqlFromContent = (content: string): string => {
 export const requestAiSqlCompletion = (params: IAiSqlCompletionParams): IAiSqlCompletionTask => {
   const sessionId = uuidv4();
   const query = formatParams({
+    conversationId: sessionId,
     message: params.message,
     promptType: 'SQL_COMPLETION',
     dataSourceId: params.boundInfo.dataSourceId,
