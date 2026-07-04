@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import i18n from '@/i18n';
 import configServer from '@/service/config';
-import { Button, Input, Select, Switch, message } from 'antd';
+import mcpServer, { IMcpStatus } from '@/service/mcp';
+import { Button, Input, Select, Space, Switch, Tag, message } from 'antd';
 import classnames from 'classnames';
 import styles from '../index.less';
 
@@ -29,6 +30,8 @@ export default function McpSetting() {
   const [allowWrite, setAllowWrite] = useState(false);
   const [allowDdl, setAllowDdl] = useState(false);
   const [requireConfirmParam, setRequireConfirmParam] = useState(true);
+  const [mcpStatus, setMcpStatus] = useState<IMcpStatus>();
+  const [statusLoading, setStatusLoading] = useState(false);
   const mcpAddress = useMemo(() => {
     return window._BaseURL ? `${window._BaseURL.replace(/\/+$/, '')}${MCP_ENDPOINT}` : '';
   }, []);
@@ -50,6 +53,23 @@ export default function McpSetting() {
         setStoredConfig({});
       }
     });
+  }, []);
+
+  async function refreshMcpStatus() {
+    setStatusLoading(true);
+    try {
+      setMcpStatus(await mcpServer.getStatus());
+    } catch {
+      setMcpStatus(undefined);
+    } finally {
+      setStatusLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refreshMcpStatus();
+    const timer = window.setInterval(refreshMcpStatus, 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   async function saveMcpConfig() {
@@ -75,6 +95,21 @@ export default function McpSetting() {
       <div className={styles.title}>{i18n('setting.label.mcpAddress')}</div>
       <div className={classnames(styles.content, styles.chatGPTKey)}>
         <Input value={mcpAddress} readOnly />
+      </div>
+      <div className={styles.title}>{i18n('setting.label.mcpConnectionStatus')}</div>
+      <div className={styles.content}>
+        <Space>
+          {mcpStatus?.connected ? (
+            <Tag color="success">
+              {i18n('setting.text.mcpConnected')} ({mcpStatus.connectionCount})
+            </Tag>
+          ) : (
+            <Tag>{i18n('setting.text.mcpDisconnected')}</Tag>
+          )}
+          <Button size="small" loading={statusLoading} onClick={refreshMcpStatus}>
+            {i18n('setting.button.refresh')}
+          </Button>
+        </Space>
       </div>
       <div className={styles.title}>{i18n('setting.label.mcpAuthType')}</div>
       <div className={classnames(styles.content, styles.chatGPTKey)}>
