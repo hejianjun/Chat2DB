@@ -72,6 +72,17 @@ const WorkspaceTabs = memo(() => {
     return connection?.environment || null;
   };
 
+  const getDataSourceName = (item: IWorkspaceTab) => {
+    if (item.uniqueData?.dataSourceName) return item.uniqueData.dataSourceName;
+    if (!item.uniqueData?.dataSourceId || !connectionList) return null;
+    return connectionList.find((connection) => connection.id === item.uniqueData.dataSourceId)?.alias || null;
+  };
+
+  const getTabDisplayTitle = (title: string, dataSourceName?: string | null) => {
+    if (!dataSourceName || title.includes(`(${dataSourceName})`)) return title;
+    return `${title} (${dataSourceName})`;
+  };
+
   const isReleaseEnvironment = (environment: { name: string; shortName: string } | null) => {
     if (!environment) return false;
     const envName = environment.name?.toLowerCase();
@@ -539,6 +550,8 @@ const WorkspaceTabs = memo(() => {
       const environment = getConnectionEnvironment(item.uniqueData?.dataSourceId);
       const isGeneratingTitle = generatingTitleKey === item.id;
       const isActive = activeConsoleId === item.id;
+      const title = isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title;
+      const displayTitle = getTabDisplayTitle(title, getDataSourceName(item));
       return {
         prefixIcon: isGeneratingTitle
           ? <Spin indicator={<LoadingOutlined spin />} size="small" />
@@ -549,11 +562,12 @@ const WorkspaceTabs = memo(() => {
               <span className={styles.envTag} style={{ background: environment.color?.toLocaleLowerCase() }} />
             )}
             <span className={styles.tabTitle} style={getEnvLabelStyle(environment, isActive)}>
-              {isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title}
+              {displayTitle}
             </span>
           </div>
         ),
-        name: isGeneratingTitle ? i18n('common.text.generatingTitle') : item.title,
+        name: title,
+        popover: displayTitle,
         key: item.id,
         editableName: item.type === WorkspaceTabType.CONSOLE,
         canGenerateTitle: canGenerateTitleType(item.type),
