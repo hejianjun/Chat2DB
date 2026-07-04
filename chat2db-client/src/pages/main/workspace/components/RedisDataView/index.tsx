@@ -319,14 +319,38 @@ const RedisDataView = memo((props: IProps) => {
     if (!selectedPrefix) {
       return;
     }
-    loadKeysByPrefixName(selectedPrefix);
+    openLoadKeysByPrefixModal(selectedPrefix);
   };
 
-  const loadKeysByPrefixName = (prefixName: string) => {
+  const openLoadKeysByPrefixModal = (prefixName: string) => {
     if (!prefixName) {
       return;
     }
-    const keyword = `${prefixName}*`;
+    let suffix = '';
+    Modal.confirm({
+      title: '加载 Keys',
+      className: styles.loadKeysModal,
+      icon: null,
+      width: 600,
+      content: (
+        <Input
+          addonBefore={prefixName}
+          autoFocus
+          placeholder="请输入 Key 后缀，留空则匹配全部"
+          onChange={(event) => {
+            suffix = event.target.value;
+          }}
+        />
+      ),
+      okText: '加载',
+      cancelText: '取消',
+      onOk: () => loadKeysByPrefixName(prefixName, suffix),
+    });
+  };
+
+  const loadKeysByPrefixName = (prefixName: string, suffix = '') => {
+    const normalizedSuffix = suffix.trim();
+    const keyword = `${prefixName}${normalizedSuffix || '*'}`;
     setSearchMode(SEARCH_MODE_KEY);
     setSearchKey(keyword);
     loadData(keyword, keyLimit);
@@ -565,10 +589,31 @@ const RedisDataView = memo((props: IProps) => {
   };
 
   useEffect(() => {
-    loadData('');
-    loadPrefixComments('');
-    loadPrefixBuildStatus();
+    let cancelled = false;
+    const initializeData = async () => {
+      const status = await loadPrefixBuildStatus();
+      if (cancelled) {
+        return;
+      }
+      setSearchKey('');
+      if (status?.status === DONE_STATUS) {
+        closeStreamRef.current?.();
+        setData([]);
+        setScanCursor('0');
+        setHasMore(false);
+        setSearchMode(SEARCH_MODE_PREFIX);
+        setSortInfo(DEFAULT_PREFIX_SORT);
+        await loadPrefixComments('', false, true);
+        return;
+      }
+      setSearchMode(SEARCH_MODE_KEY);
+      setSortInfo(null);
+      loadData('');
+      loadPrefixComments('');
+    };
+    initializeData();
     return () => {
+      cancelled = true;
       closeStreamRef.current?.();
       closeStreamRef.current = null;
     };
@@ -875,7 +920,7 @@ const RedisDataView = memo((props: IProps) => {
             onDoubleClick: () => {
               if (record.prefixOnly) {
                 openPrefixEditor(record);
-                loadKeysByPrefixName(record.name);
+                openLoadKeysByPrefixModal(record.name);
               }
             },
           })}
