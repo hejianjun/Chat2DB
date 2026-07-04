@@ -33,9 +33,6 @@ public class McpProperties {
         /** Allows DDL statements through the dangerous DDL tool. */
         private boolean allowDdl = false;
 
-        /** Requires callers to pass confirm=true for P2 operations. */
-        private boolean requireConfirmParam = true;
-
         /** Page size used when the caller does not provide one. */
         private int defaultPageSize = 100;
 

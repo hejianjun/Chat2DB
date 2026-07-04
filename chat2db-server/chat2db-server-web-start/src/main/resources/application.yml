@@ -70,7 +70,6 @@ chat2db:
       read-only: true
       allow-write: false
       allow-ddl: false
-      require-confirm-param: true
       default-page-size: 100
       max-rows: 1000
 

@@ -76,7 +76,7 @@ public class SqlGuard {
         }
     }
 
-    public void requireWriteAllowed(Long dataSourceId, Boolean confirm) {
+    public void requireWriteAllowed(Long dataSourceId) {
         // Production datasources remain protected even if write tools are enabled in configuration.
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 write operations are disabled for Release/production datasources.");
@@ -85,10 +85,9 @@ public class SqlGuard {
         if (!sqlConfig.isAllowWrite()) {
             throw new IllegalStateException("P2 write operations are disabled. Set chat2db.mcp.sql.allow-write=true to enable.");
         }
-        requireConfirm(confirm, sqlConfig);
     }
 
-    public void requireDdlAllowed(Long dataSourceId, Boolean confirm) {
+    public void requireDdlAllowed(Long dataSourceId) {
         // DDL is guarded separately from DML because schema changes are higher risk.
         if (isReleaseDatasource(dataSourceId)) {
             throw new IllegalStateException("P2 DDL operations are disabled for Release/production datasources.");
@@ -97,7 +96,6 @@ public class SqlGuard {
         if (!sqlConfig.isAllowDdl()) {
             throw new IllegalStateException("P2 DDL operations are disabled. Set chat2db.mcp.sql.allow-ddl=true to enable.");
         }
-        requireConfirm(confirm, sqlConfig);
     }
 
     public int normalizePageSize(Integer pageSize) {
@@ -150,12 +148,6 @@ public class SqlGuard {
     private boolean isReleaseText(String text) {
         String normalized = StringUtils.lowerCase(StringUtils.trimToEmpty(text), Locale.ROOT);
         return StringUtils.containsAny(normalized, "release", "prod", "production", "正式", "生产");
-    }
-
-    private void requireConfirm(Boolean confirm, Sql sqlConfig) {
-        if (sqlConfig.isRequireConfirmParam() && !Boolean.TRUE.equals(confirm)) {
-            throw new IllegalArgumentException("This P2 operation requires user confirmation. Call again with confirm=true after the MCP client confirmation dialog.");
-        }
     }
 
     private List<String> parseSql(String sql) {

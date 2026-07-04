@@ -33,7 +33,6 @@ export default {
   'setting.label.mcpToken': 'MCP Token',
   'setting.label.mcpAllowWrite': 'P2書き込み操作を許可',
   'setting.label.mcpAllowDdl': 'P2 DDL操作を許可',
-  'setting.label.mcpRequireConfirm': 'P2操作にconfirm=trueを要求',
   'setting.option.mcpAuthNone': '認証なし',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': '適用',

@@ -14,7 +14,6 @@ type McpAuthType = 'none' | 'bearer';
 interface IMcpSqlConfig {
   allowWrite?: boolean;
   allowDdl?: boolean;
-  requireConfirmParam?: boolean;
 }
 
 interface IMcpServerConfig {
@@ -29,7 +28,6 @@ export default function McpSetting() {
   const [mcpToken, setMcpToken] = useState('');
   const [allowWrite, setAllowWrite] = useState(false);
   const [allowDdl, setAllowDdl] = useState(false);
-  const [requireConfirmParam, setRequireConfirmParam] = useState(true);
   const [mcpStatus, setMcpStatus] = useState<IMcpStatus>();
   const [statusLoading, setStatusLoading] = useState(false);
   const mcpAddress = useMemo(() => {
@@ -43,12 +41,13 @@ export default function McpSetting() {
       }
       try {
         const config = JSON.parse(res.content) as IMcpServerConfig;
+        // Remove the retired flag when an older saved configuration is applied again.
+        delete (config.sql as (IMcpSqlConfig & { requireConfirmParam?: boolean }) | undefined)?.requireConfirmParam;
         setStoredConfig(config);
         setMcpAuthType(config.authType || 'none');
         setMcpToken(config.token || '');
         setAllowWrite(Boolean(config.sql?.allowWrite));
         setAllowDdl(Boolean(config.sql?.allowDdl));
-        setRequireConfirmParam(config.sql?.requireConfirmParam !== false);
       } catch {
         setStoredConfig({});
       }
@@ -83,7 +82,6 @@ export default function McpSetting() {
           ...storedConfig.sql,
           allowWrite,
           allowDdl,
-          requireConfirmParam,
         },
       }),
     });
@@ -137,10 +135,6 @@ export default function McpSetting() {
       <div className={styles.title}>{i18n('setting.label.mcpAllowDdl')}</div>
       <div className={classnames(styles.content, styles.chatGPTKey)}>
         <Switch checked={allowDdl} onChange={setAllowDdl} />
-      </div>
-      <div className={styles.title}>{i18n('setting.label.mcpRequireConfirm')}</div>
-      <div className={classnames(styles.content, styles.chatGPTKey)}>
-        <Switch checked={requireConfirmParam} onChange={setRequireConfirmParam} />
       </div>
       <div className={styles.bottomButton}>
         <Button type="primary" onClick={saveMcpConfig}>

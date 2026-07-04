@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.service.ConfigService;
 import ai.chat2db.server.domain.repository.Dbutils;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -64,9 +65,6 @@ public class McpServerConfigService {
         if (sql.getAllowDdl() != null) {
             effective.setAllowDdl(sql.getAllowDdl());
         }
-        if (sql.getRequireConfirmParam() != null) {
-            effective.setRequireConfirmParam(sql.getRequireConfirmParam());
-        }
         if (sql.getDefaultPageSize() != null) {
             effective.setDefaultPageSize(sql.getDefaultPageSize());
         }
@@ -81,7 +79,6 @@ public class McpServerConfigService {
         copy.setReadOnly(source.isReadOnly());
         copy.setAllowWrite(source.isAllowWrite());
         copy.setAllowDdl(source.isAllowDdl());
-        copy.setRequireConfirmParam(source.isRequireConfirmParam());
         copy.setDefaultPageSize(source.getDefaultPageSize());
         copy.setMaxRows(source.getMaxRows());
         return copy;
@@ -110,11 +107,11 @@ public class McpServerConfigService {
     }
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class McpSqlConfig {
         private Boolean readOnly;
         private Boolean allowWrite;
         private Boolean allowDdl;
-        private Boolean requireConfirmParam;
         private Integer defaultPageSize;
         private Integer maxRows;
     }

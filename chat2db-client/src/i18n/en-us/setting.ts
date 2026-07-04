@@ -29,7 +29,6 @@ export default {
   'setting.label.mcpToken': 'MCP Token',
   'setting.label.mcpAllowWrite': 'Allow P2 Write Operations',
   'setting.label.mcpAllowDdl': 'Allow P2 DDL Operations',
-  'setting.label.mcpRequireConfirm': 'Require confirm=true for P2',
   'setting.option.mcpAuthNone': 'No Auth',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': 'Apply',

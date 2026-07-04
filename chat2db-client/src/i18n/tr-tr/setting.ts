@@ -33,7 +33,6 @@ export default {
   'setting.label.mcpToken': 'MCP Token',
   'setting.label.mcpAllowWrite': 'P2 Yazma İşlemlerine İzin Ver',
   'setting.label.mcpAllowDdl': 'P2 DDL İşlemlerine İzin Ver',
-  'setting.label.mcpRequireConfirm': 'P2 için confirm=true gerektir',
   'setting.option.mcpAuthNone': 'Kimlik doğrulama yok',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': 'Uygula',

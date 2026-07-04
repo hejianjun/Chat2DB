@@ -29,7 +29,6 @@ export default {
   'setting.label.mcpToken': 'MCP Token',
   'setting.label.mcpAllowWrite': '允许 P2 写操作',
   'setting.label.mcpAllowDdl': '允许 P2 DDL 操作',
-  'setting.label.mcpRequireConfirm': 'P2 操作需要 confirm=true',
   'setting.option.mcpAuthNone': '无认证',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': '应用',

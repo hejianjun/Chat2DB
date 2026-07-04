@@ -47,7 +47,7 @@ public class DangerousSqlTools {
                                 @McpToolParam(description = "Expected updated row count for each SQL item. Must have the same size as sqlList.") List<Integer> expectedUpdateCounts) {
         return connectionScope.run(datasourceUri, databaseName, schemaName,
                 resolvedDataSource -> {
-                    sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId(), true);
+                    sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId());
                     sqlGuard.requireWriteSqlList(sqlList);
                     sqlGuard.requireExpectedUpdateCounts(sqlList, expectedUpdateCounts);
                     PreparedSqlChange change = preparedSqlChangeStore.prepare("UPDATE", datasourceUri, resolvedDataSource,
@@ -65,7 +65,7 @@ public class DangerousSqlTools {
                              @McpToolParam(description = "DDL SQL") String sql) {
         return connectionScope.run(datasourceUri, databaseName, schemaName,
                 resolvedDataSource -> {
-                    sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId(), true);
+                    sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId());
                     sqlGuard.requireSingleDdlSql(sql);
                     PreparedSqlChange change = preparedSqlChangeStore.prepare("DDL", datasourceUri, resolvedDataSource,
                         databaseName, schemaName, List.of(sql), null);
@@ -81,14 +81,14 @@ public class DangerousSqlTools {
         return connectionScope.run(change.getDatasourceUri(), change.getDatabaseName(), change.getSchemaName(),
             resolvedDataSource -> {
                 if ("UPDATE".equals(change.getOperationType())) {
-                    sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId(), true);
+                    sqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId());
                     sqlGuard.requireWriteSqlList(change.getSqlList());
                     sqlGuard.requireExpectedUpdateCounts(change.getSqlList(), change.getExpectedUpdateCounts());
                     return resultFormatter.format(dlTemplateService.executeBatchUpdate(
                         batchUpdateParam(resolvedDataSource.getDataSourceId(), change.getDatabaseName(),
                             change.getSchemaName(), change.getSqlList(), change.getExpectedUpdateCounts())));
                 }
-                sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId(), true);
+                sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId());
                 sqlGuard.requireSingleDdlSql(change.getSqlList().get(0));
                 return resultFormatter.format(dlTemplateService.execute(executeParam(resolvedDataSource.getDataSourceId(),
                     change.getDatabaseName(), change.getSchemaName(), change.getSqlList().get(0))));
