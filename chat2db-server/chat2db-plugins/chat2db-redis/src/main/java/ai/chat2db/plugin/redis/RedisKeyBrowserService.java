@@ -214,25 +214,23 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     private CompletableFuture<RedisKeyScanResult> scanKeyInfoAsync(RedisAsyncCommands<String, String> commands,
                                                                    String pattern, String cursor, long count,
                                                                    Consumer<List<RedisKeyInfo>> batchConsumer) {
-        ScanArgs scanArgs = new ScanArgs().limit(KEY_SCAN_BATCH_SIZE);
-        if (StringUtils.isNotBlank(pattern)) {
-            scanArgs.match(pattern);
-        }
         RedisKeyInfoBatchEmitter emitter = new RedisKeyInfoBatchEmitter(batchConsumer);
-        return scanKeyInfoAsync(commands, scanArgs, buildScanCursor(cursor), count, 0, emitter);
+        return scanKeyInfoAsync(commands, pattern, buildScanCursor(cursor), count, 0, KEY_SCAN_BATCH_SIZE, emitter);
     }
 
     private CompletableFuture<RedisKeyScanResult> scanKeyInfoAsync(RedisAsyncCommands<String, String> commands,
-                                                                   ScanArgs scanArgs, ScanCursor scanCursor,
-                                                                   long count, long emitted,
+                                                                   String pattern, ScanCursor scanCursor, long count,
+                                                                   long emitted, int scanCount,
                                                                    RedisKeyInfoBatchEmitter emitter) {
         if (emitted >= count) {
             return emitter.finish().thenApply(ignored -> buildScanResult(scanCursor, emitted));
         }
+        ScanArgs scanArgs = buildScanArgs(pattern, scanCount);
         return commands.scan(scanCursor, scanArgs).toCompletableFuture()
                 .thenCompose(result -> {
                     List<String> keys = result.getKeys();
                     long nextEmitted = emitted + keys.size();
+                    int nextScanCount = nextScanCount(scanCount, keys.isEmpty());
                     ScanCursor nextCursor = ScanCursor.of(result.getCursor());
                     nextCursor.setFinished(result.isFinished());
                     boolean shouldStop = result.isFinished() || nextEmitted >= count;
@@ -242,7 +240,8 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                                     return emitter.finish()
                                             .thenApply(unused -> buildScanResult(nextCursor, nextEmitted));
                                 }
-                                return scanKeyInfoAsync(commands, scanArgs, nextCursor, count, nextEmitted, emitter);
+                                return scanKeyInfoAsync(commands, pattern, nextCursor, count, nextEmitted,
+                                        nextScanCount, emitter);
                             });
                 });
     }
@@ -250,20 +249,18 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
                                                                     String pattern, String cursor, long count,
                                                                     Consumer<List<String>> batchConsumer) {
-        ScanArgs scanArgs = new ScanArgs().limit(KEY_SCAN_BATCH_SIZE);
-        if (StringUtils.isNotBlank(pattern)) {
-            scanArgs.match(pattern);
-        }
-        return scanKeyNamesAsync(commands, scanArgs, buildScanCursor(cursor), count, 0, batchConsumer);
+        return scanKeyNamesAsync(commands, pattern, buildScanCursor(cursor), count, 0, KEY_SCAN_BATCH_SIZE,
+                batchConsumer);
     }
 
     private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
-                                                                    ScanArgs scanArgs, ScanCursor scanCursor,
-                                                                    long count, long emitted,
+                                                                    String pattern, ScanCursor scanCursor, long count,
+                                                                    long emitted, int scanCount,
                                                                     Consumer<List<String>> batchConsumer) {
         if (emitted >= count) {
             return CompletableFuture.completedFuture(buildScanResult(scanCursor, emitted));
         }
+        ScanArgs scanArgs = buildScanArgs(pattern, scanCount);
         return commands.scan(scanCursor, scanArgs).toCompletableFuture()
                 .thenCompose(result -> {
                     List<String> keys = result.getKeys();
@@ -276,8 +273,24 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                     if (result.isFinished() || nextEmitted >= count) {
                         return CompletableFuture.completedFuture(buildScanResult(nextCursor, nextEmitted));
                     }
-                    return scanKeyNamesAsync(commands, scanArgs, nextCursor, count, nextEmitted, batchConsumer);
+                    return scanKeyNamesAsync(commands, pattern, nextCursor, count, nextEmitted,
+                            nextScanCount(scanCount, keys.isEmpty()), batchConsumer);
                 });
+    }
+
+    private ScanArgs buildScanArgs(String pattern, int scanCount) {
+        ScanArgs scanArgs = new ScanArgs().limit(scanCount);
+        if (StringUtils.isNotBlank(pattern)) {
+            scanArgs.match(pattern);
+        }
+        return scanArgs;
+    }
+
+    private int nextScanCount(int currentScanCount, boolean emptyBatch) {
+        if (!emptyBatch) {
+            return KEY_SCAN_BATCH_SIZE;
+        }
+        return Math.min(currentScanCount * 2, KEY_SCAN_MAX_BATCH_SIZE);
     }
 
     private CompletableFuture<RedisKeyScanResult> queryExactKeyAsync(RedisAsyncCommands<String, String> commands,

@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class RedisConnectionHelper {
 
     static final int KEY_SCAN_BATCH_SIZE = 1000;
+    static final int KEY_SCAN_MAX_BATCH_SIZE = 10000;
     static final int KEY_INFO_EMIT_BATCH_SIZE = 50;
     static final int VALUE_PREVIEW_LIMIT = 5;
     static final int VALUE_TEXT_LIMIT = 200;
