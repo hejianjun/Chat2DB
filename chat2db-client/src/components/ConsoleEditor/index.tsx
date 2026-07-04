@@ -23,6 +23,7 @@ import MonacoEditor, {
   ISelectedContentInfo,
   registerVinPasteTransform,
 } from '../MonacoEditor';
+import { extractTableNames } from '../MonacoEditor/syntax-parser/plugin/sql-parser';
 import OperationLine from './components/OperationLine';
 import styles from './index.less';
 
@@ -72,6 +73,7 @@ export const IntelligentEditorContext = createContext<IIntelligentEditorContext>
 
 interface IAiCompletionContext {
   message: string;
+  tableNames: string[];
   ext?: string;
   replaceRange: any;
   originalText: string;
@@ -338,7 +340,8 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
     );
 
     return {
-      message: [`${selectedText ? '选中 SQL' : '当前语句'}:`, statementSql || '(空)'].join('\n'),
+      message: statementSql,
+      tableNames: extractTableNames(statementSql),
       replaceRange,
       originalText: statementSql,
     };
@@ -377,6 +380,7 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
       const task = requestAiSqlCompletion({
         boundInfo,
         message: completionContext.message,
+        tableNames: completionContext.tableNames,
         ext: completionContext.ext,
       });
       aiCompletionTaskRef.current = task;

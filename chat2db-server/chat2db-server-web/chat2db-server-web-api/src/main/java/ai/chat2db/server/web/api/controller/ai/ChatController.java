@@ -208,10 +208,14 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    private ChatEvent determineInitialEvent(ChatQueryRequest request) {
+    ChatEvent determineInitialEvent(ChatQueryRequest request) {
         boolean hasTables = CollectionUtils.isNotEmpty(request.getTableNames());
 
         String promptType = request.getPromptType();
+
+        if (PromptType.SQL_COMPLETION.getCode().equals(promptType) && !hasTables) {
+            return ChatEvent.TABLES_NOT_NEEDED;
+        }
 
         if (PromptType.TEXT_GENERATION.getCode().equals(promptType)
                 || PromptType.TITLE_GENERATION.getCode().equals(promptType)

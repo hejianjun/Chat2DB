@@ -6,6 +6,7 @@ import { IBoundInfo } from '@/typings';
 export interface IAiSqlCompletionParams {
   boundInfo: IBoundInfo;
   message: string;
+  tableNames?: string[];
   ext?: string;
 }
 
@@ -41,7 +42,7 @@ export const requestAiSqlCompletion = (params: IAiSqlCompletionParams): IAiSqlCo
     dataSourceId: params.boundInfo.dataSourceId,
     databaseName: params.boundInfo.databaseName,
     schemaName: params.boundInfo.schemaName,
-    tableNames: (params.boundInfo as any).tableNames,
+    tableNames: params.tableNames,
     ext: params.ext,
   });
   const eventSource = createSSEConnection({ url: `/api/ai/chat?${query}`, uid: sessionId });
