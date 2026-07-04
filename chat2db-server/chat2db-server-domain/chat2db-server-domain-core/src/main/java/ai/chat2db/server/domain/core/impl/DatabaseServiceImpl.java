@@ -315,7 +315,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             return tableNames.stream()
                     .map(tableName -> queryTableDdl(dataSourceId, databaseName, schemaName, tableName))
                     .filter(StringUtils::isNotBlank)
-                    .collect(Collectors.joining("\n"));
+                    .collect(Collectors.joining("\n\n"));
         } catch (Exception e) {
             log.error("query tables:{} error, do nothing", tableNames);
         }
@@ -346,7 +346,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             return tables.stream()
                     .map(sqlBuilder::buildCreateTableSql)
                     .filter(StringUtils::isNotBlank)
-                    .collect(Collectors.joining("\n"));
+                    .collect(Collectors.joining("\n\n"));
         } catch (Exception e) {
             log.error("search table columns error, keyword:{}", keyword, e);
         }
