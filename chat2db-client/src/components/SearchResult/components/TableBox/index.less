@@ -29,6 +29,9 @@
       background-color: var(--color-hover-bg);
     }
   }
+  .tableWithColumnComment {
+    --header-row-height: 44px;
+  }
   :global {
     .table{
       overflow: hidden;
@@ -104,7 +107,7 @@
       height: 100%;
     }
     .art-table-body {
-      height: calc(100% - 32px);
+      height: calc(100% - var(--header-row-height));
       overflow-y: auto !important;
     }
   }
@@ -201,6 +204,26 @@
 
 .table {
   height: 100%;
+}
+
+.columnHeader {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 16px;
+}
+
+.columnHeaderName,
+.columnHeaderComment {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.columnHeaderComment {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: normal;
+  line-height: 14px;
 }
 
 .tableItem {

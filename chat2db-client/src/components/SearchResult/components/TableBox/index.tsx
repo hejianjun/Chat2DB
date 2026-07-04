@@ -666,7 +666,7 @@ export default function TableBox(props: ITableProps) {
   // 表格 列配置
   const columns: ArtColumn[] = useMemo(() => {
     return (queryResultData.headerList || []).map((item, colIndex) => {
-      const { dataType, name } = item;
+      const { comment, dataType, name } = item;
       const isNumber = dataType === TableDataType.NUMERIC;
       const isNumericalOrder = dataType === TableDataType.CHAT2DB_ROW_NUMBER;
       const colId = `${preCode}${colIndex}${name}`;
@@ -721,7 +721,18 @@ export default function TableBox(props: ITableProps) {
         code: colId,
         name: name,
         key: name,
-        // title: <div>{name}</div>,
+        title: (
+          <div className={styles.columnHeader}>
+            <div className={styles.columnHeaderName} title={name}>
+              {name}
+            </div>
+            {comment?.trim() && (
+              <div className={styles.columnHeaderComment} title={comment}>
+                {comment}
+              </div>
+            )}
+          </div>
+        ),
         render: (value: any, rowData) => {
           const rowId = rowData[colNoCode];
           const content = renderTableCellValue(value);
@@ -761,6 +772,8 @@ export default function TableBox(props: ITableProps) {
       };
     });
   }, [queryResultData.headerList, editingCell, editingData, curOperationRowNo, oldDataList]);
+
+  const hasColumnComment = queryResultData.headerList?.some((item) => item.comment?.trim());
 
   const { updateTableData, handleCreateData, handleDeleteData } = useCurdTableData({
     tableData,
@@ -1127,7 +1140,9 @@ export default function TableBox(props: ITableProps) {
                   <>
                     {tableLoading && <Spin className={styles.supportBaseTableSpin} />}
                     <SupportBaseTable
-                      className={classnames('supportBaseTable', props.className, styles.table)}
+                      className={classnames('supportBaseTable', props.className, styles.table, {
+                        [styles.tableWithColumnComment]: hasColumnComment,
+                      })}
                       components={{ EmptyContent: () => <h2>{i18n('common.text.noData')}</h2> }}
                       isStickyHead
                       stickyTop={31}
