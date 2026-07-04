@@ -49,7 +49,7 @@ const SEARCH_MODE_PREFIX = 'prefix';
 const RUNNING_STATUS = 'RUNNING';
 const DONE_STATUS = 'DONE';
 const PREFIX_STATUS_POLL_INTERVAL = 3000;
-const DEFAULT_PREFIX_SORT = { field: 'displayName', order: 'ascend' as const };
+const DEFAULT_PREFIX_SORT = { field: 'keyCount', order: 'descend' as const };
 const REDIS_PREFIX_DELIMITERS = ':_-.';
 
 interface IHashFieldRow {
@@ -750,7 +750,8 @@ const RedisDataView = memo((props: IProps) => {
           if (record.isGroup) {
             return (
               <span className={styles.groupName}>
-                {text} <span>({record.count})</span>
+                {text}
+                {searchMode !== SEARCH_MODE_PREFIX && <span> ({record.count})</span>}
               </span>
             );
           }
@@ -761,6 +762,18 @@ const RedisDataView = memo((props: IProps) => {
           );
         },
       },
+      ...(searchMode === SEARCH_MODE_PREFIX
+        ? [
+            {
+              title: 'Key 数量',
+              dataIndex: 'keyCount',
+              width: 120,
+              sorter: true,
+              sortOrder: sortInfo?.field === 'keyCount' ? sortInfo.order : undefined,
+              render: (keyCount?: number) => keyCount ?? 0,
+            },
+          ]
+        : []),
       {
         title: '注释',
         dataIndex: 'comment',
@@ -826,7 +839,7 @@ const RedisDataView = memo((props: IProps) => {
         render: (ttl, record) => (record.isGroup ? null : formatTtl(ttl)),
       },
     ],
-    [sortInfo],
+    [searchMode, sortInfo],
   );
 
   // 表格排序变化回调，三次点击循环：升序 → 降序 → 取消
@@ -1306,6 +1319,9 @@ function getLeafValue(node: IRedisKeyRow, field: string): number | string {
   if (field === 'ttl') {
     return node.ttl === undefined || node.ttl === null ? -1 : node.ttl;
   }
+  if (field === 'keyCount') {
+    return node.keyCount ?? node.count ?? 0;
+  }
   return '';
 }
 
@@ -1342,6 +1358,9 @@ function getGroupAggValue(node: IRedisKeyRow, field: string): number | string {
       }
     }
     return minTtl === Infinity ? -1 : minTtl;
+  }
+  if (field === 'keyCount') {
+    return node.keyCount ?? node.count ?? 0;
   }
   return '';
 }
