@@ -167,7 +167,7 @@ const DataTransferModal = memo(() => {
     taskSubscriptionRef.current = taskService.subscribeTask({
       id: taskId,
       onMessage: (task) => {
-        const processedCount = parseInt(task.taskProgress || '0', 10);
+        const processedCount = task.taskProgress || 0;
         setTransferProgress(processedCount);
         if (task.content && task.content !== lastTaskContentRef.current) {
           lastTaskContentRef.current = task.content;

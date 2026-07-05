@@ -156,7 +156,7 @@ public class TaskBizService {
         param.setTableName(tableName);
         param.setDataSourceId(datasourceId);
         param.setUserId(ContextUtils.getUserId());
-        param.setTaskProgress("0");
+        param.setTaskProgress(0);
         Long taskId = taskService.create(param);
         return DataResult.of(taskId);
     }
@@ -212,7 +212,7 @@ public class TaskBizService {
     private void updateProgressCount(Long taskId, int processedCount) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(taskId);
-        updateParam.setTaskProgress(String.valueOf(processedCount));
+        updateParam.setTaskProgress(processedCount);
         taskService.updateStatus(updateParam);
     }
 

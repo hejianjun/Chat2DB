@@ -79,7 +79,7 @@ public class TransferBizService {
         param.setTableName(StringUtils.join(request.getTableNames(), ","));
         param.setDataSourceId(request.getTargetDataSourceId());
         param.setUserId(ContextUtils.getUserId());
-        param.setTaskProgress("0");
+        param.setTaskProgress(0);
         return taskService.create(param);
     }
 
@@ -298,7 +298,7 @@ public class TransferBizService {
     private void updateProgressCount(Long taskId, int processedCount) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(taskId);
-        updateParam.setTaskProgress(String.valueOf(processedCount));
+        updateParam.setTaskProgress(processedCount);
         taskService.updateStatus(updateParam);
     }
 

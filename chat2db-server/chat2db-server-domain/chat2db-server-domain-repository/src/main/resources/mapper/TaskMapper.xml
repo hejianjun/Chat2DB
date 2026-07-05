@@ -3,7 +3,9 @@
 <mapper namespace="ai.chat2db.server.domain.repository.mapper.TaskMapper">
 
     <select id="pageQuery" resultType="ai.chat2db.server.domain.repository.entity.TaskDO">
-        select ID,GMT_CREATE,GMT_MODIFIED,DATA_SOURCE_ID,DATABASE_NAME,SCHEMA_NAME,TABLE_NAME,DELETED,USER_ID,TASK_TYPE,TASK_STATUS,TASK_PROGRESS,TASK_NAME,DOWNLOAD_URL,CONTENT
+        <!-- Keep TOTAL_COUNT in the explicit projection so task-list progress matches selectById/SSE responses. -->
+        select ID,GMT_CREATE,GMT_MODIFIED,DATA_SOURCE_ID,DATABASE_NAME,SCHEMA_NAME,TABLE_NAME,DELETED,USER_ID,
+               TASK_TYPE,TASK_STATUS,TASK_PROGRESS,TOTAL_COUNT,TASK_NAME,DOWNLOAD_URL,CONTENT
         from TASK
         <where>
             <if test="param.dataSourceId != null ">

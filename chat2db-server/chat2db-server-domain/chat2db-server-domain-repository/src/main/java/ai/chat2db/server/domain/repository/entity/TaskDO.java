@@ -82,7 +82,7 @@ public class TaskDO implements Serializable {
     /**
      * task progress
      */
-    private String taskProgress;
+    private Integer taskProgress;
 
     /**
      * task name
@@ -98,5 +98,10 @@ public class TaskDO implements Serializable {
      * task content
      */
     private String content;
+
+    /**
+     * total work count, zero means unknown
+     */
+    private Integer totalCount;
 
 }

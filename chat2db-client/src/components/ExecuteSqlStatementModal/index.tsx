@@ -92,7 +92,7 @@ const ExecuteSqlStatementModal = () => {
     taskSubscriptionRef.current = taskService.subscribeTask({
       id: taskId,
       onMessage: (task) => {
-        const latestProcessedCount = parseInt(task.taskProgress || '0', 10) || 0;
+        const latestProcessedCount = task.taskProgress || 0;
         setProcessedCount(latestProcessedCount);
         setProgress((prev) => {
           if (totalCount > 0) {

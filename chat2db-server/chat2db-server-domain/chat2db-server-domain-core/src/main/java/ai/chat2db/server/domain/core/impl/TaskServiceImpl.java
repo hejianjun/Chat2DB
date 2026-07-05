@@ -43,6 +43,12 @@ public class TaskServiceImpl implements TaskService {
     @Override
     public Long create(TaskCreateParam param) {
         TaskDO taskDO = taskConverter.todo(param);
+        if (taskDO.getTaskProgress() == null) {
+            taskDO.setTaskProgress(0);
+        }
+        if (taskDO.getTotalCount() == null) {
+            taskDO.setTotalCount(0);
+        }
         taskDO.setDeleted(DeletedTypeEnum.N.name());
         taskDO.setTaskStatus(TaskStatusEnum.INIT.name());
         MapperUtils.getTaskMapper().insert(taskDO);
@@ -55,8 +61,18 @@ public class TaskServiceImpl implements TaskService {
         taskDO.setId(param.getId());
         taskDO.setTaskStatus(param.getTaskStatus());
         taskDO.setTaskProgress(param.getTaskProgress());
+        taskDO.setTotalCount(param.getTotalCount());
         taskDO.setDownloadUrl(param.getDownloadUrl());
         taskDO.setContent(param.getContent());
+        if (TaskStatusEnum.FINISH.name().equals(param.getTaskStatus()) && param.getTotalCount() == null) {
+            TaskDO currentTask = MapperUtils.getTaskMapper().selectById(param.getId());
+            if (currentTask != null && (currentTask.getTotalCount() == null || currentTask.getTotalCount() <= 0)) {
+                Integer finalProgress = param.getTaskProgress() != null
+                        ? param.getTaskProgress()
+                        : currentTask.getTaskProgress();
+                taskDO.setTotalCount(finalProgress == null ? 0 : finalProgress);
+            }
+        }
         MapperUtils.getTaskMapper().updateById(taskDO);
         if (taskEventPublisher != null) {
             taskEventPublisher.publish(get(param.getId()));
@@ -74,7 +90,9 @@ public class TaskServiceImpl implements TaskService {
         page.setOrders(Lists.newArrayList(OrderItem.desc("gmt_create")));
         IPage<TaskDO> iPage = MapperUtils.getTaskMapper().pageQuery(page, param);
         if (iPage != null) {
-            return ServicePage.of(taskConverter.toModel(iPage.getRecords()), iPage.getTotal(), param.getPageNo(), param.getPageSize());
+            List<Task> tasks = taskConverter.toModel(iPage.getRecords());
+            tasks.forEach(this::normalizeFinishedProgress);
+            return ServicePage.of(tasks, iPage.getTotal(), param.getPageNo(), param.getPageSize());
         }
         return ServicePage.empty(param.getPageNo(), param.getPageSize());
     }
@@ -82,7 +100,19 @@ public class TaskServiceImpl implements TaskService {
     @Override
     public Task get(Long id) {
         TaskDO task = MapperUtils.getTaskMapper().selectById(id);
-        return taskConverter.toModel(task);
+        return normalizeFinishedProgress(taskConverter.toModel(task));
+    }
+
+    private Task normalizeFinishedProgress(Task task) {
+        // Older tasks may not have a total count; their final processed count is the exact total after completion.
+        if (task != null
+                && TaskStatusEnum.FINISH.name().equals(task.getTaskStatus())
+                && (task.getTotalCount() == null || task.getTotalCount() <= 0)
+                && task.getTaskProgress() != null
+                && task.getTaskProgress() > 0) {
+            task.setTotalCount(task.getTaskProgress());
+        }
+        return task;
     }
 
     @Override

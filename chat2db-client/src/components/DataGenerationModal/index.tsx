@@ -381,7 +381,9 @@ const DataGenerationModal: React.FC = () => {
       id: taskId,
       onMessage: (task) => {
         if (task) {
-          const progress = parseInt(task.taskProgress || '0', 10);
+          const processedCount = task.taskProgress || 0;
+          const progress =
+            task.totalCount > 0 ? Math.min(Math.round((processedCount / task.totalCount) * 100), 100) : 0;
           setTaskProgress(progress);
 
           if (task.taskStatus === 'FINISH') {

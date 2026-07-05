@@ -188,7 +188,7 @@ export default function TableBox(props: ITableProps) {
       fallbackInterval: 500,
       onMessage: (task: ITask) => {
         if (task) {
-          const processedCount = parseInt(task.taskProgress || '0', 10);
+          const processedCount = task.taskProgress || 0;
           setExportProgress(processedCount);
 
           if (task.taskStatus === 'FINISH') {

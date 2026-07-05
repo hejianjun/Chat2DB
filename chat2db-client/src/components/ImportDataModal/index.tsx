@@ -227,7 +227,7 @@ const ImportDataModal = () => {
       id: taskId,
       onMessage: (task) => {
         if (task) {
-          const processedCount = parseInt(task.taskProgress || '0', 10);
+          const processedCount = task.taskProgress || 0;
           setImportProgress(processedCount);
           addLog(`Progress: ${processedCount} rows imported`);
 

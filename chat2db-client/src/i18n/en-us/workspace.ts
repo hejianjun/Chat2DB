@@ -249,6 +249,8 @@ export default {
   'workspace.taskCenter.database': 'Database',
   'workspace.taskCenter.table': 'Task Name',
   'workspace.taskCenter.progress': 'Progress',
+  'workspace.taskCenter.progressCount': 'Processed {1} / {2}',
+  'workspace.taskCenter.processedCount': 'Processed {1}',
   'workspace.taskCenter.type': 'Type',
   'workspace.taskCenter.status': 'Status',
 };

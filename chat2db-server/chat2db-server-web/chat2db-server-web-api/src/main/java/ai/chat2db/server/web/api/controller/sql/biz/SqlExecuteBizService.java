@@ -95,7 +95,7 @@ public class SqlExecuteBizService {
         param.setSchemaName(request.getSchemaName());
         param.setDataSourceId(request.getDataSourceId());
         param.setUserId(ContextUtils.getUserId());
-        param.setTaskProgress("0");
+        param.setTaskProgress(0);
         Long taskId = taskService.create(param);
         return DataResult.of(taskId);
     }
@@ -340,7 +340,7 @@ public class SqlExecuteBizService {
     private void updateProgressCount(Long taskId, int processedCount) {
         TaskUpdateParam updateParam = new TaskUpdateParam();
         updateParam.setId(taskId);
-        updateParam.setTaskProgress(String.valueOf(processedCount));
+        updateParam.setTaskProgress(processedCount);
         taskService.updateStatus(updateParam);
     }
 

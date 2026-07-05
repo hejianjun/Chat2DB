@@ -12,7 +12,8 @@ export interface ITask {
   userId: number;
   taskType: string;
   taskStatus: string;
-  taskProgress: string;
+  taskProgress: number;
+  totalCount: number;
   taskName: string;
   downloadUrl: string;
   content?: string;

@@ -245,6 +245,8 @@ export default {
   'workspace.taskCenter.database': '数据库',
   'workspace.taskCenter.table': '任务名',
   'workspace.taskCenter.progress': '进度',
+  'workspace.taskCenter.progressCount': '已处理 {1} / {2} 条',
+  'workspace.taskCenter.processedCount': '已处理 {1} 条',
   'workspace.taskCenter.type': '类型',
   'workspace.taskCenter.status': '状态',
 };

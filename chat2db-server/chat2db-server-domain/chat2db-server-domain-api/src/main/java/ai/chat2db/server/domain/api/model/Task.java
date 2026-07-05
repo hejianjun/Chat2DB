@@ -65,7 +65,7 @@ public class Task implements Serializable {
     /**
      * task progress
      */
-    private String taskProgress;
+    private Integer taskProgress;
 
     /**
      * task name

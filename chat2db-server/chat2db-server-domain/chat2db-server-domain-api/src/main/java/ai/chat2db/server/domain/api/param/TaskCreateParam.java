@@ -38,7 +38,12 @@ public class TaskCreateParam implements Serializable {
     /**
      * task progress
      */
-    private String taskProgress;
+    private Integer taskProgress;
+
+    /**
+     * total work count, zero means unknown
+     */
+    private Integer totalCount;
 
     /**
      * task name

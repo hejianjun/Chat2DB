@@ -172,7 +172,8 @@ ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(r
             taskParam.setTableName(request.getTableName());
             taskParam.setTaskType(TaskTypeEnum.GENERATE_TABLE_DATA.name());
             taskParam.setTaskName("数据生成 - " + request.getTableName());
-            taskParam.setTaskProgress("0");
+            taskParam.setTaskProgress(0);
+            taskParam.setTotalCount(request.getRowCount() != null ? request.getRowCount() : 100);
 
             Long taskId = taskService.create(taskParam);
             if (taskId == null) {
@@ -467,8 +468,7 @@ ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(r
                 insertBatchData(request, batchData);
                 processedRows += currentBatchSize;
 
-                int progress = (processedRows * 100) / totalRows;
-                updateTaskProgress(taskId, TaskStatusEnum.PROCESSING, progress);
+                updateTaskProgress(taskId, TaskStatusEnum.PROCESSING, processedRows);
             }
 
             log.info("Data generation completed successfully for table: {}", request.getTableName());
@@ -493,7 +493,6 @@ ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(r
                 }
             } else {
                 updateParam.setTaskStatus(TaskStatusEnum.FINISH.name());
-                updateParam.setTaskProgress("100");
             }
             taskService.updateStatus(updateParam);
         } catch (Exception e) {
@@ -594,7 +593,7 @@ ForeignKeyValueProvider foreignKeyValueProvider = buildForeignKeyValueProvider(r
             TaskUpdateParam updateParam = new TaskUpdateParam();
             updateParam.setId(taskId);
             updateParam.setTaskStatus(status.name());
-            updateParam.setTaskProgress(String.valueOf(progress));
+            updateParam.setTaskProgress(progress);
             taskService.updateStatus(updateParam);
         } catch (Exception e) {
             log.error("Failed to update task progress", e);

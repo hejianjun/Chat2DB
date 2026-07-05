@@ -123,18 +123,30 @@ const TaskCenter: React.FC = () => {
       title: i18n('workspace.taskCenter.progress'),
       dataIndex: 'taskProgress',
       key: 'taskProgress',
-      width: 150,
-      render: (progress: string, record: ITask) => {
-        const percent = record.taskStatus === 'FINISH' ? 100 : parseInt(progress || '0', 10);
+      width: 180,
+      render: (progress: number, record: ITask) => {
+        const processedCount = Math.max(progress || 0, 0);
+        const storedTotalCount = Math.max(record.totalCount || 0, 0);
+        // Completed tasks can safely use their final processed count when legacy records have no total.
+        const totalCount =
+          storedTotalCount > 0 || record.taskStatus !== 'FINISH' ? storedTotalCount : processedCount;
+        const hasTotal = totalCount > 0;
+        const percent = hasTotal ? Math.min(Math.round((processedCount / totalCount) * 100), 100) : 0;
         return (
           <div className={styles.progressCell}>
             <Progress
-              percent={isNaN(percent) ? 0 : Math.min(percent, 100)}
+              percent={percent}
               size="small"
+              showInfo={hasTotal}
               status={
                 record.taskStatus === 'ERROR' ? 'exception' : record.taskStatus === 'FINISH' ? 'success' : 'active'
               }
             />
+            <span className={styles.progressCount}>
+              {hasTotal
+                ? i18n('workspace.taskCenter.progressCount', processedCount, totalCount)
+                : i18n('workspace.taskCenter.processedCount', processedCount)}
+            </span>
           </div>
         );
       },
