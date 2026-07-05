@@ -41,4 +41,19 @@ class SaveAiCommentActionTest {
 
         assertNull(tableName);
     }
+
+    @Test
+    void extractCompleteBatchTableObjectsFromTruncatedResponse() {
+        String content = "```json\n{\"tables\":["
+                + "{\"table_name\":\"first\",\"table_comment\":\"first comment\"},"
+                + "{\"table_name\":\"second\",\"table_comment\":\"包含 } 和转义引号 \\\" 的注释\"},"
+                + "{\"table_name\":\"third\",\"table_comment";
+
+        List<String> objects = SaveAiCommentAction.extractCompleteBatchTableObjects(content);
+
+        assertEquals(2, objects.size());
+        assertEquals("{\"table_name\":\"first\",\"table_comment\":\"first comment\"}", objects.get(0));
+        assertEquals("{\"table_name\":\"second\",\"table_comment\":\"包含 } 和转义引号 \\\" 的注释\"}",
+                objects.get(1));
+    }
 }

@@ -1,5 +1,6 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -124,9 +125,63 @@ public class SaveAiCommentAction extends BaseChatAction {
             }
             return tables.toJavaList(BatchTableComment.class);
         } catch (Exception e) {
-            log.error("[SaveAiCommentAction] Failed to parse batch JSON: {}", content, e);
+            List<BatchTableComment> recovered = extractCompleteBatchTableObjects(content).stream()
+                    .map(item -> JSONObject.parseObject(item, BatchTableComment.class))
+                    .filter(item -> StringUtils.isNotBlank(item.getTableName())
+                            && StringUtils.isNotBlank(item.getTableComment()))
+                    .collect(Collectors.toList());
+            if (CollectionUtils.isNotEmpty(recovered)) {
+                log.warn("[SaveAiCommentAction] Batch JSON was incomplete; recovered {} complete table comments",
+                        recovered.size());
+                return recovered;
+            }
+            log.error("[SaveAiCommentAction] Failed to parse batch JSON", e);
             return null;
         }
+    }
+
+    static List<String> extractCompleteBatchTableObjects(String content) {
+        List<String> objects = new ArrayList<>();
+        if (StringUtils.isBlank(content)) {
+            return objects;
+        }
+
+        int tablesKey = content.indexOf("\"tables\"");
+        int arrayStart = tablesKey < 0 ? -1 : content.indexOf('[', tablesKey);
+        if (arrayStart < 0) {
+            return objects;
+        }
+
+        int objectStart = -1;
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = arrayStart + 1; i < content.length(); i++) {
+            char current = content.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (current == '\\') {
+                    escaped = true;
+                } else if (current == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (current == '"') {
+                inString = true;
+            } else if (current == '{') {
+                if (depth++ == 0) {
+                    objectStart = i;
+                }
+            } else if (current == '}' && depth > 0 && --depth == 0) {
+                objects.add(content.substring(objectStart, i + 1));
+                objectStart = -1;
+            } else if (current == ']' && depth == 0) {
+                break;
+            }
+        }
+        return objects;
     }
 
     private String extractBatchJson(String content) {
