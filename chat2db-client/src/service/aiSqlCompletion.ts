@@ -33,6 +33,56 @@ const extractSqlFromContent = (content: string): string => {
     .trim();
 };
 
+const extractSqlComments = (sql: string): string[] => {
+  const comments: string[] = [];
+  let quote: "'" | '"' | '`' | null = null;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    const next = sql[i + 1];
+
+    if (quote) {
+      if (char === quote) {
+        if (next === quote) {
+          i++;
+        } else {
+          quote = null;
+        }
+      } else if (char === '\\') {
+        i++;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '-' && next === '-') {
+      const end = sql.slice(i).search(/[\r\n]/);
+      const commentEnd = end === -1 ? sql.length : i + end;
+      comments.push(sql.slice(i, commentEnd).trimEnd());
+      i = commentEnd - 1;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      const end = sql.indexOf('*/', i + 2);
+      const commentEnd = end === -1 ? sql.length : end + 2;
+      comments.push(sql.slice(i, commentEnd).trimEnd());
+      i = commentEnd - 1;
+    }
+  }
+
+  return comments;
+};
+
+export const restoreMissingSqlComments = (originalSql: string, completedSql: string): string => {
+  const missingComments = extractSqlComments(originalSql).filter((comment) => !completedSql.includes(comment));
+  return missingComments.length > 0 ? `${missingComments.join('\n')}\n${completedSql}` : completedSql;
+};
+
 export const requestAiSqlCompletion = (params: IAiSqlCompletionParams): IAiSqlCompletionTask => {
   const sessionId = uuidv4();
   const query = formatParams({

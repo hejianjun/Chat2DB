@@ -1,7 +1,8 @@
 import Popularize from '@/components/Popularize';
 import i18n from '@/i18n';
 import { IBoundInfo } from '@/typings';
-import { requestAiSqlCompletion, IAiSqlCompletionTask } from '@/service/aiSqlCompletion';
+import { requestAiSqlCompletion, restoreMissingSqlComments, IAiSqlCompletionTask } from '@/service/aiSqlCompletion';
+import { formatSql } from '@/utils/sql';
 import { Modal, Spin, message } from 'antd';
 import React, {
   createContext,
@@ -386,7 +387,16 @@ function ConsoleEditor(props: IProps, ref: ForwardedRef<IConsoleRef>) {
       aiCompletionTaskRef.current = task;
 
       try {
-        const sql = await task.promise;
+        let sql = await task.promise;
+        if (aiCompletionTaskRef.current !== task) {
+          return;
+        }
+
+        if (/[\r\n]/.test(completionContext.originalText) && !/[\r\n]/.test(sql)) {
+          sql = await formatSql(sql, boundInfo.databaseType);
+        }
+        sql = restoreMissingSqlComments(completionContext.originalText, sql);
+
         if (aiCompletionTaskRef.current !== task) {
           return;
         }
