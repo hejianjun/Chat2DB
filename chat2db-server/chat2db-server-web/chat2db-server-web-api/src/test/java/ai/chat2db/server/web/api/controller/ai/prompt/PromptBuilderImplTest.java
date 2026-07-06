@@ -9,9 +9,13 @@ import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 
 class PromptBuilderImplTest {
 
-    private final PromptBuilderImpl promptBuilder = new PromptBuilderImpl(
-            new PromptTemplateRegistry(),
-            new PromptValidator());
+    private final PromptBuilderImpl promptBuilder = createPromptBuilder();
+
+    private static PromptBuilderImpl createPromptBuilder() {
+        PromptTemplateRegistry templateRegistry = new PromptTemplateRegistry();
+        templateRegistry.init();
+        return new PromptBuilderImpl(templateRegistry, new PromptValidator());
+    }
 
     @Test
     void buildNl2SqlWithoutHistoryKeepsInitialTemplate() {
@@ -22,7 +26,8 @@ class PromptBuilderImplTest {
                 .dataSourceType("MYSQL")
                 .build()).build();
 
-        assertTrue(prompt.contains("### SQL input: 查询最近 7 天订单"));
+        assertTrue(prompt.contains("### MYSQL SQL tables, with their properties:"));
+        assertTrue(prompt.contains("CREATE TABLE orders(id bigint, created_at datetime)"));
         assertFalse(prompt.contains("连续对话修正要求"));
         assertFalse(prompt.contains("上一版 SQL"));
     }
@@ -44,5 +49,22 @@ class PromptBuilderImplTest {
         assertFalse(prompt.contains("最近对话历史"));
         assertFalse(prompt.contains("user: 查询订单"));
         assertFalse(prompt.contains("上一版 SQL"));
+    }
+
+    @Test
+    void buildDataExpressionPromptIncludesEnumMockGuidance() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.NL_2_DATA_EXPRESSION)
+                .message("为字段推荐 datafaker 表达式")
+                .schemaDdl("CREATE TABLE user(status tinyint COMMENT '0-禁用，1-启用', name varchar(32))")
+                .dataSourceType("MYSQL")
+                .build()).build();
+
+        assertTrue(prompt.contains("#{Options.option '启用','禁用','待定'}"));
+        assertTrue(prompt.contains("将其中明确给出的候选值原样放入 Options.option"));
+        assertTrue(prompt.contains("#{Options.option '0','1'}"));
+        assertTrue(prompt.contains("#{Name.first_name}"));
+        assertTrue(prompt.contains("#{Date.past '30','DAYS'}"));
+        assertTrue(prompt.contains("#{Number.number_between '1','1000'}"));
     }
 }

@@ -268,6 +268,7 @@ prompts:
       - 公司: #{Company.name}, #{Company.industry}, #{Company.catch_phrase}
       - ID: #{Internet.uuid}, #{Code.isbn10}, #{Code.asin}
       - 布尔: #{Bool.bool}
+      - 枚举: #{Options.option '启用','禁用','待定'}
       
       **要求**:
       1. 根据字段名、数据类型、注释推荐合适的表达式
@@ -276,6 +277,8 @@ prompts:
       4. 如果字段是主键或自增，可以跳过
       5. 如果字段允许 NULL 且没有合适表达式，可以留空
       6. 优先从上面的示例中选择表达式；不要输出未在示例或官方 providers 中确认存在的方法
+      7. 根据字段类型和注释识别枚举字段；将其中明确给出的候选值原样放入 Options.option，不要翻译、改写或补充候选值
+      8. 数字枚举值也使用字符串参数，例如字段注释为“0-禁用，1-启用”时输出 #{Options.option '0','1'}
       
       **输出格式（严格 JSON，不要包含其他文字）**:
       ```json
