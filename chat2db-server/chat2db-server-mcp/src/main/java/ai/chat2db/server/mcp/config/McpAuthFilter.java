@@ -31,14 +31,15 @@ public class McpAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = StringUtils.removeStart(request.getRequestURI(), request.getContextPath());
-        String effectiveToken = getEffectiveToken();
-        boolean mcpPath = isMcpPath(path);
-        boolean skip = !mcpPath || StringUtils.isBlank(effectiveToken);
-        if (mcpPath) {
-            log.info("MCP auth check: uri={}, contextPath={}, path={}, configuredToken={}, tokenLength={}, skipFilter={}",
-                request.getRequestURI(), request.getContextPath(), path, StringUtils.isNotBlank(effectiveToken),
-                StringUtils.length(effectiveToken), skip);
+        if (!isMcpPath(path)) {
+            return true;
         }
+
+        String effectiveToken = getEffectiveToken();
+        boolean skip = StringUtils.isBlank(effectiveToken);
+        log.info("MCP auth check: uri={}, contextPath={}, path={}, configuredToken={}, tokenLength={}, skipFilter={}",
+            request.getRequestURI(), request.getContextPath(), path, StringUtils.isNotBlank(effectiveToken),
+            StringUtils.length(effectiveToken), skip);
         // Leave non-MCP routes untouched and allow tokenless local setups when no token is configured.
         return skip;
     }
