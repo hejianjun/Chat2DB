@@ -53,11 +53,7 @@ function MyNotification() {
     );
 
     const renderDescription = () => {
-      return (
-        <div className={styles.description}>
-          {errorCode} {errorMessage}
-        </div>
-      );
+      return <div className={styles.description}>{errorMessage || errorCode}</div>;
     };
 
     const renderMessage = () => {
