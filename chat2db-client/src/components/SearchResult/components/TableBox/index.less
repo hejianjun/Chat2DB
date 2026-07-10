@@ -77,6 +77,9 @@
     .art-table-row {
       height: 32px;
     }
+    .art-table-body .art-table-row:nth-child(even) {
+      --table-row-bg: var(--color-fill-quaternary);
+    }
     .art-table-header {
       background: transparent !important;
       overflow: hidden !important;
@@ -234,7 +237,7 @@
   position: relative;
   padding-left: 4px;
   user-select: none;
-  background-color: var(--color-bg-base);
+  background-color: var(--table-row-bg, var(--color-bg-base));
   cursor: pointer;
 
   .tableItemContent {
@@ -258,7 +261,7 @@
     padding: 0px 4px;
     max-height: 31px;
     line-height: 31px;
-    background-color: var(--color-bg-layout);
+    background-color: var(--table-row-bg, var(--color-bg-base));
     z-index: 2;
     color: var(--color-text);
     white-space: nowrap;

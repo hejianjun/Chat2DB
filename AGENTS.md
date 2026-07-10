@@ -8,6 +8,12 @@ Chat2DB is a multi-database client tool with AI capabilities. It consists of:
 - **chat2db-client**: Frontend React/Electron application (TypeScript)
 - **chat2db-server**: Backend Spring Boot application (Java 17)
 
+## Module Instructions
+
+Before modifying any backend code or resources under `chat2db-server/`, read
+[`chat2db-server/README.md`](chat2db-server/README.md). Its module-specific conventions, especially the
+internationalization rules, take precedence over the general guidance in this file.
+
 ## Build/Lint/Test Commands
 
 ### Frontend (chat2db-client)

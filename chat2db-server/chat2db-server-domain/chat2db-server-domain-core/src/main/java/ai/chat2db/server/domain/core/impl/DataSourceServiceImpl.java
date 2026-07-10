@@ -285,7 +285,7 @@ public class DataSourceServiceImpl implements DataSourceService {
                 while (t.getCause() != null) {
                     t = t.getCause();
                 }
-                throw new BusinessException("CONNECT_ERROR", new Object[]{t.getMessage()});
+                throw new BusinessException("connection.error", new Object[]{t.getMessage()});
             }
             return;
         }
@@ -300,7 +300,7 @@ public class DataSourceServiceImpl implements DataSourceService {
                 testParam.getUsername(), testParam.getPassword(), testParam.getDbType(),
                 driverConfig, param.getSsh(), KeyValue.toMap(param.getExtendInfo()));
         if (BooleanUtils.isNotTrue(dataSourceConnect.getSuccess())) {
-            throw new BusinessException("CONNECT_ERROR", new Object[]{dataSourceConnect.getMessage()});
+            throw new BusinessException("connection.error", new Object[]{dataSourceConnect.getMessage()});
         }
         
     }

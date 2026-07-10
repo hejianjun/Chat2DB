@@ -175,7 +175,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 param.getSchemaName(),
                 param.getTableName(),
                 param.getColumnName())) {
-            throw new BusinessException("VIRTUAL_FK_EXISTS", new Object[]{});
+            throw new BusinessException("foreignKey.virtualForeignKeyExists");
         }
 
         VirtualForeignKeyDO entity = buildVirtualForeignKeyDO(param);
@@ -251,7 +251,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                     || !tableMap.containsKey(referencedTableKey)
                     || !columnMap.getOrDefault(sourceTableKey, Collections.emptyMap()).containsKey(sourceColumnKey)
                     || !columnMap.getOrDefault(referencedTableKey, Collections.emptyMap()).containsKey(referencedColumnKey)) {
-                throw new BusinessException("VIRTUAL_FK_RELATION_INVALID", new Object[]{"虚拟外键关联表或字段不存在"});
+                throw new BusinessException("foreignKey.virtualForeignKeyRelationInvalid");
             }
 
             String key = buildVirtualForeignKeyKey(
@@ -341,7 +341,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     public VirtualForeignKey updateVirtualFK(UpdateVirtualFKParam param) {
         VirtualForeignKeyDO existing = getVFKMapper().selectById(param.getId());
         if (existing == null) {
-            throw new BusinessException("VIRTUAL_FK_NOT_FOUND", new Object[]{"虚拟外键不存在"});
+            throw new BusinessException("foreignKey.virtualForeignKeyNotFound");
         }
 
         VirtualForeignKeyDO updateDO = new VirtualForeignKeyDO();
@@ -366,7 +366,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 existing.getSchemaName(),
                 tableName,
                 columnName)) {
-            throw new BusinessException("VIRTUAL_FK_EXISTS", new Object[]{});
+            throw new BusinessException("foreignKey.virtualForeignKeyExists");
         }
 
         updateDO.setComment(param.getComment());
@@ -410,7 +410,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     public void deleteVirtualFK(Long id) {
         VirtualForeignKeyDO existing = getVFKMapper().selectById(id);
         if (existing == null) {
-            throw new BusinessException("VIRTUAL_FK_NOT_FOUND", new Object[]{"虚拟外键不存在"});
+            throw new BusinessException("foreignKey.virtualForeignKeyNotFound");
         }
         getVFKMapper().deleteById(id);
     }
@@ -434,7 +434,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     public String deleteRealFK(Long id) {
         ForeignKeyDO existing = getFKMapper().selectById(id);
         if (existing == null) {
-            throw new BusinessException("FK_NOT_FOUND", new Object[]{"外键不存在"});
+            throw new BusinessException("foreignKey.notFound");
         }
 
         SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
@@ -698,13 +698,13 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 metaData, connection, databaseName, schemaName, referencedTable);
 
         if (StringUtils.isBlank(actualTableName) || StringUtils.isBlank(actualReferencedTable)) {
-            throw new BusinessException("VIRTUAL_FK_TABLE_NOT_FOUND", new Object[]{"虚拟外键关联表不存在"});
+            throw new BusinessException("foreignKey.virtualForeignKeyTableNotFound");
         }
 
         if (!existsColumnIgnoreCase(metaData, connection, databaseName, schemaName, actualTableName, columnName)
                 || !existsColumnIgnoreCase(
                 metaData, connection, databaseName, schemaName, actualReferencedTable, referencedColumnName)) {
-            throw new BusinessException("VIRTUAL_FK_COLUMN_NOT_FOUND", new Object[]{"虚拟外键关联字段不存在"});
+            throw new BusinessException("foreignKey.virtualForeignKeyColumnNotFound");
         }
     }
 

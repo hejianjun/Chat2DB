@@ -7,6 +7,7 @@ import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.request.CreateVirtualFKRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DeleteVirtualFKBatchRequest;
 import ai.chat2db.server.web.api.controller.rdb.request.DeleteFKByNameRequest;
@@ -175,6 +176,7 @@ public class ForeignKeyController {
                 return ActionResult.isSuccess();
             }
         }
-        return ActionResult.fail("VIRTUAL_FK_NOT_FOUND", "虚拟外键不存在", "");
+        return ActionResult.fail("foreignKey.virtualForeignKeyNotFound",
+                I18nUtils.getMessage("foreignKey.virtualForeignKeyNotFound"), "");
     }
 }
