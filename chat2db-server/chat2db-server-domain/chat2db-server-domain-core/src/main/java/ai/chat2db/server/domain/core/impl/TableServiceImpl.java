@@ -376,8 +376,10 @@ public class TableServiceImpl implements TableService {
         } else {
             tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey());
         }
-        if (param.getLastDocId() == null) {
+        if (param.getLastDocId() == null && StringUtils.isBlank(param.getSearchKey())) {
             tables = pinTable(tables, param);
+        }
+        if (param.getLastDocId() == null) {
             tables = deprecatedTable(tables, param);
         }
         Map<String, List<TableColumn>> tableColumnMap = Collections.emptyMap();
