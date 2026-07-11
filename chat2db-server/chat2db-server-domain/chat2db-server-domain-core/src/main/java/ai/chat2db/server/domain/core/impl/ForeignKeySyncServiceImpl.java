@@ -251,7 +251,12 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                     || !tableMap.containsKey(referencedTableKey)
                     || !columnMap.getOrDefault(sourceTableKey, Collections.emptyMap()).containsKey(sourceColumnKey)
                     || !columnMap.getOrDefault(referencedTableKey, Collections.emptyMap()).containsKey(referencedColumnKey)) {
-                throw new BusinessException("foreignKey.virtualForeignKeyRelationInvalid");
+                throw new BusinessException("foreignKey.virtualForeignKeyRelationInvalid", new Object[]{
+                        param.getTableName(),
+                        param.getColumnName(),
+                        param.getReferencedTable(),
+                        param.getReferencedColumnName()
+                });
             }
 
             String key = buildVirtualForeignKeyKey(

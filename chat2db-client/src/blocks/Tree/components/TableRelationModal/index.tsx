@@ -379,8 +379,8 @@ const TableRelationModal = memo((props: IProps) => {
 
       message.success(i18n('workspace.tableRelation.importSuccess', result?.created || 0, result?.updated || 0));
       fetchForeignKeys();
-    } catch {
-      message.error(i18n('workspace.tableRelation.importError'));
+    } catch (error) {
+      message.error(`${i18n('workspace.tableRelation.importError')}: ${String(error)}`);
     } finally {
       setImporting(false);
     }
