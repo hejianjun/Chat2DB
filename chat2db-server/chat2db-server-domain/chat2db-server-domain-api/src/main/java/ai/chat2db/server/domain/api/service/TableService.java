@@ -118,6 +118,8 @@ public interface TableService {
      */
     List<SimpleTable> queryTables(TablePageQueryParam param);
 
+    void updateTag(TablePageQueryParam param, String tableName, String tag);
+
     /**
      * 查询表包含的字段
      *

@@ -39,6 +39,8 @@ public class TableBriefQueryRequest extends PageQueryRequest implements DataSour
      */
     private String searchKey;
 
+    private String tag;
+
     /**
      * if true, refresh the cache
      */

@@ -120,6 +120,9 @@ public class Table implements IndexModel {
      */
     @LuceneField(name = "aiComment", type = LuceneFieldType.TEXT, inherit = true)
     private String aiComment;
+
+    @LuceneField(name = "tag", type = LuceneFieldType.STRING, inherit = true)
+    private String tag;
     
     /**
      * 版本

@@ -32,6 +32,7 @@ import ai.chat2db.server.domain.api.service.ForeignKeySyncService;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManager;
 import ai.chat2db.server.domain.core.cache.LuceneIndexManagerFactory;
 import ai.chat2db.server.domain.core.converter.PinTableConverter;
+import ai.chat2db.server.domain.core.util.TableTagUtils;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.spi.DBManage;
@@ -451,6 +452,20 @@ public class TableServiceImpl implements TableService {
         return tables;
     }
 
+    @Override
+    public void updateTag(TablePageQueryParam param, String tableName, String tag) {
+        // Lucene 按数据源共享索引；标签是全局元数据，直接更新单个表文档即可立即用于过滤。
+        LuceneIndexManager<Table> manager = managerFactory.getManager(param.getDataSourceId());
+        TablePageQueryParam query = TablePageQueryParam.builder()
+                .dataSourceId(param.getDataSourceId()).databaseName(param.getDatabaseName())
+                .schemaName(param.getSchemaName()).tableName(tableName).build();
+        List<Table> tables = manager.searchAll(query, null);
+        if (!tables.isEmpty()) {
+            tables.get(0).setTag(StringUtils.trimToNull(tag));
+            manager.updateDocument(tables.get(0));
+        }
+    }
+
 
 
     private boolean needRefreshCache(TablePageQueryParam param, Long version) {
@@ -483,6 +498,10 @@ public class TableServiceImpl implements TableService {
             Connection conn = redis ? null : Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
             List<Table> tables = meta.tables(conn, databaseName, schemaName, null);
+            // 新建索引时填充自动标签；已有手工标签由 @LuceneField(inherit = true) 在刷新时保留。
+            Map<String, String> generatedTags = TableTagUtils.calculateTags(
+                    tables.stream().map(Table::getName).collect(Collectors.toList()));
+            tables.forEach(table -> table.setTag(generatedTags.get(table.getName())));
             Long dataSourceId = Chat2DBContext.getConnectInfo().getDataSourceId();
             String objectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_TABLE, databaseName,
                     schemaName, databaseName);

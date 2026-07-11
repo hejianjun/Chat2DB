@@ -1,8 +1,8 @@
-import React, { memo, useEffect, useState, useCallback } from 'react';
+import React, { memo, useEffect, useState, useCallback, useRef } from 'react';
 import i18n from '@/i18n';
 import styles from './index.less';
 import classnames from 'classnames';
-import { Table, Dropdown, Input, Pagination, Button, Form, Modal, message, Spin } from 'antd';
+import { Table, Dropdown, Input, Pagination, Button, Form, Modal, message, Spin, Tag } from 'antd';
 import { DatabaseTypeCode, TreeNodeType, OperationColumn, WorkspaceTabType } from '@/constants';
 import sqlServer, { IBatchModifyTableSqlParams } from '@/service/sql';
 import type { ColumnsType } from 'antd/es/table';
@@ -52,6 +52,9 @@ export default memo<IProps>((props) => {
   const [guessLoading, setGuessLoading] = useState<boolean>(false);
   const [form] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [editingTagKey, setEditingTagKey] = useState<string | null>(null);
+  const tagSavingRef = useRef(false);
+  const tagEditCancelledRef = useRef(false);
 
   useEffect(() => {
     getTable({
@@ -69,11 +72,11 @@ export default memo<IProps>((props) => {
   const getTable = (params: IPageParams) => {
     setCurrentPageNo(params.pageNo);
     setTableLoading(true);
-    sqlServer
-      .getTableList({
-        ...props.uniqueData,
-        ...(params || {}),
-      } as any)
+    const requestParams = {
+      ...props.uniqueData,
+      ...(params || {}),
+    } as any;
+    sqlServer.getTableList(requestParams)
       .then((res) => {
         setTableDataTotal(res.total);
         const data = res.data.map((t) => {
@@ -88,6 +91,7 @@ export default memo<IProps>((props) => {
             rawComment: t.rawComment ?? null,
             aiComment: t.aiComment ?? null,
             rowCount: t.rowCount,
+            tag: t.tag ?? null,
             extraParams: {
               ...uniqueData,
               tableName: t.name,
@@ -99,6 +103,74 @@ export default memo<IProps>((props) => {
       .finally(() => {
         setTableLoading(false);
       });
+  };
+
+  // Enter 和 blur 会连续触发；通过 ref 保证同一编辑操作只提交一次。
+  const saveTag = async (record, value: string) => {
+    if (tagSavingRef.current) return;
+    tagSavingRef.current = true;
+    const nextTag = value.trim();
+    try {
+      await sqlServer.updateTableTag({
+        dataSourceId: Number(uniqueData.dataSourceId),
+        databaseName: uniqueData.databaseName,
+        schemaName: uniqueData.schemaName,
+        tableName: record.name,
+        tagName: nextTag,
+      });
+      setTableData((previous) =>
+        previous?.map((item) => (item.key === record.key ? { ...item, tag: nextTag || null } : item)) || null,
+      );
+    } catch {
+      message.error(i18n('workspace.table.tag.saveFailed'));
+    } finally {
+      tagSavingRef.current = false;
+      setEditingTagKey(null);
+    }
+  };
+
+  const renderTagCell = (tag: string | null | undefined, record: any) => {
+    const active = activeId === record.key;
+    if (editingTagKey === record.key) {
+      return (
+        <div
+          className={classnames(styles.tableCell, { [styles.activeTableCell]: active })}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Input
+            autoFocus
+            size="small"
+            defaultValue={tag || ''}
+            onPressEnter={(event) => saveTag(record, event.currentTarget.value)}
+            onBlur={(event) => {
+              if (tagEditCancelledRef.current) {
+                tagEditCancelledRef.current = false;
+                return;
+              }
+              saveTag(record, event.currentTarget.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                tagEditCancelledRef.current = true;
+                setEditingTagKey(null);
+              }
+            }}
+          />
+        </div>
+      );
+    }
+    return (
+      <div
+        className={classnames(styles.tableCell, styles.tagCell, { [styles.activeTableCell]: active })}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          setEditingTagKey(record.key);
+        }}
+        title={i18n('workspace.table.tag.editTip')}
+      >
+        {tag && <Tag color="blue">{tag}</Tag>}
+      </div>
+    );
   };
 
   const paginationChange = (pageNo: number) => {
@@ -206,6 +278,13 @@ export default memo<IProps>((props) => {
       key: 'name',
       sorter: true,
       render: (text, record) => renderCell(text, record, 'name'),
+    },
+    {
+      title: i18n('workspace.table.tag.title'),
+      dataIndex: 'tag',
+      key: 'tag',
+      width: 180,
+      render: (text, record) => renderTagCell(text, record),
     },
     {
       title: 'Row Count',
@@ -682,6 +761,7 @@ export default memo<IProps>((props) => {
                 columns={columns}
                 pagination={false}
                 dataSource={tableData || []}
+                rowClassName={(_, index) => (index % 2 === 1 ? styles.zebraTableRow : '')}
               />
             </Form>
           </div>

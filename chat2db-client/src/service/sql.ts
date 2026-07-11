@@ -393,6 +393,17 @@ const getAllTableList = createRequest<
   Array<{ name: string; comment: string }>
 >('/api/rdb/table/table_list', { method: 'get' });
 
+const updateTableTag = createRequest<
+  {
+    dataSourceId: number;
+    databaseName?: string | null;
+    schemaName?: string | null;
+    tableName: string;
+    tagName: string;
+  },
+  void
+>('/api/rdb/table/tag/update', { method: 'post' });
+
 /** 获取表的所有字段 */
 const getAllFieldByTable = createRequest<
   { dataSourceId: number; databaseName?: string; schemaName?: string | null; tableName: string },
@@ -740,6 +751,7 @@ export default {
   getDMLCount,
   // exportResultTable
   getAllTableList,
+  updateTableTag,
   getAllFieldByTable,
   getAiGuess,
   deleteVirtualForeignKey,

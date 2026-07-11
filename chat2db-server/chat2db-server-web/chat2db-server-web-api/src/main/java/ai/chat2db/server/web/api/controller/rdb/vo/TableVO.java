@@ -36,6 +36,8 @@ public class TableVO {
      */
     private String aiComment;
 
+    private String tag;
+
     /**
      * 列
      */

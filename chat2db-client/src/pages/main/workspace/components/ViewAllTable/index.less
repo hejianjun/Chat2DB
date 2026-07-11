@@ -79,6 +79,19 @@
   color: var(--color-bg-base);
 }
 
+.tagCell {
+  cursor: default;
+  :global(.ant-tag) {
+    margin-inline-end: 0;
+  }
+}
+
+.zebraTableRow {
+  :global(.ant-table-cell) {
+    background-color: var(--color-bg-subtle);
+  }
+}
+
 :global {
   .ant-table-wrapper .ant-table-cell {
     padding: 0px;
