@@ -21,7 +21,7 @@
       "url": "http://localhost:10821/api/mcp",
       "enabled": true,
       "headers": {
-        "Authorization": "Bearer 123456"
+        "Authorization": "Bearer 3723402"
       }
     }
   }
