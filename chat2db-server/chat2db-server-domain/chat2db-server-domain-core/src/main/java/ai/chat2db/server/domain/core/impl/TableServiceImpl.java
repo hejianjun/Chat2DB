@@ -371,7 +371,10 @@ public class TableServiceImpl implements TableService {
             loadAndCacheMetadata(luceneMgr, param.getDatabaseName(), param.getSchemaName(), version);
         }
         List<Table> tables;
-        if (StringUtils.isNotBlank(param.getSortField())) {
+        // ER 推断等场景传入 preferredTag 时，保持全文检索范围不变，只提升同 Tag 的命中分数。
+        if (StringUtils.isNotBlank(param.getPreferredTag())) {
+            tables = luceneMgr.searchWithPreferredTerm(param, param.getLastDocId(), param.getSearchKey(), "tag", param.getPreferredTag());
+        } else if (StringUtils.isNotBlank(param.getSortField())) {
             boolean reverse = "descend".equals(param.getSortOrder());
             tables = luceneMgr.search(param, param.getLastDocId(), param.getSearchKey(), param.getSortField(), reverse);
         } else {

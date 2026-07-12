@@ -62,6 +62,9 @@ public class TablePageQueryParam extends PageQueryParam implements BaseModel<Tab
     @LuceneField(name = "tag", type = LuceneFieldType.STRING)
     private String tag;
 
+    /** 仅用于候选结果相关性提升，不参与精确过滤。 */
+    private String preferredTag;
+
     /**
      * 排序字段: name, rowCount
      */

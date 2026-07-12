@@ -540,6 +540,31 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         return search(queryModel, lastDocId, queryStr, null, false);
     }
 
+    /**
+     * 在保留原有全文匹配条件的同时，提升指定精确字段值的文档分数。
+     * 适合 ER 图根据当前表 Tag 优先选择同业务域目标表的场景。
+     */
+    @SneakyThrows
+    public <E extends BaseModel> List<T> searchWithPreferredTerm(
+            E queryModel, Integer lastDocId, String queryStr, String fieldName, String preferredValue) {
+        if (StringUtils.isBlank(preferredValue)) {
+            return search(queryModel, lastDocId, queryStr);
+        }
+        lock.readLock().lock();
+        try {
+            BooleanQuery.Builder query = new BooleanQuery.Builder();
+            query.add(buildSearchQuery(queryModel, queryStr), BooleanClause.Occur.MUST);
+            query.add(new BoostQuery(new TermQuery(new Term(fieldName, preferredValue)), 100.0f), BooleanClause.Occur.SHOULD);
+            int pageSize = queryModel instanceof PageQueryParam page && page.getPageSize() != null ? page.getPageSize() : 1000;
+            TopDocs topDocs = searcher.search(query.build(), pageSize);
+            return Arrays.stream(topDocs.scoreDocs)
+                    .map(scoreDoc -> (T) getDocument(queryModel.getClassType(), scoreDoc.doc))
+                    .collect(Collectors.toList());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     @SneakyThrows
     public <E extends BaseModel> List<T> searchAll(E queryModel, String queryStr) {
         lock.readLock().lock();

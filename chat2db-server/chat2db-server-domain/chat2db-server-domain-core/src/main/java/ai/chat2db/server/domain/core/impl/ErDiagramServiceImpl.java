@@ -434,6 +434,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                         .databaseName(currentColumn.getDatabaseName())
                         .schemaName(currentColumn.getSchemaName())
                         .searchKey(referencedTableName)
+                        .preferredTag(currentTable.getTag())
                         .build(),
                 selector
         );
