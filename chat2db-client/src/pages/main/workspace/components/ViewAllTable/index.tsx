@@ -761,7 +761,6 @@ export default memo<IProps>((props) => {
                 columns={columns}
                 pagination={false}
                 dataSource={tableData || []}
-                rowClassName={(_, index) => (index % 2 === 1 ? styles.zebraTableRow : '')}
               />
             </Form>
           </div>

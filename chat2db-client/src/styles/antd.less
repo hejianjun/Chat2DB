@@ -82,5 +82,10 @@
     .ant-btn-link:not(:disabled):not(.ant-btn-disabled):hover {
       color: var(--color-primary-hover);
     }
+
+    // 为所有 Ant Design 表格提供统一的斑马纹，状态行（悬停、选中等）仍由组件自身样式覆盖。
+    .ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td {
+      background-color: var(--color-bg-subtle);
+    }
   }
 }
