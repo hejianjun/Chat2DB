@@ -80,6 +80,8 @@ export interface IErNode {
   name: string;
   /** 表注释 */
   comment?: string;
+  /** 表标签，用于 ER 图分组。 */
+  tag?: string;
   /** 表的列数量 */
   columnCount?: number;
 }

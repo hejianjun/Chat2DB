@@ -32,6 +32,7 @@ export default {
   'workspace.erDiagram.refresh': '刷新',
   'workspace.erDiagram.hierarchical': '层级布局',
   'workspace.erDiagram.forceLayout': '力导向布局',
+  'workspace.erDiagram.untagged': '未分组',
   'workspace.erDiagram.virtualFk': '虚拟外键',
   'workspace.erDiagram.inferVirtualFk': '推断虚拟外键',
   'workspace.erDiagram.inferVirtualFkSuccess': '成功推断 {1} 个虚拟外键',

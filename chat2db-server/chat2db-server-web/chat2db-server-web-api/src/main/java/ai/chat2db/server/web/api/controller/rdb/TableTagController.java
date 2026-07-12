@@ -4,7 +4,6 @@ import ai.chat2db.server.domain.api.param.TablePageQueryParam;
 import ai.chat2db.server.domain.api.service.TableService;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
-import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.request.TableTagUpdateRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +21,6 @@ public class TableTagController {
     @Autowired
     private TableService tableService;
 
-    @Autowired
     @PostMapping("/update")
     public ActionResult update(@Valid @RequestBody TableTagUpdateRequest request) {
         TablePageQueryParam param = TablePageQueryParam.builder().dataSourceId(request.getDataSourceId())

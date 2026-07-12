@@ -28,6 +28,7 @@ import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { compatibleDataBaseName } from '@/utils/database';
 import type { LayoutType } from './store';
 import TableNode, { IErDiagramFieldHandlePayload } from './components/TableNode';
+import TagGroupNode from './components/TagGroupNode';
 import RelationEdge from './components/RelationEdge';
 import Toolbar from './components/Toolbar';
 import TableFilter from './components/TableFilter';
@@ -47,14 +48,14 @@ interface IERDiagramProps {
 }
 
 /** 自定义节点和边类型映射 */
-const nodeTypes = { tableNode: TableNode };
+const nodeTypes = { tableNode: TableNode, tagGroup: TagGroupNode };
 const edgeTypes = { relationEdge: RelationEdge };
 const FIELD_HANDLE_PREFIX = 'field:';
 
 /**
  * 使用dagre算法计算层级布局
  */
-const getDagreLayout = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'TB') => {
+const getDagreLayout = (nodes: Node[], edges: Edge[], direction: 'TB' | 'LR' = 'LR') => {
   const dagreGraph = new dagre.graphlib.Graph({ multigraph: true, compound: false });
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
@@ -198,6 +199,51 @@ const applyLayout = (nodes: Node[], edges: Edge[], layoutType: LayoutType): Node
     return getDagreLayout(nodes, edges);
   }
   return getForceLayout(nodes, edges);
+};
+
+const getTagGroupedLayout = (nodes: Node[], edges: Edge[], layoutType: LayoutType): Node[] => {
+  const groups = new Map<string, Node[]>();
+  nodes.forEach((node) => {
+    const tag = ((node.data as any)?.tag || i18n('workspace.erDiagram.untagged')).trim();
+    groups.set(tag, [...(groups.get(tag) || []), node]);
+  });
+
+  const result: Node[] = [];
+  let nextX = 0;
+  const padding = 40;
+  const groupGap = 70;
+
+  [...groups.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([tag, groupNodes]) => {
+    const groupNodeIds = new Set(groupNodes.map((node) => node.id));
+    const groupEdges = edges.filter((edge) => groupNodeIds.has(edge.source) && groupNodeIds.has(edge.target));
+    const laidOutNodes = applyLayout(groupNodes, groupEdges, layoutType);
+    const minX = Math.min(...laidOutNodes.map((node) => node.position.x));
+    const minY = Math.min(...laidOutNodes.map((node) => node.position.y));
+    const maxX = Math.max(...laidOutNodes.map((node) => node.position.x + 220));
+    const maxY = Math.max(...laidOutNodes.map((node) => node.position.y + 160));
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+
+    result.push({
+      id: `tag-group:${tag}`,
+      type: 'tagGroup',
+      position: { x: nextX, y: 0 },
+      data: { label: tag },
+      selectable: false,
+      draggable: false,
+      connectable: false,
+      style: { width, height, zIndex: -1 },
+    });
+    result.push(
+      ...laidOutNodes.map((node) => ({
+        ...node,
+        position: { x: node.position.x - minX + nextX + padding, y: node.position.y - minY + padding },
+      })),
+    );
+    nextX += width + groupGap;
+  });
+
+  return result;
 };
 
 const parseFieldHandle = (handleId?: string | null): IErDiagramFieldHandlePayload | null => {
@@ -550,7 +596,7 @@ const ERDiagramInner: React.FC<IERDiagramProps> = ({ uniqueData }) => {
         : { stroke: 'var(--color-text-tertiary)', strokeWidth: 2 },
     }));
 
-    const laidOutNodes = applyLayout(rfNodes, rfEdges, layoutType);
+    const laidOutNodes = getTagGroupedLayout(rfNodes, rfEdges, layoutType);
     setNodes(laidOutNodes);
     setEdges(rfEdges);
   }, [

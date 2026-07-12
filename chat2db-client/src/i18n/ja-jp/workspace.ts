@@ -61,6 +61,7 @@ export default {
   'workspace.tips.maxConsole': 'コンソールは最大20個まで開くことができます',
   'workspace.tips.openExecutiveLogging': '実行ログを開く',
   'workspace.erDiagram.inferVirtualFk': '仮想FKを推測',
+  'workspace.erDiagram.untagged': '未分類',
   'workspace.erDiagram.inferVirtualFkNoResult': '新しい仮想外部キーが見つかりませんでした',
   'workspace.erDiagram.inferVirtualFkError': '仮想外部キーの推測に失敗しました',
   'workspace.erDiagram.inferResult.title': '仮想FK推測結果',

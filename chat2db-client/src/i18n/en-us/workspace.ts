@@ -32,6 +32,7 @@ export default {
   'workspace.erDiagram.refresh': 'Refresh',
   'workspace.erDiagram.hierarchical': 'Hierarchical',
   'workspace.erDiagram.forceLayout': 'Force',
+  'workspace.erDiagram.untagged': 'Untagged',
   'workspace.erDiagram.inferVirtualFk': 'Infer Virtual FK',
   'workspace.erDiagram.inferVirtualFkSuccess': 'Successfully inferred {1} virtual foreign key(s)',
   'workspace.erDiagram.inferVirtualFkNoResult': 'No new virtual foreign keys found',

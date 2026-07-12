@@ -46,6 +46,8 @@ public class ErDiagram {
          * 表注释
          */
         private String comment;
+        /** 表所属的全局标签，用于 ER 图分组布局。 */
+        private String tag;
         /**
          * 表的列数量
          */

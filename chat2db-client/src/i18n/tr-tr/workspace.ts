@@ -23,6 +23,7 @@ export default {
   'workspace.menu.editTableData': 'Tablo Verilerini Düzenle',
   'workspace.menu.queryConsole': 'Sorgu Konsolu',
   'workspace.menu.viewAllTable': 'Tüm Tabloları Görüntüle',
+  'workspace.erDiagram.untagged': 'Etiketsiz',
   'workspace.table.tag.title': 'Etiket',
   'workspace.table.tag.editTip': 'Etiketi düzenlemek için çift tıklayın',
   'workspace.table.tag.saveFailed': 'Tablo etiketi kaydedilemedi. Lütfen tekrar deneyin.',

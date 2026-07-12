@@ -92,6 +92,7 @@ public class ErDiagramServiceImpl implements ErDiagramService {
                 .id(table.getName())
                 .name(table.getName())
                 .comment(table.getComment())
+                .tag(table.getTag())
                 .columnCount(CollectionUtils.isEmpty(table.getColumnList()) ? 0 : table.getColumnList().size())
                 .build()
         ).collect(Collectors.toList());
