@@ -6,6 +6,7 @@ import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefixBuildStatus;
 import ai.chat2db.server.domain.api.param.RedisKeyPrefixQueryParam;
 import ai.chat2db.server.domain.api.service.RedisKeyPrefixService;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
@@ -14,9 +15,15 @@ import ai.chat2db.server.web.api.controller.data.source.request.DataSourceBaseRe
 import ai.chat2db.server.web.api.controller.redis.request.KeyPrefixCommentRequest;
 import ai.chat2db.server.web.api.controller.redis.request.KeyPrefixDeleteRequest;
 import ai.chat2db.server.web.api.controller.redis.request.KeyPrefixQueryRequest;
+import ai.chat2db.server.web.api.controller.redis.request.KeyPrefixSampleRequest;
+import ai.chat2db.server.web.api.controller.redis.vo.KeyVO;
+import ai.chat2db.spi.MetaData;
+import ai.chat2db.spi.redis.RedisKeyBrowser;
+import ai.chat2db.spi.redis.RedisKeyInfo;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConnectionInfoAspect
 public class RedisKeyPrefixController {
+
+    private static final int PREFIX_SAMPLE_LIMIT = 1000;
 
     @Autowired
     private RedisKeyPrefixService redisKeyPrefixService;
@@ -48,6 +57,17 @@ public class RedisKeyPrefixController {
                 .build();
         List<RedisKeyPrefix> list = redisKeyPrefixService.search(param);
         return ListResult.of(list);
+    }
+
+    @GetMapping("/sample")
+    public ListResult<KeyVO> sample(@Valid KeyPrefixSampleRequest request) {
+        MetaData metaData = Chat2DBContext.getMetaData();
+        if (!(metaData instanceof RedisKeyBrowser browser)) {
+            throw new BusinessException("当前数据源不是 Redis");
+        }
+        List<KeyVO> samples = browser.sampleKeys(request.getDatabaseName(), request.getPrefix(), PREFIX_SAMPLE_LIMIT)
+                .join().stream().map(this::toKeyVO).toList();
+        return ListResult.of(samples);
     }
 
     @PostMapping("/refresh")
@@ -73,5 +93,11 @@ public class RedisKeyPrefixController {
     @GetMapping("/status")
     public DataResult<RedisKeyPrefixBuildStatus> status(@Valid DataSourceBaseRequest request) {
         return DataResult.of(redisKeyPrefixService.getStatus(request.getDataSourceId(), request.getDatabaseName()));
+    }
+
+    private KeyVO toKeyVO(RedisKeyInfo keyInfo) {
+        KeyVO vo = new KeyVO();
+        BeanUtils.copyProperties(keyInfo, vo);
+        return vo;
     }
 }

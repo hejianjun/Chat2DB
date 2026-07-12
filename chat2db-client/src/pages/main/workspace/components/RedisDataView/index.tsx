@@ -3,6 +3,7 @@ import { Button, Empty, Input, InputNumber, Modal, Segmented, Select, Table, Tag
 import {
   BulbOutlined,
   CloseOutlined,
+  CodeOutlined,
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -37,6 +38,7 @@ interface IRedisKeyRow extends IRedisKeyItem {
   comment?: string;
   inheritedComment?: string;
   keyCount?: number;
+  sampleTypes?: string[];
   prefixOnly?: boolean;
   children?: IRedisKeyRow[];
 }
@@ -65,6 +67,7 @@ const RedisDataView = memo((props: IProps) => {
   const [data, setData] = useState<IRedisKeyItem[]>([]);
   const [prefixComments, setPrefixComments] = useState<Record<string, IRedisKeyPrefixItem>>({});
   const [prefixSearchData, setPrefixSearchData] = useState<IRedisKeyPrefixItem[]>([]);
+  const [prefixSamples, setPrefixSamples] = useState<IRedisKeyItem[]>([]);
   const [prefixBuildStatus, setPrefixBuildStatus] = useState<IRedisKeyPrefixBuildStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -72,6 +75,7 @@ const RedisDataView = memo((props: IProps) => {
   const [prefixSaving, setPrefixSaving] = useState(false);
   const [prefixGuessing, setPrefixGuessing] = useState(false);
   const [prefixLoading, setPrefixLoading] = useState(false);
+  const [prefixSampleLoading, setPrefixSampleLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedPrefix, setSelectedPrefix] = useState('');
   const [prefixCommentDraft, setPrefixCommentDraft] = useState('');
@@ -80,6 +84,7 @@ const RedisDataView = memo((props: IProps) => {
   const [editorType, setEditorType] = useState('string');
   const [editorTtl, setEditorTtl] = useState<number | null>(NO_TTL);
   const [textValue, setTextValue] = useState('');
+  const [isJsonString, setIsJsonString] = useState(false);
   const [hashFields, setHashFields] = useState<IHashFieldRow[]>([]);
   const [originalHashFields, setOriginalHashFields] = useState<Record<string, string>>({});
   const [hashFieldFilter, setHashFieldFilter] = useState('');
@@ -106,6 +111,7 @@ const RedisDataView = memo((props: IProps) => {
     setEditorType(type || 'string');
     setEditorTtl(ttl);
     setHashFieldFilter('');
+    setIsJsonString(false);
     if (type === 'hash' && value && typeof value === 'object' && !Array.isArray(value)) {
       const originalMap = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, String(v ?? '')]));
       setOriginalHashFields(originalMap);
@@ -125,7 +131,16 @@ const RedisDataView = memo((props: IProps) => {
       setTextValue(value.map((item) => String(item ?? '')).join('\n'));
       return;
     }
-    setTextValue(value === undefined || value === null ? '' : String(value));
+    const nextTextValue = value === undefined || value === null ? '' : String(value);
+    if (type === 'string') {
+      const formattedJson = formatJson(nextTextValue);
+      if (formattedJson !== null) {
+        setTextValue(formattedJson);
+        setIsJsonString(true);
+        return;
+      }
+    }
+    setTextValue(nextTextValue);
   };
 
   const loadPrefixBuildStatus = async () => {
@@ -222,12 +237,33 @@ const RedisDataView = memo((props: IProps) => {
     }
   };
 
+  const loadPrefixSamples = (prefix: string) => {
+    if (!uniqueData?.dataSourceId || !prefix) {
+      return;
+    }
+    setPrefixSampleLoading(true);
+    redisService
+      .sampleKeyPrefixTypes({
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        prefix,
+      })
+      .then((items) => setPrefixSamples(items || []))
+      .catch((error) => {
+        setPrefixSamples([]);
+        message.error(String(error || 'Redis key 前缀样例加载失败'));
+      })
+      .finally(() => setPrefixSampleLoading(false));
+  };
+
   const openPrefixEditor = (record: IRedisKeyRow) => {
     setCreating(false);
     setDetail(null);
     setSelectedKey('');
     setSelectedPrefix(record.name);
     setPrefixCommentDraft(record.comment || prefixComments[record.name]?.comment || '');
+    setPrefixSamples([]);
+    loadPrefixSamples(record.name);
   };
 
   const savePrefixComment = () => {
@@ -447,6 +483,10 @@ const RedisDataView = memo((props: IProps) => {
       return;
     }
     const type = normalizeType(creating ? editorType : detail?.type);
+    if (type === 'string' && isJsonString && formatJson(textValue) === null) {
+      message.error('JSON 格式无效，请修正后再保存');
+      return;
+    }
     setSaving(true);
 
     let saveRequest: Promise<any>;
@@ -529,6 +569,7 @@ const RedisDataView = memo((props: IProps) => {
     setEditorType('string');
     setEditorTtl(NO_TTL);
     setTextValue('');
+    setIsJsonString(false);
     setHashFields([{ id: uuid(), field: '', value: '' }]);
     setOriginalHashFields({});
     setHashFieldFilter('');
@@ -801,9 +842,21 @@ const RedisDataView = memo((props: IProps) => {
       {
         title: '类型',
         dataIndex: 'type',
-        width: 120,
+        width: searchMode === SEARCH_MODE_PREFIX ? 180 : 120,
         sorter: true,
         render: (type, record) => {
+          if (record.prefixOnly) {
+            const types = record.sampleTypes;
+            return types?.length ? (
+              <div className={styles.prefixTypeTags}>
+                {types.map((sampleType) => (
+                  <Tag color={getTypeColor(sampleType)} key={sampleType}>
+                    {sampleType}
+                  </Tag>
+                ))}
+              </div>
+            ) : null;
+          }
           if (record.isGroup || !type) {
             return null;
           }
@@ -1003,6 +1056,7 @@ const RedisDataView = memo((props: IProps) => {
                   onClick={() => {
                     setSelectedPrefix('');
                     setPrefixCommentDraft('');
+                    setPrefixSamples([]);
                   }}
                 />
                 <Button icon={<SearchOutlined />} size="small" onClick={loadKeysByPrefix}>
@@ -1041,11 +1095,43 @@ const RedisDataView = memo((props: IProps) => {
                 <Input.TextArea
                   className={styles.prefixCommentInput}
                   value={prefixCommentDraft}
-                  rows={5}
+                  rows={3}
                   maxLength={500}
                   showCount
                   onChange={(event) => setPrefixCommentDraft(event.target.value)}
                 />
+              </div>
+              <div className={styles.prefixSamples}>
+                <div className={styles.prefixSamplesHeader}>
+                  <span>类型样例</span>
+                  <Button
+                    loading={prefixSampleLoading}
+                    size="small"
+                    type="text"
+                    onClick={() => loadPrefixSamples(selectedPrefix)}
+                  >
+                    刷新样例
+                  </Button>
+                </div>
+                {prefixSamples.length ? (
+                  <div className={styles.prefixSampleList}>
+                    {prefixSamples.map((item) => (
+                      <Button
+                        className={styles.prefixSample}
+                        key={`${item.type}-${item.name}`}
+                        size="small"
+                        type="text"
+                        onClick={() => loadKeyDetail(item.name)}
+                      >
+                        <Tag color={getTypeColor(item.type || '')}>{item.type || 'unknown'}</Tag>
+                        <span className={styles.prefixSampleName}>{item.name}</span>
+                        <span className={styles.prefixSampleValue}>{String(item.value ?? '')}</span>
+                      </Button>
+                    ))}
+                  </div>
+                ) : !prefixSampleLoading ? (
+                  <span className={styles.emptySamples}>未采样到可用 key</span>
+                ) : null}
               </div>
             </div>
           </>
@@ -1062,6 +1148,7 @@ const RedisDataView = memo((props: IProps) => {
                     setSelectedKey('');
                     setSelectedPrefix('');
                     setCreating(false);
+                    setIsJsonString(false);
                   }}
                 />
                 <Button
@@ -1091,6 +1178,7 @@ const RedisDataView = memo((props: IProps) => {
                     onChange={(value) => {
                       setEditorType(value);
                       setTextValue('');
+                      setIsJsonString(false);
                       setHashFields(value === 'hash' ? [{ id: uuid(), field: '', value: '' }] : []);
                       setHashFieldFilter('');
                     }}
@@ -1162,15 +1250,45 @@ const RedisDataView = memo((props: IProps) => {
       );
     }
     return (
-      <Input.TextArea
-        value={textValue}
-        onChange={(event) => setTextValue(event.target.value)}
-        rows={type === 'string' ? 5 : 7}
-        placeholder={type === 'string' ? '字符串值' : '每行一个元素'}
-      />
+      <>
+        {type === 'string' && (
+          <div className={styles.jsonToolbar}>
+            <Button
+              icon={<CodeOutlined />}
+              size="small"
+              onClick={() => {
+                const formattedJson = formatJson(textValue);
+                if (formattedJson === null) {
+                  message.warning('当前字符串不是合法 JSON');
+                  return;
+                }
+                setTextValue(formattedJson);
+                setIsJsonString(true);
+              }}
+            >
+              格式化 JSON
+            </Button>
+            {isJsonString && <span>JSON 编辑模式</span>}
+          </div>
+        )}
+        <Input.TextArea
+          value={textValue}
+          onChange={(event) => setTextValue(event.target.value)}
+          rows={type === 'string' ? 5 : 7}
+          placeholder={type === 'string' ? '字符串值' : '每行一个元素'}
+        />
+      </>
     );
   }
 });
+
+function formatJson(value: string) {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return null;
+  }
+}
 
 function buildRows(keys: IRedisKeyItem[], prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
   const root: IRedisKeyRow[] = [];
@@ -1217,6 +1335,7 @@ function buildPrefixRows(prefixes: IRedisKeyPrefixItem[]) {
     prefixOnly: true,
     count: item.keyCount,
     keyCount: item.keyCount,
+    sampleTypes: item.sampleTypes?.split(',').filter(Boolean),
     comment: item.comment,
   }));
 }

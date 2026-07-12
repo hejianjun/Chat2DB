@@ -117,9 +117,16 @@
   font-weight: 500;
 }
 
+.prefixTypeTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 .editorPane {
   flex: 0 0 320px;
   min-height: 260px;
+  overflow: hidden;
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-base);
 }
@@ -140,6 +147,7 @@
 }
 
 .editorBody {
+  box-sizing: border-box;
   height: calc(100% - 40px);
   overflow: auto;
   padding: 12px;
@@ -207,6 +215,67 @@
 
 .prefixCommentInput {
   flex: 1;
+}
+
+.prefixSamples {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.prefixSamplesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.prefixSampleList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.prefixSample {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.prefixSampleName,
+.prefixSampleValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prefixSampleName {
+  flex: 0 1 40%;
+}
+
+.prefixSampleValue {
+  flex: 1;
+  color: var(--color-text-45);
+}
+
+.emptySamples {
+  color: var(--color-text-45);
+  font-size: 12px;
+}
+
+.jsonToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--color-text-45);
+  font-size: 12px;
 }
 
 .ttlHint {

@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,6 +34,9 @@ import static ai.chat2db.plugin.redis.RedisConnectionHelper.*;
  */
 @Slf4j
 class RedisKeyBrowserService implements RedisKeyBrowser {
+
+    private static final Set<String> SAMPLE_KEY_TYPES = Set.of("string", "hash", "list", "set", "zset");
+
 
     @Override
     public CompletableFuture<RedisKeyScanResult> streamKeys(String databaseName, String searchKey, String cursor,
@@ -218,6 +222,60 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
         return scanKeyInfoAsync(commands, pattern, buildScanCursor(cursor), count, 0, KEY_SCAN_BATCH_SIZE, emitter);
     }
 
+    @Override
+    public CompletableFuture<RedisKeyScanResult> streamKeyTypes(String databaseName, String searchKey, String cursor,
+                                                                int count, Consumer<List<RedisKeyInfo>> batchConsumer) {
+        try {
+            RedisConnectionProvider.RedisConnectionContext context =
+                    RedisConnectionProvider.open(Chat2DBContext.getConnectInfo());
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            AtomicBoolean closed = new AtomicBoolean(false);
+            CompletableFuture<RedisKeyScanResult> operation = selectDatabase(commands, databaseName)
+                    .thenCompose(ignored -> {
+                        String pattern = StringUtils.trimToNull(searchKey);
+                        long limit = count < 0 ? Long.MAX_VALUE : count == 0 ? KEY_SCAN_BATCH_SIZE : count;
+                        return scanKeyTypesAsync(commands, pattern, buildScanCursor(cursor), limit, 0, batchConsumer);
+                    });
+            CompletableFuture<RedisKeyScanResult> result = new CompletableFuture<>();
+            operation.whenComplete((scanResult, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    result.complete(scanResult);
+                }
+                closeContextAsync(context, closed);
+            });
+            result.whenComplete((ignored, throwable) -> {
+                if (result.isCancelled()) {
+                    operation.cancel(true);
+                    closeContextAsync(context, closed);
+                }
+            });
+            return result;
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    @Override
+    public CompletableFuture<List<RedisKeyInfo>> sampleKeys(String databaseName, String prefix, int maxCount) {
+        try {
+            RedisConnectionProvider.RedisConnectionContext context =
+                    RedisConnectionProvider.open(Chat2DBContext.getConnectInfo());
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            AtomicBoolean closed = new AtomicBoolean(false);
+            Map<String, RedisKeyInfo> samples = new LinkedHashMap<>();
+            int limit = Math.max(1, maxCount);
+            CompletableFuture<List<RedisKeyInfo>> operation = selectDatabase(commands, databaseName)
+                    .thenCompose(ignored -> sampleKeyInfoAsync(commands, escapeScanPattern(prefix) + "*",
+                            ScanCursor.INITIAL, limit, 0, samples));
+            operation.whenComplete((ignored, throwable) -> closeContextAsync(context, closed));
+            return operation;
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
     private CompletableFuture<RedisKeyScanResult> scanKeyInfoAsync(RedisAsyncCommands<String, String> commands,
                                                                    String pattern, ScanCursor scanCursor, long count,
                                                                    long emitted, int scanCount,
@@ -246,11 +304,69 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                 });
     }
 
+    private CompletableFuture<List<RedisKeyInfo>> sampleKeyInfoAsync(RedisAsyncCommands<String, String> commands,
+                                                                       String pattern, ScanCursor cursor, int limit,
+                                                                       int scanned,
+                                                                       Map<String, RedisKeyInfo> samples) {
+        if (scanned >= limit || samples.keySet().containsAll(SAMPLE_KEY_TYPES)) {
+            return CompletableFuture.completedFuture(List.copyOf(samples.values()));
+        }
+        int remaining = limit - scanned;
+        ScanArgs scanArgs = buildScanArgs(pattern, Math.min(KEY_SCAN_BATCH_SIZE, remaining));
+        return commands.scan(cursor, scanArgs).toCompletableFuture().thenCompose(result -> {
+            List<String> keys = result.getKeys().stream().limit(remaining).toList();
+            int nextScanned = scanned + keys.size();
+            ScanCursor nextCursor = ScanCursor.of(result.getCursor());
+            nextCursor.setFinished(result.isFinished());
+            return buildKeyInfoBatch(commands, keys, false).thenCompose(futures ->
+                    CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).thenCompose(ignored -> {
+                        futures.forEach(future -> {
+                            RedisKeyInfo key = future.join();
+                            samples.putIfAbsent(key.getType(), key);
+                        });
+                        if (nextCursor.isFinished() || nextScanned >= limit
+                                || samples.keySet().containsAll(SAMPLE_KEY_TYPES)) {
+                            return CompletableFuture.completedFuture(List.copyOf(samples.values()));
+                        }
+                        return sampleKeyInfoAsync(commands, pattern, nextCursor, limit, nextScanned, samples);
+                    }));
+        });
+    }
+
     private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
                                                                     String pattern, String cursor, long count,
                                                                     Consumer<List<String>> batchConsumer) {
         return scanKeyNamesAsync(commands, pattern, buildScanCursor(cursor), count, 0, KEY_SCAN_BATCH_SIZE,
                 batchConsumer);
+    }
+
+    private CompletableFuture<RedisKeyScanResult> scanKeyTypesAsync(RedisAsyncCommands<String, String> commands,
+                                                                    String pattern, ScanCursor scanCursor, long count,
+                                                                    long emitted,
+                                                                    Consumer<List<RedisKeyInfo>> batchConsumer) {
+        if (emitted >= count) {
+            return CompletableFuture.completedFuture(buildScanResult(scanCursor, emitted));
+        }
+        ScanArgs scanArgs = buildScanArgs(pattern, KEY_SCAN_BATCH_SIZE);
+        return commands.scan(scanCursor, scanArgs).toCompletableFuture().thenCompose(result -> {
+            List<String> keys = result.getKeys();
+            long nextEmitted = emitted + keys.size();
+            ScanCursor nextCursor = ScanCursor.of(result.getCursor());
+            nextCursor.setFinished(result.isFinished());
+            List<CompletableFuture<RedisKeyInfo>> typeFutures = keys.stream()
+                    .map(key -> getTypeAsync(commands, key)
+                            .thenApply(type -> RedisKeyInfo.builder().name(key).type(type).build()))
+                    .toList();
+            return CompletableFuture.allOf(typeFutures.toArray(CompletableFuture[]::new)).thenCompose(ignored -> {
+                if (!typeFutures.isEmpty()) {
+                    batchConsumer.accept(typeFutures.stream().map(CompletableFuture::join).toList());
+                }
+                if (nextCursor.isFinished() || nextEmitted >= count) {
+                    return CompletableFuture.completedFuture(buildScanResult(nextCursor, nextEmitted));
+                }
+                return scanKeyTypesAsync(commands, pattern, nextCursor, count, nextEmitted, batchConsumer);
+            });
+        });
     }
 
     private CompletableFuture<RedisKeyScanResult> scanKeyNamesAsync(RedisAsyncCommands<String, String> commands,
@@ -328,6 +444,15 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     private boolean isExactKeyPattern(String pattern) {
         return StringUtils.isNotBlank(pattern)
                 && !StringUtils.containsAny(pattern, '*', '?', '[', ']');
+    }
+
+    private String escapeScanPattern(String prefix) {
+        String value = StringUtils.defaultString(prefix);
+        return value.replace("\\", "\\\\")
+                .replace("*", "\\*")
+                .replace("?", "\\?")
+                .replace("[", "\\[")
+                .replace("]", "\\]");
     }
 
     // ======================== 键信息构建 ========================

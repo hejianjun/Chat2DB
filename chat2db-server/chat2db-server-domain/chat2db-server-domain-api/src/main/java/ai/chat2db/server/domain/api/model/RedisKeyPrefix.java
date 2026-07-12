@@ -76,6 +76,12 @@ public class RedisKeyPrefix implements IndexModel {
     private Long keyCount;
 
     /**
+     * 本次前缀缓存刷新中发现的 Redis 类型，使用逗号分隔以便存入 Lucene 索引。
+     */
+    @LuceneField(name = "sampleTypes", type = LuceneFieldType.STRING, inherit = true)
+    private String sampleTypes;
+
+    /**
      * 当前数据源/库是否正在刷新 Redis key 前缀缓存。
      *
      * <p>这是运行时返回字段，不写入 Lucene。搜索结果返回前由服务层根据刷新状态填充。</p>

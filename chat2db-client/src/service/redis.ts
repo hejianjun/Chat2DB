@@ -22,6 +22,7 @@ export interface IRedisKeyPrefixItem {
   name: string;
   comment?: string;
   keyCount?: number;
+  sampleTypes?: string;
   building?: boolean;
 }
 
@@ -59,6 +60,12 @@ export interface IRedisKeyPrefixBuildStatus {
   startedAt?: string;
   updatedAt?: string;
   errorMessage?: string;
+}
+
+export interface IRedisKeyPrefixSampleParams {
+  dataSourceId: number;
+  databaseName?: string;
+  prefix: string;
 }
 
 export interface IRedisKeyQueryParams {
@@ -133,6 +140,10 @@ const searchKeyPrefixes = createRequest<IRedisKeyPrefixSearchParams, IRedisKeyPr
     method: 'get',
   },
 );
+
+const sampleKeyPrefixTypes = createRequest<IRedisKeyPrefixSampleParams, IRedisKeyItem[]>('/api/redis/key-prefix/sample', {
+  method: 'get',
+});
 
 const updateKeyPrefixComment = createRequest<IRedisKeyPrefixCommentUpdateParams, void>(
   '/api/redis/key-prefix/comment',
@@ -266,6 +277,7 @@ export default {
   queryKey,
   refreshKeyPrefixCache,
   searchKeyPrefixes,
+  sampleKeyPrefixTypes,
   streamKeyList,
   streamMonitor,
   updateKeyPrefixComment,
