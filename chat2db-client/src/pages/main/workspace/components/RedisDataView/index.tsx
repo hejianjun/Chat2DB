@@ -1526,7 +1526,23 @@ function formatTtl(ttl?: number) {
   if (ttl === -2) {
     return '已过期';
   }
-  return `${ttl}s`;
+
+  const units = [
+    [24 * 60 * 60, 'd'],
+    [60 * 60, 'h'],
+    [60, 'm'],
+    [1, 's'],
+  ] as const;
+  let remaining = ttl;
+
+  return units
+    .map(([seconds, suffix]) => {
+      const value = Math.floor(remaining / seconds);
+      remaining %= seconds;
+      return value > 0 || seconds === 1 ? `${value}${suffix}` : '';
+    })
+    .filter(Boolean)
+    .join(' ');
 }
 
 function formatSize(size?: number) {
