@@ -160,7 +160,12 @@ const RedisDataView = memo((props: IProps) => {
     }
   };
 
-  const loadPrefixComments = (keyword = '', refresh = false, syncSearchResult = false) => {
+  const loadPrefixComments = (
+    keyword = '',
+    refresh = false,
+    syncSearchResult = false,
+    sort = sortInfo,
+  ) => {
     if (!uniqueData?.dataSourceId) {
       return Promise.resolve();
     }
@@ -171,11 +176,11 @@ const RedisDataView = memo((props: IProps) => {
         databaseName: uniqueData.databaseName,
         searchKey: keyword,
         refresh,
-        sortField: 'name',
-        sortOrder: 'ascend',
+        sortField: sort?.field === 'keyCount' ? 'keyCount' : 'name',
+        sortOrder: sort?.order || 'ascend',
       })
       .then((items) => {
-        const list = items || [];
+        const list = mergePrefixItems(items || []);
         setPrefixComments((current) => mergePrefixComments(current, list));
         if (syncSearchResult) {
           setPrefixSearchData(list);
@@ -189,8 +194,8 @@ const RedisDataView = memo((props: IProps) => {
       .finally(() => setPrefixLoading(false));
   };
 
-  const searchPrefixes = (keyword = searchKey, refresh = false) => {
-    const searchRequest = loadPrefixComments(keyword, refresh, true);
+  const searchPrefixes = (keyword = searchKey, refresh = false, sort = sortInfo) => {
+    const searchRequest = loadPrefixComments(keyword, refresh, true, sort);
     loadPrefixBuildStatus();
     return searchRequest;
   };
@@ -644,7 +649,7 @@ const RedisDataView = memo((props: IProps) => {
         setHasMore(false);
         setSearchMode(SEARCH_MODE_PREFIX);
         setSortInfo(DEFAULT_PREFIX_SORT);
-        await loadPrefixComments('', false, true);
+        await loadPrefixComments('', false, true, DEFAULT_PREFIX_SORT);
         return;
       }
       setSearchMode(SEARCH_MODE_KEY);
@@ -680,7 +685,7 @@ const RedisDataView = memo((props: IProps) => {
       const headerHeight = tableWrap.querySelector('.ant-table-thead')?.getBoundingClientRect().height || 39;
       const { height: wrapHeight, width: wrapWidth } = tableWrap.getBoundingClientRect();
       setTableScrollY(Math.max(120, Math.floor(wrapHeight - headerHeight)));
-      setTableScrollX(Math.max(1000, Math.floor(wrapWidth)));
+      setTableScrollX(Math.floor(wrapWidth));
     };
 
     updateTableScrollY();
@@ -697,8 +702,11 @@ const RedisDataView = memo((props: IProps) => {
 
   // 构建树形数据，若有排序则递归排序每层 children
   const tableData = useMemo(() => {
-    const tree =
-      searchMode === SEARCH_MODE_PREFIX ? buildPrefixRows(prefixSearchData) : buildRows(data, prefixComments);
+    if (searchMode === SEARCH_MODE_PREFIX) {
+      // 前缀列表已由后端按当前字段排序，避免本地再次排序造成顺序和滚动状态不一致。
+      return buildPrefixRows(prefixSearchData);
+    }
+    const tree = buildRows(data, prefixComments);
     if (!sortInfo) {
       return tree;
     }
@@ -783,10 +791,10 @@ const RedisDataView = memo((props: IProps) => {
     () => [
       {
         title: '键',
-        dataIndex: 'displayName',
+        dataIndex: 'name',
         width: '28%',
         sorter: true,
-        sortOrder: sortInfo?.field === 'displayName' ? sortInfo.order : undefined,
+        sortOrder: sortInfo?.field === 'name' ? sortInfo.order : undefined,
         render: (text, record) => {
           if (record.isGroup) {
             return (
@@ -903,18 +911,14 @@ const RedisDataView = memo((props: IProps) => {
       sorter: SorterResult<IRedisKeyRow> | SorterResult<IRedisKeyRow>[],
     ) => {
       const s = Array.isArray(sorter) ? sorter[0] : sorter;
-      if (s?.field && s.order) {
-        setSortInfo((prev) => {
-          if (prev?.field === s.field && prev?.order === s.order) {
-            return null;
-          }
-          return { field: s.field as string, order: s.order as 'ascend' | 'descend' };
-        });
-      } else {
-        setSortInfo(null);
+      const nextSort =
+        s?.field && s.order ? { field: String(s.field), order: s.order as 'ascend' | 'descend' } : null;
+      setSortInfo(nextSort);
+      if (searchMode === SEARCH_MODE_PREFIX) {
+        searchPrefixes(searchKey, false, nextSort);
       }
     },
-    [],
+    [searchKey, searchMode, sortInfo],
   );
 
   return (
@@ -932,7 +936,7 @@ const RedisDataView = memo((props: IProps) => {
             setSearchMode(nextMode);
             setSortInfo(nextMode === SEARCH_MODE_PREFIX ? DEFAULT_PREFIX_SORT : null);
             if (nextMode === SEARCH_MODE_PREFIX) {
-              searchPrefixes(searchKey);
+              searchPrefixes(searchKey, false, DEFAULT_PREFIX_SORT);
             }
           }}
         />
@@ -1338,6 +1342,27 @@ function buildPrefixRows(prefixes: IRedisKeyPrefixItem[]) {
     sampleTypes: item.sampleTypes?.split(',').filter(Boolean),
     comment: item.comment,
   }));
+}
+
+function mergePrefixItems(items: IRedisKeyPrefixItem[]): IRedisKeyPrefixItem[] {
+  const merged = new Map<string, IRedisKeyPrefixItem>();
+  items.forEach((item) => {
+    const existing = merged.get(item.name);
+    if (!existing) {
+      merged.set(item.name, item);
+      return;
+    }
+    const sampleTypes = [...new Set(`${existing.sampleTypes || ''},${item.sampleTypes || ''}`.split(',').filter(Boolean))];
+    merged.set(item.name, {
+      ...existing,
+      ...item,
+      keyCount: Math.max(existing.keyCount || 0, item.keyCount || 0),
+      sampleTypes: sampleTypes.join(',') || undefined,
+      comment: item.comment ?? existing.comment,
+      aiComment: item.aiComment ?? existing.aiComment,
+    });
+  });
+  return [...merged.values()];
 }
 
 function mergePrefixComments(
