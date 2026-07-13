@@ -102,14 +102,19 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     }
 
     @Override
-    public CompletableFuture<RedisKeyScanResult> streamKeyNames(String databaseName, String searchKey, String cursor,
-                                                                int count, Consumer<List<String>> batchConsumer) {
-        return keyBrowser.streamKeyNames(databaseName, searchKey, cursor, count, batchConsumer);
+    public RedisKeyInfo queryKey(String databaseName, String keyName) {
+        return keyBrowser.queryKey(databaseName, keyName);
     }
 
     @Override
-    public RedisKeyInfo queryKey(String databaseName, String keyName) {
-        return keyBrowser.queryKey(databaseName, keyName);
+    public CompletableFuture<List<RedisKeyInfo>> sampleKeys(String databaseName, String prefix, int maxCount) {
+        return keyBrowser.sampleKeys(databaseName, prefix, maxCount);
+    }
+
+    @Override
+    public CompletableFuture<RedisKeyScanResult> streamPrefixKeys(String databaseName,
+                                                                    Consumer<List<RedisKeyInfo>> batchConsumer) {
+        return keyBrowser.streamPrefixKeys(databaseName, batchConsumer);
     }
 
     @Override

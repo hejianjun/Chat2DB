@@ -65,11 +65,9 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /** 自定义 Redis key 前缀分隔符环境变量。 */
     private static final String PREFIX_DELIMITERS_ENV = "CHAT2DB_REDIS_KEY_PREFIX_DELIMITERS";
 
-    /** 每扫描到指定数量的 key 后，将当前聚合结果刷新到 Lucene，控制长时间扫描时的内存增长。 */
-    private static final long FLUSH_KEY_THRESHOLD = 50000L;
 
-    /** 单次写入 Lucene 的文档数量，避免一次性提交过多文档导致索引写入压力过大。 */
-    private static final int FLUSH_DOCUMENT_BATCH_SIZE = 500;
+    /** 前缀类型样例最多检查的 key 数量。 */
+    private static final int PREFIX_TYPE_SAMPLE_LIMIT = 3;
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
@@ -241,10 +239,10 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             // 获取当前数据源对应的 RedisKeyPrefix Lucene 索引管理器。
             LuceneIndexManager<RedisKeyPrefix> luceneMgr = managerFactory.getManager(dataSourceId);
 
-            // 流式遍历 Redis key，按分隔符提取前缀并统计出现次数。
-            browser.streamKeyTypes(databaseName, null, "0", -1, keys -> {
-                // 对当前批次返回的每个 key 提取前缀，并累计数量和类型。
-                keys.forEach(key -> collectPrefixes(key.getName(), key.getType(), prefixCountMap, prefixTypeMap));
+            // 流式遍历 Redis key，只按 key 名提取前缀并统计出现次数。
+            browser.streamPrefixKeys(databaseName, keys -> {
+                // 类型采样延后到最长前缀筛选完成后，避免全量扫描阶段逐 key 识别类型。
+                keys.forEach(key -> collectPrefixes(key.getName(), prefixCountMap));
 
                 // 累加本批次 key 数量，得到当前任务已经扫描的 key 总数。
                 long scanned = scannedCount.addAndGet(keys.size());
@@ -259,6 +257,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             }).join();
 
             Map<String, Long> selectedPrefixCountMap = selectLongestPrefixes(prefixCountMap);
+            collectPrefixSampleTypes(browser, databaseName, selectedPrefixCountMap.keySet(), prefixTypeMap);
 
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
             flushPrefixes(luceneMgr, dataSourceId, databaseName, selectedPrefixCountMap, prefixTypeMap);
@@ -311,14 +310,20 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         collectPrefixes(key, prefixCountMap, resolvePrefixDelimiters());
     }
 
-    private void collectPrefixes(String key, String type, Map<String, Long> prefixCountMap,
-                                 Map<String, Set<String>> prefixTypeMap) {
-        extractPrefixCandidates(key, resolvePrefixDelimiters()).forEach(prefix -> {
-            prefixCountMap.merge(prefix, 1L, Long::sum);
-            if (StringUtils.isNotBlank(type)) {
-                prefixTypeMap.computeIfAbsent(prefix, ignored -> ConcurrentHashMap.newKeySet()).add(type);
+    private void collectPrefixSampleTypes(RedisKeyBrowser browser, String databaseName, Set<String> prefixes,
+                                          Map<String, Set<String>> prefixTypeMap) {
+        for (String prefix : prefixes) {
+            try {
+                browser.sampleKeys(databaseName, prefix, PREFIX_TYPE_SAMPLE_LIMIT).join().forEach(sample -> {
+                    if (StringUtils.isNotBlank(sample.getType())) {
+                        prefixTypeMap.computeIfAbsent(prefix, ignored -> ConcurrentHashMap.newKeySet())
+                                .add(sample.getType());
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("Sample Redis key types failed, databaseName={}, prefix={}", databaseName, prefix, e);
             }
-        });
+        }
     }
 
     static Map<String, Long> buildPrefixCountMap(Collection<String> keys, String delimiters) {
