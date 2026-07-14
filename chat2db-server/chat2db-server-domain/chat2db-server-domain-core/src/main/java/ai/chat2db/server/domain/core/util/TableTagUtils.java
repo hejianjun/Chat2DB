@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public final class TableTagUtils {
 
@@ -15,20 +17,46 @@ public final class TableTagUtils {
 
     public static Map<String, String> calculateTags(List<String> tableNames) {
         Map<String, String> result = new LinkedHashMap<>();
-        List<NameParts> names = tableNames.stream().filter(StringUtils::isNotBlank).map(NameParts::new).toList();
+        List<NameParts> names = new ArrayList<>(tableNames.stream()
+                .filter(StringUtils::isNotBlank)
+                .map(NameParts::new)
+                .collect(Collectors.toMap(name -> name.tokens, name -> name, (first, ignored) -> first,
+                        LinkedHashMap::new))
+                .values());
+        Map<NameParts, Integer> candidateSizes = new LinkedHashMap<>();
         for (NameParts name : names) {
-            String tag = null;
-            for (int size = name.tokens.size() - 1; size >= 1; size--) {
-                final int prefixSize = size;
+            for (int size = name.tokens.size(); size >= 1; size--) {
                 List<String> prefix = name.tokens.subList(0, size);
-                if (names.stream().filter(other -> other.tokens.size() > prefixSize && other.startsWith(prefix)).count() >= 2) {
-                    tag = name.prefix(size);
+                if (names.stream().filter(other -> other.startsWith(prefix)).count() >= 2) {
+                    candidateSizes.put(name, size);
                     break;
                 }
             }
-            result.put(name.original, tag);
         }
+
+        Set<List<String>> candidateTags = candidateSizes.entrySet().stream()
+                .map(entry -> entry.getKey().tokens.subList(0, entry.getValue()))
+                .collect(Collectors.toSet());
+        Set<List<String>> longestTags = candidateTags.stream()
+                .filter(tag -> candidateTags.stream().noneMatch(other -> other.size() > tag.size() && startsWith(other, tag)))
+                .collect(Collectors.toSet());
+        Map<List<String>, String> tagLabels = new LinkedHashMap<>();
+        for (Map.Entry<NameParts, Integer> entry : candidateSizes.entrySet()) {
+            NameParts name = entry.getKey();
+            int tagSize = entry.getValue();
+            List<String> tag = name.tokens.subList(0, tagSize);
+            if (!longestTags.contains(tag)) {
+                continue;
+            }
+            tagLabels.putIfAbsent(tag, name.prefix(tagSize));
+            result.put(name.original, tagLabels.get(tag));
+        }
+        names.stream().filter(name -> !result.containsKey(name.original)).forEach(name -> result.put(name.original, null));
         return result;
+    }
+
+    private static boolean startsWith(List<String> tokens, List<String> prefix) {
+        return tokens.size() >= prefix.size() && tokens.subList(0, prefix.size()).equals(prefix);
     }
 
     private static final class NameParts {
@@ -56,7 +84,7 @@ public final class TableTagUtils {
         }
 
         private boolean startsWith(List<String> prefix) {
-            return tokens.subList(0, prefix.size()).equals(prefix);
+            return tokens.size() >= prefix.size() && tokens.subList(0, prefix.size()).equals(prefix);
         }
 
         private String prefix(int count) {

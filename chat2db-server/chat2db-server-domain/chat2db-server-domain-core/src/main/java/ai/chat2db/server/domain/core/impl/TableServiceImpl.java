@@ -464,9 +464,29 @@ public class TableServiceImpl implements TableService {
                 .schemaName(param.getSchemaName()).tableName(tableName).build();
         List<Table> tables = manager.searchAll(query, null);
         if (!tables.isEmpty()) {
-            tables.get(0).setTag(StringUtils.trimToNull(tag));
+            // Empty string means the tag was explicitly cleared. Using null here would trigger Lucene field
+            // inheritance and restore the previous tag during updateDocument.
+            tables.get(0).setTag(StringUtils.trimToEmpty(tag));
             manager.updateDocument(tables.get(0));
         }
+    }
+
+    @Override
+    public void refreshTags(TablePageQueryParam param) {
+        LuceneIndexManager<Table> manager = managerFactory.getManager(param.getDataSourceId());
+        List<Table> tables = deprecatedTable(manager.searchAll(param, null), param);
+        if (CollectionUtils.isEmpty(tables)) {
+            return;
+        }
+        Map<String, String> generatedTags = TableTagUtils.calculateTags(
+                tables.stream().map(Table::getName).collect(Collectors.toList()));
+        log.info("[TableTag] Refresh all tags, dataSourceId:{}, databaseName:{}, schemaName:{}, tableCount:{}, "
+                        + "generatedTagCount:{}, fullNameTagCount:{}", param.getDataSourceId(), param.getDatabaseName(),
+                param.getSchemaName(), tables.size(),
+                generatedTags.values().stream().filter(StringUtils::isNotBlank).distinct().count(),
+                generatedTags.entrySet().stream().filter(entry -> entry.getKey().equals(entry.getValue())).count());
+        tables.forEach(table -> table.setTag(StringUtils.defaultString(generatedTags.get(table.getName()))));
+        manager.updateDocumentsByName(tables);
     }
 
 
@@ -501,10 +521,6 @@ public class TableServiceImpl implements TableService {
             Connection conn = redis ? null : Chat2DBContext.getConnection();
             MetaData meta = Chat2DBContext.getMetaData();
             List<Table> tables = meta.tables(conn, databaseName, schemaName, null);
-            // 新建索引时填充自动标签；已有手工标签由 @LuceneField(inherit = true) 在刷新时保留。
-            Map<String, String> generatedTags = TableTagUtils.calculateTags(
-                    tables.stream().map(Table::getName).collect(Collectors.toList()));
-            tables.forEach(table -> table.setTag(generatedTags.get(table.getName())));
             Long dataSourceId = Chat2DBContext.getConnectInfo().getDataSourceId();
             String objectKey = metadataSnapshotService.buildObjectKey(MetadataSnapshotService.TYPE_TABLE, databaseName,
                     schemaName, databaseName);

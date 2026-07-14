@@ -283,6 +283,9 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
         // 使用 STRING 类型的字段自动构建过滤条件
         List<AnnotationBasedDocumentBuilder.AnnotatedFieldInfo> stringFields = documentBuilder.getStringFields(model.getClass());
         for (AnnotationBasedDocumentBuilder.AnnotatedFieldInfo info : stringFields) {
+            if (info.annotation.inherit()) {
+                continue;
+            }
             Object value = info.getValue(model);
             if (value instanceof String) {
                 addTermQuery(booleanQuery, info.annotation.name(), (String) value, BooleanClause.Occur.FILTER);
@@ -538,6 +541,32 @@ public class LuceneIndexManager<T extends IndexModel> implements AutoCloseable {
     @SneakyThrows
     public <E extends BaseModel> List<T> search(E queryModel, Integer lastDocId, String queryStr) {
         return search(queryModel, lastDocId, queryStr, null, false);
+    }
+
+    /**
+     * Batch updates documents by their individual names and reloads the searcher only once.
+     */
+    @SneakyThrows
+    public void updateDocumentsByName(List<? extends T> sources) {
+        if (CollectionUtils.isEmpty(sources)) {
+            return;
+        }
+        lock.writeLock().lock();
+        try {
+            for (T source : sources) {
+                String field = StringUtils.uncapitalize(source.getClassType().getSimpleName() + "Name");
+                TermQuery termQuery = new TermQuery(new Term(field, source.getName()));
+                BooleanQuery query = buildBooleanQuery(source)
+                        .add(termQuery, BooleanClause.Occur.FILTER)
+                        .build();
+                Map<String, JSONObject> sourceMap = buildSourceMap(query, 1);
+                Document document = createDocument(source, sourceMap, true);
+                writer.updateDocuments(query, Collections.singletonList(document));
+            }
+            reload();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**

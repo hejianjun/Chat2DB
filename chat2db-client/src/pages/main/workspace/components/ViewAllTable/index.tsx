@@ -53,6 +53,7 @@ export default memo<IProps>((props) => {
   const [form] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [editingTagKey, setEditingTagKey] = useState<string | null>(null);
+  const [tagRefreshing, setTagRefreshing] = useState(false);
   const tagSavingRef = useRef(false);
   const tagEditCancelledRef = useRef(false);
 
@@ -171,6 +172,31 @@ export default memo<IProps>((props) => {
         {tag && <Tag color="blue">{tag}</Tag>}
       </div>
     );
+  };
+
+  const refreshAllTags = () => {
+    Modal.confirm({
+      title: i18n('workspace.table.tag.refreshConfirmTitle'),
+      content: i18n('workspace.table.tag.refreshConfirmContent'),
+      okText: i18n('common.button.confirm'),
+      cancelText: i18n('common.button.cancel'),
+      onOk: async () => {
+        setTagRefreshing(true);
+        try {
+          await sqlServer.refreshTableTags({
+            dataSourceId: Number(uniqueData.dataSourceId),
+            databaseName: uniqueData.databaseName,
+            schemaName: uniqueData.schemaName,
+          });
+          message.success(i18n('workspace.table.tag.refreshSuccess'));
+          getTable({ pageNo: currentPageNo, pageSize: 1000 });
+        } catch {
+          message.error(i18n('workspace.table.tag.refreshFailed'));
+        } finally {
+          setTagRefreshing(false);
+        }
+      },
+    });
   };
 
   const paginationChange = (pageNo: number) => {
@@ -684,6 +710,9 @@ export default memo<IProps>((props) => {
             </>
           ) : (
             <>
+              <Button loading={tagRefreshing} onClick={refreshAllTags} style={{ marginLeft: 8 }}>
+                {i18n('workspace.table.tag.refreshAll')}
+              </Button>
               <Button
                 onClick={batchDeprecatedTable}
                 disabled={selectedRowKeys.length === 0}

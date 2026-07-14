@@ -406,6 +406,11 @@ const updateTableTag = createRequest<
   void
 >('/api/rdb/table/tag/update', { method: 'post' });
 
+const refreshTableTags = createRequest<
+  { dataSourceId: number; databaseName?: string | null; schemaName?: string | null },
+  void
+>('/api/rdb/table/tag/refresh', { method: 'post' });
+
 /** 获取表的所有字段 */
 const getAllFieldByTable = createRequest<
   { dataSourceId: number; databaseName?: string; schemaName?: string | null; tableName: string },
@@ -754,6 +759,7 @@ export default {
   // exportResultTable
   getAllTableList,
   updateTableTag,
+  refreshTableTags,
   getAllFieldByTable,
   getAiGuess,
   deleteVirtualForeignKey,

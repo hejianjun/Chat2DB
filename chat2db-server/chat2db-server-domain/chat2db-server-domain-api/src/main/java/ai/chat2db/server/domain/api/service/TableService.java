@@ -120,6 +120,8 @@ public interface TableService {
 
     void updateTag(TablePageQueryParam param, String tableName, String tag);
 
+    void refreshTags(TablePageQueryParam param);
+
     /**
      * 查询表包含的字段
      *
