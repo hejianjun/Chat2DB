@@ -67,7 +67,7 @@ public class AiChatConfig {
     }
 
     public ChatResponse testModelService(String provider, String apiHost, String completionsPath, String apiKey,
-                                         String model) {
+            String model) {
         ModelServiceConfig service = new ModelServiceConfig();
         service.setProvider(provider);
         service.setApiHost(apiHost);
@@ -82,9 +82,9 @@ public class AiChatConfig {
     }
 
     private ChatClient createChatClientByModel(ModelServiceConfig service,
-                                               ModelItem modelItem,
-                                               boolean fastMode,
-                                               boolean enableMemory) {
+            ModelItem modelItem,
+            boolean fastMode,
+            boolean enableMemory) {
         AiSqlSourceEnum aiSqlSourceEnum = AiSqlSourceEnum.getByName(service.getProvider());
         if (aiSqlSourceEnum == null) {
             aiSqlSourceEnum = AiSqlSourceEnum.OPENAI;
@@ -119,9 +119,9 @@ public class AiChatConfig {
             extraBody.put("enable_thinking", !fastMode);
         } else if (StringUtils.contains(modelItem.getModel(), "hy")) {
             extraBody.put("reasoning", ImmutableMap.of("enable", !fastMode));
-        } else if(fastMode){
+        } else if (fastMode) {
             extraBody.put("thinking", ImmutableMap.of("type", "disabled"));
-            extraBody.put("reasoning_effort","minimal");
+            extraBody.put("reasoning_effort", "none");
         }
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelItem.getModel())
@@ -137,15 +137,16 @@ public class AiChatConfig {
     }
 
     private ChatClient buildChatClient(org.springframework.ai.chat.model.ChatModel chatModel,
-                                       ModelItem modelItem,
-                                       boolean enableMemory) {
+            ModelItem modelItem,
+            boolean enableMemory) {
         ChatClient.Builder builder = ChatClient.builder(chatModel);
         if (enableMemory) {
-            // Reserve most of the model context for schema DDL, the current request, and the generated answer.
+            // Reserve most of the model context for schema DDL, the current request, and
+            // the generated answer.
             int contextWindowTokens = modelItem.getContextWindowTokens() == null
                     || modelItem.getContextWindowTokens() <= 0
-                    ? DEFAULT_CONTEXT_WINDOW_TOKENS
-                    : modelItem.getContextWindowTokens();
+                            ? DEFAULT_CONTEXT_WINDOW_TOKENS
+                            : modelItem.getContextWindowTokens();
             int historyBudget = Math.max(1, (int) (contextWindowTokens * HISTORY_BUDGET_RATIO));
             TokenWindowChatMemory chatMemory = new TokenWindowChatMemory(chatMemoryRepository, historyBudget);
             builder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build());
