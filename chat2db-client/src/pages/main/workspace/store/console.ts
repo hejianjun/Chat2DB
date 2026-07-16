@@ -62,7 +62,6 @@ export const setWorkspaceTabList = (items: IConsoleStore['workspaceTabList']) =>
 
 export const createConsole = (params: ICreateConsoleParams) => {
   const workspaceTabList = useWorkspaceStore.getState().workspaceTabList;
-  const consoleList = useWorkspaceStore.getState().consoleList;
   const currentConnectionDetails = useWorkspaceStore.getState().currentConnectionDetails;
   const newConsole = {
     ...params,
@@ -97,21 +96,19 @@ export const createConsole = (params: ICreateConsoleParams) => {
         operationType: newConsole.operationType,
       };
 
-      const newConsoleList = [...(consoleList || []), newConsoleItem];
-      useWorkspaceStore.setState({ consoleList: newConsoleList });
-
-      const newList = [
-        ...(workspaceTabList || []),
-        {
-          id: res,
-          title: newConsole.name,
-          type: newConsole.operationType,
-          uniqueData: newConsole,
-        },
-      ];
-
-      setWorkspaceTabList(newList);
-      setActiveConsoleId(res);
+      useWorkspaceStore.setState((state) => ({
+        consoleList: [...(state.consoleList || []), newConsoleItem],
+        workspaceTabList: [
+          ...(state.workspaceTabList || []),
+          {
+            id: res,
+            title: newConsole.name,
+            type: newConsole.operationType,
+            uniqueData: newConsole,
+          },
+        ],
+        activeConsoleId: res,
+      }));
       resolve(res);
     })
       .finally(() => { 

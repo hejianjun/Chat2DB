@@ -46,6 +46,27 @@ import { getConsoleEditor } from '../SQLExecute/consoleEditorRegistry';
 
 const MAX_DIRECT_SSE_URL_LENGTH = 1800;
 
+const updateConsoleTitle = (consoleId: number | string, title: string) => {
+  useWorkspaceStore.setState((state) => ({
+    consoleList: state.consoleList
+      ? state.consoleList.map((item) =>
+          String(item.id) === String(consoleId) ? { ...item, name: title } : item,
+        )
+      : state.consoleList,
+    workspaceTabList: state.workspaceTabList
+      ? state.workspaceTabList.map((item) =>
+          String(item.id) === String(consoleId)
+            ? {
+                ...item,
+                title,
+                uniqueData: item.uniqueData ? { ...item.uniqueData, name: title } : item.uniqueData,
+              }
+            : item,
+        )
+      : state.workspaceTabList,
+  }));
+};
+
 const WorkspaceTabs = memo(() => {
   const { activeConsoleId, consoleList, workspaceTabList } = useWorkspaceStore((state) => {
     return {
@@ -212,18 +233,7 @@ const WorkspaceTabs = memo(() => {
       name: value,
     };
     historyService.updateSavedConsole(_params);
-
-    const _workspaceTabList: any =
-      workspaceTabList?.map((item) => {
-        if (item.id === t.key) {
-          return {
-            ...item,
-            title: value,
-          };
-        }
-        return item;
-      }) || [];
-    setWorkspaceTabList(_workspaceTabList);
+    updateConsoleTitle(t.key, value);
   };
 
   // AI 生成标题
@@ -309,18 +319,7 @@ const WorkspaceTabs = memo(() => {
           name: cleanTitle,
         };
         historyService.updateSavedConsole(_params);
-
-        const _workspaceTabList: any =
-          workspaceTabList?.map((item) => {
-            if (item.id === consoleId) {
-              return {
-                ...item,
-                title: cleanTitle,
-              };
-            }
-            return item;
-          }) || [];
-        setWorkspaceTabList(_workspaceTabList);
+        updateConsoleTitle(consoleId, cleanTitle);
         message.success(i18n('common.tips.updateSuccess'));
       } else {
         message.warning(i18n('workspace.tips.generateTitleFailed'));
