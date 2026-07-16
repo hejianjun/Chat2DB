@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Input, Spin, message, Tag, Alert, Modal, Select } from 'antd';
+import { Button, Mentions, Spin, message, Tag, Alert, Modal, Select } from 'antd';
 import {
   DownOutlined,
   RightOutlined,
@@ -253,6 +253,7 @@ export default memo<IProps>(() => {
   const [relatedTablesLoading, setRelatedTablesLoading] = useState(false);
   const [databaseTables, setDatabaseTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [selectedTableDraft, setSelectedTableDraft] = useState<string[]>([]);
+  const [mentionActive, setMentionActive] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const {
     currentSessionId,
@@ -410,17 +411,12 @@ export default memo<IProps>(() => {
     [currentSessionId, setSelectedTables],
   );
 
-  const openTableSelector = useCallback(async () => {
+  const loadDatabaseTables = useCallback(async () => {
     if (!boundInfo.dataSourceId) {
       message.warning('请先选择数据库连接');
       return;
     }
-
-    const currentTables = currentSession?.selectedTables || boundInfo.tableNames || [];
-    setSelectedTableDraft(currentTables);
-    setTableSelectorOpen(true);
-
-    if (databaseTables.length > 0) {
+    if (databaseTables.length > 0 || tableSelectorLoading) {
       return;
     }
 
@@ -438,7 +434,25 @@ export default memo<IProps>(() => {
     } finally {
       setTableSelectorLoading(false);
     }
-  }, [boundInfo, currentSession?.selectedTables, databaseTables.length]);
+  }, [
+    boundInfo.dataSourceId,
+    boundInfo.databaseName,
+    boundInfo.schemaName,
+    databaseTables.length,
+    tableSelectorLoading,
+  ]);
+
+  const openTableSelector = useCallback(() => {
+    if (!boundInfo.dataSourceId) {
+      message.warning('请先选择数据库连接');
+      return;
+    }
+
+    const currentTables = currentSession?.selectedTables || boundInfo.tableNames || [];
+    setSelectedTableDraft(currentTables);
+    setTableSelectorOpen(true);
+    loadDatabaseTables();
+  }, [boundInfo.dataSourceId, boundInfo.tableNames, currentSession?.selectedTables, loadDatabaseTables]);
 
   const handleRemoveSelectedTable = useCallback(
     (tableName: string) => {
@@ -918,19 +932,30 @@ export default memo<IProps>(() => {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionActive) {
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendAiChat(inputValue);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const nextValue = e.target.value;
-    setInputValue(nextValue);
-    if (nextValue.endsWith('@') && !tableSelectorOpen) {
-      openTableSelector();
-    }
+  const handleMentionKeyUp = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textBeforeCursor = e.currentTarget.value.slice(0, e.currentTarget.selectionStart || 0);
+    setMentionActive(/@[^\s@]*$/.test(textBeforeCursor));
+  };
+
+  const handleMentionSearch = () => {
+    setMentionActive(true);
+    loadDatabaseTables();
+  };
+
+  const handleMentionSelect = (option: { value: string }) => {
+    const currentTables = currentSession?.selectedTables || boundInfo.tableNames || [];
+    syncSelectedTables([...currentTables, option.value]);
+    setMentionActive(false);
   };
 
   const handleBoundInfoChange = (value: { dataSourceId: number; databaseName: string; schemaName: string }) => {
@@ -1082,10 +1107,17 @@ export default memo<IProps>(() => {
           curDatabaseName={boundInfo.databaseName}
           curSchemaName={boundInfo.schemaName}
         />
-        <Input.TextArea
+        <Mentions
+          className={styles.chatInput}
           value={inputValue}
-          onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
+          onChange={setInputValue}
+          onKeyDown={handleInputKeyDown}
+          onKeyUp={handleMentionKeyUp}
+          onSearch={handleMentionSearch}
+          onSelect={handleMentionSelect}
+          options={tableOptions}
+          loading={tableSelectorLoading}
+          placement="top"
           placeholder="请输入您的问题..."
           autoSize={{ minRows: 3, maxRows: 6 }}
           disabled={isProcessing}
