@@ -6,6 +6,7 @@ import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.model.VirtualForeignKey;
 
+import java.util.Collections;
 import java.util.List;
 
 public interface ForeignKeySyncService {
@@ -19,7 +20,7 @@ public interface ForeignKeySyncService {
 
     VirtualForeignKey createVirtualFK(CreateVirtualFKParam param);
 
-    ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params);
+    ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params, boolean skipInvalid);
 
     List<VirtualForeignKey> createInferredVirtualFKs(List<CreateVirtualFKParam> params);
 
@@ -70,14 +71,52 @@ public interface ForeignKeySyncService {
     class ImportVirtualFKResult {
         private int created;
         private int updated;
+        private List<ImportVirtualFKInvalidItem> invalidItems;
 
         public ImportVirtualFKResult(int created, int updated) {
+            this(created, updated, Collections.emptyList());
+        }
+
+        public ImportVirtualFKResult(int created, int updated, List<ImportVirtualFKInvalidItem> invalidItems) {
             this.created = created;
             this.updated = updated;
+            this.invalidItems = invalidItems;
         }
 
         public int getCreated() { return created; }
         public int getUpdated() { return updated; }
+        public List<ImportVirtualFKInvalidItem> getInvalidItems() { return invalidItems; }
+    }
+
+    class ImportVirtualFKInvalidItem {
+        private String tableName;
+        private String columnName;
+        private String referencedTable;
+        private String referencedColumnName;
+        private List<ImportVirtualFKErrorType> errorTypes;
+
+        public ImportVirtualFKInvalidItem(String tableName, String columnName,
+                                          String referencedTable, String referencedColumnName,
+                                          List<ImportVirtualFKErrorType> errorTypes) {
+            this.tableName = tableName;
+            this.columnName = columnName;
+            this.referencedTable = referencedTable;
+            this.referencedColumnName = referencedColumnName;
+            this.errorTypes = errorTypes;
+        }
+
+        public String getTableName() { return tableName; }
+        public String getColumnName() { return columnName; }
+        public String getReferencedTable() { return referencedTable; }
+        public String getReferencedColumnName() { return referencedColumnName; }
+        public List<ImportVirtualFKErrorType> getErrorTypes() { return errorTypes; }
+    }
+
+    enum ImportVirtualFKErrorType {
+        SOURCE_TABLE_NOT_FOUND,
+        SOURCE_COLUMN_NOT_FOUND,
+        REFERENCED_TABLE_NOT_FOUND,
+        REFERENCED_COLUMN_NOT_FOUND
     }
 
     class VirtualForeignKeyConsistencyResult {

@@ -113,7 +113,7 @@ public class ForeignKeyController {
                         .comment(item.getComment())
                         .build())
                 .collect(Collectors.toList());
-        return DataResult.of(foreignKeySyncService.importVirtualFKs(params));
+        return DataResult.of(foreignKeySyncService.importVirtualFKs(params, request.isSkipInvalid()));
     }
 
     @PostMapping("/virtual/update")

@@ -273,14 +273,18 @@ export default memo<IProps>(() => {
 
   const currentSession = currentSessionId ? sessions[currentSessionId] : null;
 
-  const { consoleList, activeConsoleId, currentConnectionDetails, pendingAiChat } = useWorkspaceStore((state) => ({
-    consoleList: state.consoleList,
-    activeConsoleId: state.activeConsoleId,
-    currentConnectionDetails: state.currentConnectionDetails,
-    pendingAiChat: state.pendingAiChat,
-  }));
+  const { consoleList, workspaceTabList, activeConsoleId, currentConnectionDetails, pendingAiChat } =
+    useWorkspaceStore((state) => ({
+      consoleList: state.consoleList,
+      workspaceTabList: state.workspaceTabList,
+      activeConsoleId: state.activeConsoleId,
+      currentConnectionDetails: state.currentConnectionDetails,
+      pendingAiChat: state.pendingAiChat,
+    }));
 
-  const activeConsole = consoleList?.find((c) => c.id === activeConsoleId);
+  const activeConsole =
+    workspaceTabList?.find((tab) => String(tab.id) === String(activeConsoleId))?.uniqueData ||
+    consoleList?.find((console) => String(console.id) === String(activeConsoleId));
 
   const [boundInfo, setBoundInfo] = useState(() => ({
     dataSourceId: activeConsole?.dataSourceId || currentConnectionDetails?.id,
@@ -290,7 +294,9 @@ export default memo<IProps>(() => {
   }));
 
   useEffect(() => {
-    const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
+    const activeConsoleInfo =
+      workspaceTabList?.find((tab) => String(tab.id) === String(activeConsoleId))?.uniqueData ||
+      consoleList?.find((console) => String(console.id) === String(activeConsoleId));
     if (activeConsoleInfo) {
       setBoundInfo((prev) => ({
         dataSourceId: activeConsoleInfo.dataSourceId || prev.dataSourceId,
@@ -299,7 +305,7 @@ export default memo<IProps>(() => {
         tableNames: prev.tableNames,
       }));
     }
-  }, [activeConsoleId, consoleList]);
+  }, [activeConsoleId, consoleList, workspaceTabList]);
 
   useEffect(() => {
     setDatabaseTables([]);

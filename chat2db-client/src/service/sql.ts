@@ -592,13 +592,29 @@ export interface IImportVirtualFKParams {
   dataSourceId: number;
   databaseName?: string;
   schemaName?: string;
+  skipInvalid?: boolean;
   virtualForeignKeys: Array<Omit<ICreateVirtualFKParams, 'dataSourceId' | 'databaseName' | 'schemaName'>>;
+}
+
+export type ImportVirtualFKErrorType =
+  | 'SOURCE_TABLE_NOT_FOUND'
+  | 'SOURCE_COLUMN_NOT_FOUND'
+  | 'REFERENCED_TABLE_NOT_FOUND'
+  | 'REFERENCED_COLUMN_NOT_FOUND';
+
+export interface IImportVirtualFKInvalidItem {
+  tableName: string;
+  columnName: string;
+  referencedTable: string;
+  referencedColumnName: string;
+  errorTypes: ImportVirtualFKErrorType[];
 }
 
 /** 批量导入虚拟外键结果 */
 export interface IImportVirtualFKResult {
   created: number;
   updated: number;
+  invalidItems: IImportVirtualFKInvalidItem[];
 }
 
 /** 更新虚拟外键参数 */

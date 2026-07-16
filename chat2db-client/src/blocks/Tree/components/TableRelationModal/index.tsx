@@ -1,7 +1,13 @@
 import Iconfont from '@/components/Iconfont';
 import { TreeNodeType } from '@/constants';
 import i18n from '@/i18n';
-import sqlService, { IForeignKeyVO, IVirtualFKConsistencyResult } from '@/service/sql';
+import sqlService, {
+  IForeignKeyVO,
+  IImportVirtualFKInvalidItem,
+  IImportVirtualFKParams,
+  ImportVirtualFKErrorType,
+  IVirtualFKConsistencyResult,
+} from '@/service/sql';
 import { ITreeNode } from '@/typings';
 import { DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
 import { Button, Form, Input, message, Modal, Progress, Select, Space, Table, Tag, Upload } from 'antd';
@@ -31,6 +37,25 @@ interface IVirtualFkImportItem {
 
 const buildVirtualFkKey = (item: IVirtualFkImportItem) =>
   [item.tableName, item.columnName].map((value) => `${value || ''}`.trim().toLowerCase()).join('\u0001');
+
+const getImportErrorText = (item: IImportVirtualFKInvalidItem, errorType: ImportVirtualFKErrorType) => {
+  switch (errorType) {
+    case 'SOURCE_TABLE_NOT_FOUND':
+      return i18n('workspace.tableRelation.importSourceTableNotFound', item.tableName);
+    case 'SOURCE_COLUMN_NOT_FOUND':
+      return i18n('workspace.tableRelation.importSourceColumnNotFound', item.tableName, item.columnName);
+    case 'REFERENCED_TABLE_NOT_FOUND':
+      return i18n('workspace.tableRelation.importReferencedTableNotFound', item.referencedTable);
+    case 'REFERENCED_COLUMN_NOT_FOUND':
+      return i18n(
+        'workspace.tableRelation.importReferencedColumnNotFound',
+        item.referencedTable,
+        item.referencedColumnName,
+      );
+    default:
+      return errorType;
+  }
+};
 
 const TableRelationModal = memo((props: IProps) => {
   const { treeNodeData, pageMode } = props;
@@ -353,6 +378,106 @@ const TableRelationModal = memo((props: IProps) => {
     return Array.from(itemMap.values());
   };
 
+  const showImportInvalidModal = (
+    importParams: IImportVirtualFKParams,
+    invalidItems: IImportVirtualFKInvalidItem[],
+  ) => {
+    const validCount = importParams.virtualForeignKeys.length - invalidItems.length;
+    const invalidColumns = [
+      {
+        title: i18n('workspace.tableRelation.childTable'),
+        dataIndex: 'tableName',
+        width: 150,
+      },
+      {
+        title: i18n('workspace.tableRelation.relationColumn'),
+        dataIndex: 'columnName',
+        width: 150,
+      },
+      {
+        title: i18n('workspace.tableRelation.masterTable'),
+        dataIndex: 'referencedTable',
+        width: 150,
+      },
+      {
+        title: i18n('workspace.tableRelation.uniqueColumn'),
+        dataIndex: 'referencedColumnName',
+        width: 150,
+      },
+      {
+        title: i18n('workspace.tableRelation.importErrorReason'),
+        width: 280,
+        render: (_: unknown, record: IImportVirtualFKInvalidItem) => (
+          <Space direction="vertical" size={0}>
+            {record.errorTypes.map((errorType) => (
+              <span key={errorType}>{getImportErrorText(record, errorType)}</span>
+            ))}
+          </Space>
+        ),
+      },
+    ];
+    const content = (
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <span>
+          {validCount
+            ? i18n('workspace.tableRelation.importInvalidContent', invalidItems.length, validCount)
+            : i18n('workspace.tableRelation.importAllInvalid', invalidItems.length)}
+        </span>
+        <Table
+          rowKey={(record) => buildVirtualFkKey(record)}
+          columns={invalidColumns}
+          dataSource={invalidItems}
+          pagination={false}
+          size="small"
+          scroll={{ x: 880, y: 360 }}
+        />
+      </Space>
+    );
+
+    if (!validCount) {
+      Modal.error({
+        title: i18n('workspace.tableRelation.importInvalidTitle'),
+        icon: null,
+        width: 920,
+        className: 'tableRelationModalRoot',
+        content,
+        okText: i18n('common.button.close'),
+      });
+      return;
+    }
+
+    Modal.confirm({
+      title: i18n('workspace.tableRelation.importInvalidTitle'),
+      icon: null,
+      width: 920,
+      className: 'tableRelationModalRoot',
+      content,
+      okText: i18n('workspace.tableRelation.importSkipInvalid'),
+      cancelText: i18n('common.button.cancel'),
+      onOk: async () => {
+        setImporting(true);
+        try {
+          const result = await sqlService.importVirtualForeignKeys({ ...importParams, skipInvalid: true });
+          const skippedCount = result?.invalidItems?.length || invalidItems.length;
+          message.success(
+            i18n(
+              'workspace.tableRelation.importSuccessWithSkipped',
+              result?.created || 0,
+              result?.updated || 0,
+              skippedCount,
+            ),
+          );
+          fetchForeignKeys();
+        } catch (error) {
+          message.error(`${i18n('workspace.tableRelation.importError')}: ${String(error)}`);
+          throw error;
+        } finally {
+          setImporting(false);
+        }
+      },
+    });
+  };
+
   const handleImport = async (file: File) => {
     if (!dataSourceId || !databaseName) return false;
     setImporting(true);
@@ -364,7 +489,7 @@ const TableRelationModal = memo((props: IProps) => {
         return false;
       }
 
-      const result = await sqlService.importVirtualForeignKeys({
+      const importParams: IImportVirtualFKParams = {
         dataSourceId: dataSourceId!,
         databaseName,
         schemaName,
@@ -375,7 +500,13 @@ const TableRelationModal = memo((props: IProps) => {
           referencedColumnName: item.referencedColumnName!,
           comment: item.comment,
         })),
-      });
+      };
+      const result = await sqlService.importVirtualForeignKeys(importParams);
+
+      if (result?.invalidItems?.length) {
+        showImportInvalidModal(importParams, result.invalidItems);
+        return false;
+      }
 
       message.success(i18n('workspace.tableRelation.importSuccess', result?.created || 0, result?.updated || 0));
       fetchForeignKeys();

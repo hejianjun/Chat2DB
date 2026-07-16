@@ -184,7 +184,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
     }
 
     @Override
-    public ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params) {
+    public ImportVirtualFKResult importVirtualFKs(List<CreateVirtualFKParam> params, boolean skipInvalid) {
         if (CollectionUtils.isEmpty(params)) {
             return new ImportVirtualFKResult(0, 0);
         }
@@ -224,6 +224,47 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
             columnMap.put(normalizedTableName, columns);
         }
 
+        List<ImportVirtualFKInvalidItem> invalidItems = new ArrayList<>();
+        List<CreateVirtualFKParam> validParams = new ArrayList<>();
+        for (CreateVirtualFKParam param : params) {
+            String sourceTableKey = normalizeVirtualForeignKeyPart(param.getTableName());
+            String referencedTableKey = normalizeVirtualForeignKeyPart(param.getReferencedTable());
+            String sourceColumnKey = normalizeVirtualForeignKeyPart(param.getColumnName());
+            String referencedColumnKey = normalizeVirtualForeignKeyPart(param.getReferencedColumnName());
+            List<ImportVirtualFKErrorType> errorTypes = new ArrayList<>();
+            if (!tableMap.containsKey(sourceTableKey)) {
+                errorTypes.add(ImportVirtualFKErrorType.SOURCE_TABLE_NOT_FOUND);
+            } else if (!columnMap.getOrDefault(sourceTableKey, Collections.emptyMap()).containsKey(sourceColumnKey)) {
+                errorTypes.add(ImportVirtualFKErrorType.SOURCE_COLUMN_NOT_FOUND);
+            }
+            if (!tableMap.containsKey(referencedTableKey)) {
+                errorTypes.add(ImportVirtualFKErrorType.REFERENCED_TABLE_NOT_FOUND);
+            } else if (!columnMap.getOrDefault(referencedTableKey, Collections.emptyMap())
+                    .containsKey(referencedColumnKey)) {
+                errorTypes.add(ImportVirtualFKErrorType.REFERENCED_COLUMN_NOT_FOUND);
+            }
+
+            if (!errorTypes.isEmpty()) {
+                invalidItems.add(new ImportVirtualFKInvalidItem(
+                        param.getTableName(),
+                        param.getColumnName(),
+                        param.getReferencedTable(),
+                        param.getReferencedColumnName(),
+                        errorTypes));
+                continue;
+            }
+
+            param.setTableName(tableMap.get(sourceTableKey));
+            param.setColumnName(columnMap.get(sourceTableKey).get(sourceColumnKey));
+            param.setReferencedTable(tableMap.get(referencedTableKey));
+            param.setReferencedColumnName(columnMap.get(referencedTableKey).get(referencedColumnKey));
+            validParams.add(param);
+        }
+
+        if ((!invalidItems.isEmpty() && !skipInvalid) || validParams.isEmpty()) {
+            return new ImportVirtualFKResult(0, 0, invalidItems);
+        }
+
         List<VirtualForeignKeyDO> existingFKs = queryVirtualFKsFromH2(
                 first.getDataSourceId(),
                 first.getDatabaseName(),
@@ -242,37 +283,16 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
         int created = 0;
         int updated = 0;
         Set<String> handledKeys = new HashSet<>();
-        for (CreateVirtualFKParam param : params) {
-            String sourceTableKey = normalizeVirtualForeignKeyPart(param.getTableName());
-            String referencedTableKey = normalizeVirtualForeignKeyPart(param.getReferencedTable());
-            String sourceColumnKey = normalizeVirtualForeignKeyPart(param.getColumnName());
-            String referencedColumnKey = normalizeVirtualForeignKeyPart(param.getReferencedColumnName());
-            if (!tableMap.containsKey(sourceTableKey)
-                    || !tableMap.containsKey(referencedTableKey)
-                    || !columnMap.getOrDefault(sourceTableKey, Collections.emptyMap()).containsKey(sourceColumnKey)
-                    || !columnMap.getOrDefault(referencedTableKey, Collections.emptyMap()).containsKey(referencedColumnKey)) {
-                throw new BusinessException("foreignKey.virtualForeignKeyRelationInvalid", new Object[]{
-                        param.getTableName(),
-                        param.getColumnName(),
-                        param.getReferencedTable(),
-                        param.getReferencedColumnName()
-                });
-            }
-
+        for (CreateVirtualFKParam param : validParams) {
             String key = buildVirtualForeignKeyKey(
                     param.getDataSourceId(),
                     param.getDatabaseName(),
                     param.getSchemaName(),
-                    tableMap.get(sourceTableKey),
-                    columnMap.get(sourceTableKey).get(sourceColumnKey));
+                    param.getTableName(),
+                    param.getColumnName());
             if (!handledKeys.add(key)) {
                 continue;
             }
-
-            param.setTableName(tableMap.get(sourceTableKey));
-            param.setColumnName(columnMap.get(sourceTableKey).get(sourceColumnKey));
-            param.setReferencedTable(tableMap.get(referencedTableKey));
-            param.setReferencedColumnName(columnMap.get(referencedTableKey).get(referencedColumnKey));
 
             VirtualForeignKeyDO existing = existingMap.get(key);
             if (existing == null) {
@@ -292,7 +312,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
             updated++;
         }
 
-        return new ImportVirtualFKResult(created, updated);
+        return new ImportVirtualFKResult(created, updated, invalidItems);
     }
 
     @Override

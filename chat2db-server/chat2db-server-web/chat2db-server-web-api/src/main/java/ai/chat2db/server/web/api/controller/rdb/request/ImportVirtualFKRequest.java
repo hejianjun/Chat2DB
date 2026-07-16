@@ -18,6 +18,8 @@ public class ImportVirtualFKRequest implements DataSourceBaseRequestInfo {
 
     private String schemaName;
 
+    private boolean skipInvalid;
+
     @Valid
     @NotEmpty
     private List<VirtualFKImportItemRequest> virtualForeignKeys;
