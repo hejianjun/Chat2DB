@@ -46,6 +46,9 @@ public class LlmHttpLoggingConnector implements ClientHttpConnector {
     public Mono<ClientHttpResponse> connect(HttpMethod method,
                                             URI uri,
                                             Function<? super ClientHttpRequest, Mono<Void>> requestCallback) {
+        if (!log.isDebugEnabled()) {
+            return delegate.connect(method, uri, requestCallback);
+        }
         ByteArrayOutputStream requestBody = new ByteArrayOutputStream();
         return delegate.connect(method, uri, request -> {
             ClientHttpRequest loggingRequest = new ClientHttpRequestDecorator(request) {

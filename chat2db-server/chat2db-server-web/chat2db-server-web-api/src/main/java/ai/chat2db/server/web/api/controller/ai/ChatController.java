@@ -3,7 +3,11 @@ package ai.chat2db.server.web.api.controller.ai;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -38,6 +42,7 @@ import ai.chat2db.server.tools.common.util.LogUtils;
 import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.config.AiChatConfig;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
+import ai.chat2db.server.web.api.controller.ai.request.ChatImageRequest;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
@@ -74,11 +79,17 @@ public class ChatController {
     private final ConcurrentHashMap<String, PendingChatPayload> pendingPayloads = new ConcurrentHashMap<>();
 
     private static final long PAYLOAD_TIMEOUT = Duration.ofMinutes(5).toMillis();
+    private static final int MAX_IMAGE_COUNT = 4;
+    private static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+    private static final int MAX_ENCODED_IMAGE_LENGTH = ((MAX_IMAGE_BYTES + 2) / 3) * 4;
+    private static final Set<String> SUPPORTED_IMAGE_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/gif", "image/webp");
 
     @PostMapping("/chat/payload")
     @CrossOrigin
     public ResponseEntity<Map<String, String>> createChatPayload(@RequestBody ChatQueryRequest queryRequest) {
         cleanupExpiredPayloads();
+        validateImages(queryRequest);
 
         String payloadId = UUID.randomUUID().toString();
         pendingPayloads.put(payloadId, new PendingChatPayload(queryRequest, System.currentTimeMillis()));
@@ -89,6 +100,7 @@ public class ChatController {
     @CrossOrigin
     public SseEmitter chat(ChatQueryRequest queryRequest) throws IOException {
         queryRequest = resolvePayload(queryRequest);
+        validateImages(queryRequest);
 
         String sessionKey = queryRequest.getConversationId();
         if (StrUtil.isBlank(sessionKey)) {
@@ -310,6 +322,30 @@ public class ChatController {
     private void cleanupExpiredPayloads() {
         long now = System.currentTimeMillis();
         pendingPayloads.entrySet().removeIf(entry -> now - entry.getValue().createdAt() > PAYLOAD_TIMEOUT);
+    }
+
+    private void validateImages(ChatQueryRequest queryRequest) {
+        List<ChatImageRequest> images = queryRequest == null ? null : queryRequest.getImages();
+        if (CollectionUtils.isEmpty(images)) {
+            return;
+        }
+        if (images.size() > MAX_IMAGE_COUNT) {
+            throw new ParamBusinessException("images");
+        }
+        for (ChatImageRequest image : images) {
+            if (image == null || StrUtil.isBlank(image.getMimeType())
+                    || !SUPPORTED_IMAGE_TYPES.contains(image.getMimeType().toLowerCase(Locale.ROOT))
+                    || StrUtil.isBlank(image.getData()) || image.getData().length() > MAX_ENCODED_IMAGE_LENGTH) {
+                throw new ParamBusinessException("images");
+            }
+            try {
+                if (Base64.getDecoder().decode(image.getData()).length > MAX_IMAGE_BYTES) {
+                    throw new ParamBusinessException("images");
+                }
+            } catch (IllegalArgumentException e) {
+                throw new ParamBusinessException("images");
+            }
+        }
     }
 
     private record PendingChatPayload(ChatQueryRequest queryRequest, long createdAt) {

@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Mentions, Spin, message, Tag, Alert, Modal, Select } from 'antd';
+import { Button, Mentions, Spin, message, Tag, Alert, Modal, Select, Upload } from 'antd';
 import {
   DownOutlined,
   RightOutlined,
@@ -8,6 +8,8 @@ import {
   PlusOutlined,
   LinkOutlined,
   DeleteOutlined,
+  PaperClipOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -28,7 +30,12 @@ import {
   isSimpleTaskPromptType,
 } from '@/pages/main/workspace/store/common';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
-import { useAiChatStore, ChatStateType, IChatMessage } from '@/pages/main/workspace/store/aiChatStore';
+import {
+  useAiChatStore,
+  ChatStateType,
+  IChatMessage,
+  IChatImageAttachment,
+} from '@/pages/main/workspace/store/aiChatStore';
 import { getConsoleEditor } from '@/pages/main/workspace/components/SQLExecute/consoleEditorRegistry';
 import { getSearchResult } from '@/pages/main/workspace/components/SQLExecute/searchResultRegistry';
 import ConversationSidebar from './ConversationSidebar';
@@ -202,6 +209,9 @@ function extractSqlFromContent(content: string): string | null {
 }
 
 const MAX_DIRECT_SSE_URL_LENGTH = 1800;
+const MAX_IMAGE_COUNT = 4;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 const normalizeNullableText = (value?: string | null): string => value || '';
 
@@ -254,6 +264,7 @@ export default memo<IProps>(() => {
   const [databaseTables, setDatabaseTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [selectedTableDraft, setSelectedTableDraft] = useState<string[]>([]);
   const [mentionActive, setMentionActive] = useState(false);
+  const [pendingImages, setPendingImages] = useState<IChatImageAttachment[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const {
     currentSessionId,
@@ -273,6 +284,54 @@ export default memo<IProps>(() => {
   } = useAiChatStore();
 
   const currentSession = currentSessionId ? sessions[currentSessionId] : null;
+
+  const addImageFiles = useCallback(async (files: File[]) => {
+    const validFiles = files.filter((file) => {
+      if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+        message.warning(`${file.name} 不是支持的图片格式`);
+        return false;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        message.warning(`${file.name} 超过 5 MB`);
+        return false;
+      }
+      return true;
+    });
+
+    let attachments: IChatImageAttachment[];
+    try {
+      attachments = await Promise.all(
+        validFiles.map(
+          (file) =>
+            new Promise<IChatImageAttachment>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () =>
+                resolve({
+                  id: uuidv4(),
+                  name: file.name,
+                  mimeType: file.type,
+                  dataUrl: String(reader.result),
+                  size: file.size,
+                });
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(file);
+            }),
+        ),
+      );
+    } catch (error) {
+      console.error('[AiChat] Failed to read image:', error);
+      message.error('读取图片失败');
+      return;
+    }
+
+    setPendingImages((current) => {
+      const remaining = MAX_IMAGE_COUNT - current.length;
+      if (attachments.length > remaining) {
+        message.warning(`单次最多上传 ${MAX_IMAGE_COUNT} 张图片`);
+      }
+      return [...current, ...attachments.slice(0, Math.max(remaining, 0))];
+    });
+  }, []);
 
   const { consoleList, workspaceTabList, activeConsoleId, currentConnectionDetails, pendingAiChat } =
     useWorkspaceStore((state) => ({
@@ -389,12 +448,18 @@ export default memo<IProps>(() => {
     [renameSession],
   );
 
-  const sendAiChat = (messageText: string, promptType: IAiChatPromptType = 'NL_2_SQL', tableNames?: string[] | null, ext?: string) => {
+  const sendAiChat = (
+    messageText: string,
+    promptType: IAiChatPromptType = 'NL_2_SQL',
+    tableNames?: string[] | null,
+    ext?: string,
+    images: IChatImageAttachment[] = pendingImages,
+  ) => {
     const infoWithTables = {
       ...boundInfo,
       tableNames: tableNames !== undefined ? tableNames : boundInfo.tableNames,
     };
-    sendAiChatInternal(messageText, promptType, infoWithTables, ext);
+    sendAiChatInternal(messageText, promptType, infoWithTables, ext, images);
   };
 
   const syncSelectedTables = useCallback(
@@ -525,11 +590,19 @@ export default memo<IProps>(() => {
   }, [boundInfo, currentSession?.selectedTables, syncSelectedTables]);
 
   const sendAiChatInternal = useCallback(
-    async (messageText: string, requestedPromptType: IAiChatPromptType, info: typeof boundInfo, ext?: string) => {
-      if (!messageText.trim()) {
+    async (
+      messageText: string,
+      requestedPromptType: IAiChatPromptType,
+      info: typeof boundInfo,
+      ext?: string,
+      images: IChatImageAttachment[] = [],
+    ) => {
+      if (!messageText.trim() && images.length === 0) {
         message.warning('请输入问题');
         return;
       }
+
+      const effectiveMessage = messageText.trim() || '请分析这些图片';
 
       if (!info.dataSourceId) {
         message.warning('请先选择数据库连接');
@@ -544,7 +617,7 @@ export default memo<IProps>(() => {
         requestedPromptType === 'NL_2_SQL' && existingSession?.promptType
           ? (existingSession.promptType as IAiChatPromptType)
           : requestedPromptType;
-      console.log('[AiChat] sendAiChat called with:', { messageText, promptType, info });
+      console.log('[AiChat] sendAiChat called with:', { messageText: effectiveMessage, promptType, info });
       const isSimpleTask = isSimpleTaskPromptType(promptType);
       const isConversationalTask = isConversationalSqlPromptType(promptType);
       const isSameConnection =
@@ -579,6 +652,16 @@ export default memo<IProps>(() => {
         existingSession?.selectedTables?.length
           ? existingSession.selectedTables
           : info.tableNames;
+      const previousImages = shouldReuseConversation
+        ? existingSession?.messages.flatMap((item) => item.images || []) || []
+        : [];
+      const currentImageIds = new Set(images.map((image) => image.id));
+      const requestImages = [
+        ...previousImages
+          .filter((image) => !currentImageIds.has(image.id))
+          .slice(-Math.max(MAX_IMAGE_COUNT - images.length, 0)),
+        ...images,
+      ];
 
       const sessionId = shouldReuseConversation ? existingSessionId! : uuidv4();
       console.log('[AiChat] Using sessionId:', sessionId, 'reuse:', shouldReuseConversation);
@@ -619,25 +702,27 @@ export default memo<IProps>(() => {
       const userMessage: IChatMessage = {
         id: userMessageId,
         role: 'user',
-        content: messageText,
+        content: effectiveMessage,
+        images,
       };
       addMessage(sessionId, userMessage);
 
       setLastRequest({
-        message: messageText,
+        message: effectiveMessage,
         promptType,
         dataSourceId: info.dataSourceId,
         databaseName: info.databaseName,
         schemaName: info.schemaName,
         tableNames: requestTableNames,
         ext,
+        images,
         conversationId: sessionId,
       });
 
       resetCurrentContent(sessionId);
 
       const requestParams = {
-        message: messageText,
+        message: effectiveMessage,
         promptType,
         dataSourceId: info.dataSourceId,
         databaseName: info.databaseName,
@@ -647,12 +732,19 @@ export default memo<IProps>(() => {
         conversationId: sessionId,
         userMessageId,
         assistantMessageId,
+        images: requestImages.map((image) => ({
+          name: image.name,
+          mimeType: image.mimeType,
+          data: image.dataUrl.slice(image.dataUrl.indexOf(',') + 1),
+        })),
       };
 
       setInputValue('');
+      setPendingImages([]);
 
-      let params = formatParams(requestParams);
-      if (`/api/ai/chat?${params}`.length > MAX_DIRECT_SSE_URL_LENGTH) {
+      const containsImages = requestImages.length > 0;
+      let params = containsImages ? '' : formatParams(requestParams);
+      if (containsImages || `/api/ai/chat?${params}`.length > MAX_DIRECT_SSE_URL_LENGTH) {
         try {
           const payloadId = await createChatPayload(requestParams);
           params = formatParams({
@@ -719,7 +811,7 @@ export default memo<IProps>(() => {
             });
             if (shouldGenerateTitle) {
               const firstUserMessage = session.messages.find((item) => item.role === 'user')?.content;
-              void generateConversationTitle(sessionId, firstUserMessage || messageText, info);
+              void generateConversationTitle(sessionId, firstUserMessage || effectiveMessage, info);
             }
 
             if (promptType === 'NL_2_COMMENT' && commentCallbackRef.current) {
@@ -928,6 +1020,7 @@ export default memo<IProps>(() => {
         lastRequest.promptType as IAiChatPromptType,
         lastRequest.tableNames,
         lastRequest.ext,
+        lastRequest.images,
       );
     }
   };
@@ -958,6 +1051,21 @@ export default memo<IProps>(() => {
     setMentionActive(false);
   };
 
+  const handleImagePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length > 0) {
+      e.preventDefault();
+      void addImageFiles(files);
+    }
+  };
+
+  const handleRemovePendingImage = (imageId: string) => {
+    setPendingImages((images) => images.filter((image) => image.id !== imageId));
+  };
+
   const handleBoundInfoChange = (value: { dataSourceId: number; databaseName: string; schemaName: string }) => {
     setBoundInfo({
       dataSourceId: value.dataSourceId,
@@ -974,6 +1082,7 @@ export default memo<IProps>(() => {
     }));
     setSelectedTableDraft([]);
     setInputValue('');
+    setPendingImages([]);
   }, []);
 
   const stateInfo = currentSession ? STATE_LABELS[currentSession.state] : null;
@@ -1067,6 +1176,13 @@ export default memo<IProps>(() => {
           const extractedSql = msg.role === 'assistant' ? extractSqlFromContent(msg.content) : null;
           return (
             <div key={msg.id} className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}>
+              {!!msg.images?.length && (
+                <div className={styles.messageImages}>
+                  {msg.images.map((image) => (
+                    <img key={image.id} src={image.dataUrl} alt={image.name} title={image.name} />
+                  ))}
+                </div>
+              )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
               {extractedSql && msg.role === 'assistant' && (
                 <SqlActionButtons
@@ -1107,6 +1223,22 @@ export default memo<IProps>(() => {
           curDatabaseName={boundInfo.databaseName}
           curSchemaName={boundInfo.schemaName}
         />
+        {pendingImages.length > 0 && (
+          <div className={styles.pendingImages}>
+            {pendingImages.map((image) => (
+              <div className={styles.pendingImage} key={image.id}>
+                <img src={image.dataUrl} alt={image.name} />
+                <Button
+                  className={styles.removeImageButton}
+                  type="text"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={() => handleRemovePendingImage(image.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         <Mentions
           className={styles.chatInput}
           value={inputValue}
@@ -1115,6 +1247,7 @@ export default memo<IProps>(() => {
           onKeyUp={handleMentionKeyUp}
           onSearch={handleMentionSearch}
           onSelect={handleMentionSelect}
+          onPaste={handleImagePaste}
           options={tableOptions}
           loading={tableSelectorLoading}
           placement="top"
@@ -1123,10 +1256,27 @@ export default memo<IProps>(() => {
           disabled={isProcessing}
         />
         <div className={styles.buttonGroup}>
+          <Upload
+            accept={SUPPORTED_IMAGE_TYPES.join(',')}
+            multiple
+            showUploadList={false}
+            beforeUpload={(file) => {
+              void addImageFiles([file]);
+              return Upload.LIST_IGNORE;
+            }}
+          >
+            <Button
+              type="text"
+              icon={<PaperClipOutlined />}
+              disabled={isProcessing || pendingImages.length >= MAX_IMAGE_COUNT}
+            >
+              图片
+            </Button>
+          </Upload>
           <Button
             type="primary"
             onClick={() => sendAiChat(inputValue)}
-            disabled={!inputValue.trim() || isInputDisabled}
+            disabled={(!inputValue.trim() && pendingImages.length === 0) || isInputDisabled}
           >
             发送
           </Button>

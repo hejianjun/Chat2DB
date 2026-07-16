@@ -1,21 +1,29 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.io.IOException;
+import java.util.Base64;
+import java.util.List;
+
 import ai.chat2db.server.domain.api.service.AiConversationMemoryStore;
 import ai.chat2db.server.domain.api.service.AiConversationService;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.content.Media;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateContext;
 import org.springframework.stereotype.Component;
+import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.alibaba.fastjson2.JSONObject;
 
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptValidator;
+import ai.chat2db.server.web.api.controller.ai.request.ChatImageRequest;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
@@ -69,9 +77,17 @@ public class StreamAction extends BaseChatAction {
             log.info("[StreamAction] Starting AI stream, uid: {}, promptLength: {}",
                     ctx.getUid(), prompt == null ? 0 : prompt.length());
 
-            Flux<ChatResponse> flux = ctx.getChatClient().prompt()
-                    .system(prompt)
-                    .user(ctx.getRequest().getMessage())
+            ChatClient.ChatClientRequestSpec requestSpec = ctx.getChatClient().prompt().system(prompt);
+            List<Media> media = buildMedia(ctx.getRequest().getImages());
+            String userText = ctx.getRequest().getMessage();
+            if (media.isEmpty()) {
+                requestSpec = requestSpec.user(userText);
+            } else {
+                String multimodalText = userText == null || userText.isBlank() ? "请分析这些图片" : userText;
+                requestSpec = requestSpec.user(user -> user.text(multimodalText).media(media.toArray(new Media[0])));
+            }
+
+            Flux<ChatResponse> flux = requestSpec
                     .advisors(advisor -> advisor.param(
                             ChatMemory.CONVERSATION_ID, ctx.getRequest().getConversationId()))
                     .stream()
@@ -128,6 +144,19 @@ public class StreamAction extends BaseChatAction {
     private synchronized void appendContent(ChatContext ctx, String content) {
         String current = ctx.getCurrentContent();
         ctx.setCurrentContent(current == null ? content : current + content);
+    }
+
+    private List<Media> buildMedia(List<ChatImageRequest> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+        return images.stream()
+                .map(image -> Media.builder()
+                        .mimeType(MimeTypeUtils.parseMimeType(image.getMimeType()))
+                        .data(new ByteArrayResource(Base64.getDecoder().decode(image.getData())))
+                        .name(image.getName())
+                        .build())
+                .toList();
     }
 
     /**

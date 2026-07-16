@@ -15,10 +15,19 @@ export type ChatStateType =
   | 'COMPLETED'
   | 'FAILED';
 
+export interface IChatImageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  size: number;
+}
+
 export interface IChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  images?: IChatImageAttachment[];
   promptType?: string;
   sequenceNo?: number;
 }
@@ -65,6 +74,7 @@ interface ILastRequest {
   schemaName?: string | null;
   tableNames?: string[] | null;
   ext?: string;
+  images?: IChatImageAttachment[];
   conversationId?: string;
 }
 

@@ -219,6 +219,21 @@
       max-width: 80%;
     }
 
+    .messageImages {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 160px));
+      gap: 8px;
+      margin-bottom: 8px;
+
+      img {
+        width: 100%;
+        max-height: 180px;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid var(--color-border-secondary);
+      }
+    }
+
     .aiBlock {
       padding: 16px;
       background-color: var(--color-bg-subtle);
@@ -447,6 +462,41 @@
 
     .chatInput {
       margin-bottom: 8px;
+    }
+
+    .pendingImages {
+      display: flex;
+      gap: 8px;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+
+    .pendingImage {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      flex: 0 0 auto;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid var(--color-border-secondary);
+      }
+
+      .removeImageButton {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 20px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0;
+        border-radius: 50%;
+        color: var(--color-text-light-solid);
+        background: var(--color-error);
+      }
     }
 
     .buttonGroup {

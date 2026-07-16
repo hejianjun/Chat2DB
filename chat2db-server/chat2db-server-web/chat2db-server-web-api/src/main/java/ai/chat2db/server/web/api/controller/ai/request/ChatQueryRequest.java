@@ -34,6 +34,11 @@ public class ChatQueryRequest extends DataSourceBaseRequest {
     private List<String> tableNames;
 
     /**
+     * 多模态图片列表。
+     */
+    private List<ChatImageRequest> images;
+
+    /**
      * 目标SQL数据类型
      * @see ai.chat2db.server.domain.support.enums.DbTypeEnum
      */
