@@ -6,6 +6,7 @@ import sqlService, { IForeignKeyVO } from '@/service/sql';
 import { IBoundInfo } from '@/typings/workspace';
 import { ICompletionItem, ITableInfo, IJoinTableInfo, ICursorInfo } from '../sql-parser/base/define';
 import { getDialectCompletion } from './dialects';
+import { initMongodbAutocomplete, isMongodbDatabase } from './mongodb-autocomplete';
 
 export interface ISqlAutocompleteOptions {
   monaco: typeof monaco;
@@ -331,6 +332,10 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
   if (isRedisDatabase(boundInfo.databaseType)) {
     return initRedisAutocomplete(options);
+  }
+
+  if (isMongodbDatabase(boundInfo.databaseType)) {
+    return initMongodbAutocomplete(options);
   }
 
   const effectiveParserType = parserType || mapDatabaseTypeToParser(boundInfo.databaseType || 'MYSQL');
