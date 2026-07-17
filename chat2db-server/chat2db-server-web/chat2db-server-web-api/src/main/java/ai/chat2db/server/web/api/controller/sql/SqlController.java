@@ -5,6 +5,7 @@ import ai.chat2db.server.web.api.aspect.ConnectionInfoAspect;
 import ai.chat2db.server.web.api.controller.sql.biz.SqlExecuteBizService;
 import ai.chat2db.server.web.api.controller.sql.request.SqlFormatRequest;
 import ai.chat2db.server.web.api.controller.sql.request.SqlFileExecuteRequest;
+import ai.chat2db.spi.mongodb.MqlFormatter;
 import com.github.vertical_blank.sqlformatter.SqlFormatter;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +38,9 @@ public class SqlController {
     public DataResult<String> list(@Valid SqlFormatRequest sqlFormatRequest) {
         String sql = sqlFormatRequest.getSql();
         try {
-            sql = SqlFormatter.format(sql);
+            sql = "MONGODB".equalsIgnoreCase(sqlFormatRequest.getDbType())
+                    ? MqlFormatter.format(sql)
+                    : SqlFormatter.format(sql);
         } catch (Exception e) {
             // ignore
         }
