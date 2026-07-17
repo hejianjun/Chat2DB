@@ -74,6 +74,20 @@ public class McpServerConfigService {
         return effective;
     }
 
+    public McpProperties.Mongo getEffectiveMongo() {
+        McpProperties.Mongo effective = copyMongo(properties.getMongodb());
+        McpServerConfig config = getStoredConfig();
+        if (config == null || config.getMongodb() == null) {
+            return effective;
+        }
+
+        McpMongoConfig mongodb = config.getMongodb();
+        if (mongodb.getMaxBatchDocuments() != null) {
+            effective.setMaxBatchDocuments(mongodb.getMaxBatchDocuments());
+        }
+        return effective;
+    }
+
     private McpProperties.Sql copySql(McpProperties.Sql source) {
         McpProperties.Sql copy = new McpProperties.Sql();
         copy.setReadOnly(source.isReadOnly());
@@ -81,6 +95,12 @@ public class McpServerConfigService {
         copy.setAllowDdl(source.isAllowDdl());
         copy.setDefaultPageSize(source.getDefaultPageSize());
         copy.setMaxRows(source.getMaxRows());
+        return copy;
+    }
+
+    private McpProperties.Mongo copyMongo(McpProperties.Mongo source) {
+        McpProperties.Mongo copy = new McpProperties.Mongo();
+        copy.setMaxBatchDocuments(source.getMaxBatchDocuments());
         return copy;
     }
 
@@ -104,6 +124,7 @@ public class McpServerConfigService {
         private String authType;
         private String token;
         private McpSqlConfig sql;
+        private McpMongoConfig mongodb;
     }
 
     @Data
@@ -114,5 +135,11 @@ public class McpServerConfigService {
         private Boolean allowDdl;
         private Integer defaultPageSize;
         private Integer maxRows;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class McpMongoConfig {
+        private Integer maxBatchDocuments;
     }
 }

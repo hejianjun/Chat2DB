@@ -1,5 +1,6 @@
 package ai.chat2db.plugin.mongodb;
 
+import ai.chat2db.spi.mongodb.MqlSyntaxParser;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 
@@ -18,81 +19,13 @@ public final class MongodbCommandParser {
     }
 
     public static List<StatementPosition> splitStatements(String script) {
-        List<StatementPosition> statements = new ArrayList<>();
-        if (StringUtils.isBlank(script)) {
-            return statements;
-        }
-        int start = 0;
-        int startLine = 1;
-        int line = 1;
-        int depth = 0;
-        char quote = 0;
-        boolean escaped = false;
-        for (int i = 0; i < script.length(); i++) {
-            char ch = script.charAt(i);
-            if (ch == '\n') {
-                line++;
-            }
-            if (quote != 0) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch == '\\') {
-                    escaped = true;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ';' && depth == 0) {
-                addStatement(statements, script, start, i, startLine, line);
-                start = i + 1;
-                startLine = line;
-            }
-        }
-        addStatement(statements, script, start, script.length(), startLine, line);
-        return statements;
+        return MqlSyntaxParser.splitStatements(script).stream()
+                .map(value -> new StatementPosition(value.statement(), value.startLine(), value.endLine()))
+                .toList();
     }
 
     public static List<String> splitArguments(String arguments) {
-        List<String> values = new ArrayList<>();
-        if (StringUtils.isBlank(arguments)) {
-            return values;
-        }
-        int start = 0;
-        int depth = 0;
-        char quote = 0;
-        boolean escaped = false;
-        for (int i = 0; i < arguments.length(); i++) {
-            char ch = arguments.charAt(i);
-            if (quote != 0) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch == '\\') {
-                    escaped = true;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ',' && depth == 0) {
-                values.add(arguments.substring(start, i).trim());
-                start = i + 1;
-            }
-        }
-        values.add(arguments.substring(start).trim());
-        return values;
+        return MqlSyntaxParser.splitArguments(arguments);
     }
 
     public static Object parseValue(String value) {
@@ -119,62 +52,9 @@ public final class MongodbCommandParser {
 
     public static List<MethodCall> parseMethodCalls(String expression) {
         List<MethodCall> calls = new ArrayList<>();
-        int position = 0;
-        while (position < expression.length()) {
-            while (position < expression.length() && Character.isWhitespace(expression.charAt(position))) {
-                position++;
-            }
-            if (position >= expression.length()) {
-                break;
-            }
-            if (expression.charAt(position) == '.') {
-                position++;
-            }
-            int nameStart = position;
-            while (position < expression.length()
-                    && (Character.isLetterOrDigit(expression.charAt(position))
-                    || expression.charAt(position) == '_' || expression.charAt(position) == '$')) {
-                position++;
-            }
-            String name = expression.substring(nameStart, position);
-            while (position < expression.length() && Character.isWhitespace(expression.charAt(position))) {
-                position++;
-            }
-            if (StringUtils.isBlank(name) || position >= expression.length() || expression.charAt(position) != '(') {
-                throw new IllegalArgumentException("Invalid MQL method expression: " + expression);
-            }
-            int close = findClosingParenthesis(expression, position);
-            calls.add(new MethodCall(name, splitArguments(expression.substring(position + 1, close))));
-            position = close + 1;
-        }
+        MqlSyntaxParser.parseMethodCalls(expression)
+                .forEach(value -> calls.add(new MethodCall(value.name(), value.arguments())));
         return calls;
-    }
-
-    private static int findClosingParenthesis(String value, int open) {
-        int depth = 0;
-        char quote = 0;
-        boolean escaped = false;
-        for (int i = open; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            if (quote != 0) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch == '\\') {
-                    escaped = true;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '(') {
-                depth++;
-            } else if (ch == ')' && --depth == 0) {
-                return i;
-            }
-        }
-        throw new IllegalArgumentException("Unclosed parenthesis in MQL expression");
     }
 
     private static boolean isQuoted(String value) {
@@ -278,14 +158,6 @@ public final class MongodbCommandParser {
 
     private static boolean isIdentifierPart(char value) {
         return Character.isLetterOrDigit(value) || value == '_' || value == '$' || value == '.';
-    }
-
-    private static void addStatement(List<StatementPosition> statements, String script, int start, int end,
-                                     int startLine, int endLine) {
-        String statement = script.substring(start, end).trim();
-        if (StringUtils.isNotBlank(statement)) {
-            statements.add(new StatementPosition(statement, startLine, endLine));
-        }
     }
 
     public record StatementPosition(String statement, int startLine, int endLine) {

@@ -16,11 +16,15 @@ public class McpProperties {
     /** Optional bearer token required by MCP HTTP endpoints. */
     private String token;
 
-    /** SQL execution policy exposed to MCP tools. */
+    /** Shared relational and MongoDB execution policy exposed to MCP tools. */
     private Sql sql = new Sql();
 
+    /** MongoDB execution policy exposed to MCP tools. */
+    private Mongo mongodb = new Mongo();
+
     /**
-     * Safety limits for SQL tools. Write and DDL execution stay disabled unless explicitly enabled.
+     * Shared MCP safety policy. Write covers SQL DML and MongoDB document writes; DDL covers SQL DDL and
+     * MongoDB collection/index administration.
      */
     @Data
     public static class Sql {
@@ -38,5 +42,12 @@ public class McpProperties {
 
         /** Hard cap for rows returned by MCP query tools. */
         private int maxRows = 1000;
+    }
+
+    /** MongoDB-specific execution limits. Permissions are inherited from the shared SQL policy above. */
+    @Data
+    public static class Mongo {
+        /** Maximum number of documents accepted by one INSERT_MANY prepare request. */
+        private int maxBatchDocuments = 100;
     }
 }

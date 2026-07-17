@@ -72,6 +72,8 @@ chat2db:
       allow-ddl: false
       default-page-size: 100
       max-rows: 1000
+    mongodb:
+      max-batch-documents: 100
 
 # flywaydb 输出执行sql的日志
 logging:

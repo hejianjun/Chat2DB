@@ -55,6 +55,16 @@ class MongodbNativeClientTest {
     }
 
     @Test
+    void methodCallListRemainsMutableForGetCollectionExecution() {
+        List<MongodbCommandParser.MethodCall> calls = MongodbCommandParser.parseMethodCalls(
+                "getCollection('audit-log').find({})");
+
+        Assertions.assertEquals("getCollection", calls.remove(0).name());
+        Assertions.assertEquals(List.of("find"),
+                calls.stream().map(MongodbCommandParser.MethodCall::name).toList());
+    }
+
+    @Test
     void splitMqlArgumentsKeepsNestedDocuments() {
         List<String> arguments = MongodbCommandParser.splitArguments(
                 "{\"_id\": 1}, {\"$set\": {\"name\": \"chat2db\", \"tags\": [\"a\", \"b\"]}}");
