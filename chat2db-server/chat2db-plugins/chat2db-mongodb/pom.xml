@@ -15,6 +15,10 @@
             <groupId>ai.chat2db</groupId>
             <artifactId>chat2db-spi</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+        </dependency>
     </dependencies>
 
     <artifactId>chat2db-mongodb</artifactId>

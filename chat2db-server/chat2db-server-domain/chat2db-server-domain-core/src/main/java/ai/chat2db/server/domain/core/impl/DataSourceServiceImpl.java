@@ -32,6 +32,7 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.ListResult;
 import ai.chat2db.server.tools.base.wrapper.result.PageResult;
 import ai.chat2db.plugin.redis.RedisConnectionProvider;
+import ai.chat2db.plugin.mongodb.MongodbConnectionProvider;
 import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
 import ai.chat2db.server.tools.common.exception.DataNotFoundException;
@@ -124,7 +125,7 @@ public class DataSourceServiceImpl implements DataSourceService {
     private void preWarmingData(Long dataSourceId) {
         DataSource dataSource = queryById(dataSourceId);
         if (dataSource != null) {
-            if (DataSourceTypeEnum.REDIS.getCode().equals(dataSource.getType())) {
+            if (isNativeClient(dataSource.getType())) {
                 return;
             }
             DriverConfig driverConfig = dataSource.getDriverConfig();
@@ -277,9 +278,21 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Override
     public void preConnect(DataSourcePreConnectParam param) {
+        if (DataSourceTypeEnum.MONGODB.getCode().equals(param.getType())) {
+            try {
+                MongodbConnectionProvider.testConnect(toNativeConnectInfo(param));
+            } catch (Exception e) {
+                Throwable t = e;
+                while (t.getCause() != null) {
+                    t = t.getCause();
+                }
+                throw new BusinessException("connection.error", new Object[]{t.getMessage()});
+            }
+            return;
+        }
         if (DataSourceTypeEnum.REDIS.getCode().equals(param.getType())) {
             try {
-                RedisConnectionProvider.testConnect(toRedisConnectInfo(param));
+                RedisConnectionProvider.testConnect(toNativeConnectInfo(param));
             } catch (Exception e) {
                 Throwable t = e;
                 while (t.getCause() != null) {
@@ -305,7 +318,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         
     }
 
-    private ConnectInfo toRedisConnectInfo(DataSourcePreConnectParam param) {
+    private ConnectInfo toNativeConnectInfo(DataSourcePreConnectParam param) {
         ConnectInfo connectInfo = new ConnectInfo();
         connectInfo.setUrl(param.getUrl());
         connectInfo.setHost(param.getHost());
@@ -327,12 +340,17 @@ public class DataSourceServiceImpl implements DataSourceService {
         DatabaseQueryAllParam queryAllParam = new DatabaseQueryAllParam();
         queryAllParam.setDataSourceId(id);
         List<Database> databases;
-        if (DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType())) {
+        if (isNativeClient(Chat2DBContext.getConnectInfo().getDbType())) {
             databases = Chat2DBContext.getMetaData().databases(null);
         } else {
             databases = Chat2DBContext.getMetaData().databases(Chat2DBContext.getConnection());
         }
         return databases;
+    }
+
+    private boolean isNativeClient(String dbType) {
+        return DataSourceTypeEnum.REDIS.getCode().equals(dbType)
+                || DataSourceTypeEnum.MONGODB.getCode().equals(dbType);
     }
 
     @Override

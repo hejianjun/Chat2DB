@@ -2216,7 +2216,7 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
           },
         },
       ],
-      pattern: /mongodb:\/\/(.*):(\d+)(\/(\w+))?/,
+      pattern: /mongodb(?:\+srv)?:\/\/.+/,
       template: 'mongodb://{host}:{port}/{database}',
       excludes: [OperationColumn.ViewDDL, OperationColumn.CreateTable, OperationColumn.EditTable],
     },

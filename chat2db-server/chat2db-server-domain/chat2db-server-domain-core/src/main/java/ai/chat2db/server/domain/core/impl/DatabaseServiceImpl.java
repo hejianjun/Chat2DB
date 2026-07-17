@@ -126,11 +126,15 @@ public class DatabaseServiceImpl implements DatabaseService {
         if (connection != null) {
             return connection;
         }
-        if (DataSourceTypeEnum.REDIS.getCode().equals(dbType)
-                || DataSourceTypeEnum.REDIS.getCode().equals(Chat2DBContext.getConnectInfo().getDbType())) {
+        if (isNativeClient(dbType) || isNativeClient(Chat2DBContext.getConnectInfo().getDbType())) {
             return null;
         }
         return Chat2DBContext.getConnection();
+    }
+
+    private boolean isNativeClient(String dbType) {
+        return DataSourceTypeEnum.REDIS.getCode().equals(dbType)
+                || DataSourceTypeEnum.MONGODB.getCode().equals(dbType);
     }
 
     private List<Database> getDatabases(String dbType, Connection connection) {
