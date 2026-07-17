@@ -6,11 +6,15 @@ import SingleFileMonacoEditor from '@/components/SingleFileMonacoEditor';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { IExecuteSqlParams } from '@/service/sql';
 import { Context } from '@/components/SearchResult';
+import { DatabaseTypeCode } from '@/constants';
+import { buildMongodbFindQuery } from '@/utils/database';
 
 interface IProps {
   className?: string;
   promptWord: any[];
   getTableData: (params?: Partial<IExecuteSqlParams>) => void;
+  databaseType?: DatabaseTypeCode;
+  tableName?: string;
 }
 
 const keywordHintList = [
@@ -29,11 +33,29 @@ const keywordHintList = [
   'LIKE',
   'ASC',
   'DESC',
-]
+];
+
+const mongodbKeywordHintList = [
+  '$and',
+  '$or',
+  '$not',
+  '$nor',
+  '$eq',
+  '$ne',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+  '$in',
+  '$nin',
+  '$exists',
+  '$regex',
+];
 
 export default memo<IProps>((props) => {
-  const { promptWord, getTableData } = props;
+  const { promptWord, getTableData, databaseType, tableName } = props;
   const { notChangedSql } = useContext(Context);
+  const isMongodb = databaseType === DatabaseTypeCode.MONGODB;
   const [isActive, setIsActive] = React.useState(false);
   const keywordHintRef = React.useRef<any>(null);
   const fieldHintRef = React.useRef<any>(null);
@@ -54,14 +76,15 @@ export default memo<IProps>((props) => {
       return new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
     };
 
-    const buildSuggestions = (range: monaco.Range) => promptWord.slice(1).map((item) => {
-      return {
-        insertText: item.name,
-        kind: monaco.languages.CompletionItemKind.Field,
-        label: item.name,
-        range,
-      };
-    });
+    const buildSuggestions = (range: monaco.Range) =>
+      promptWord.slice(isMongodb ? 0 : 1).map((item) => {
+        return {
+          insertText: item.name,
+          kind: monaco.languages.CompletionItemKind.Field,
+          label: item.name,
+          range,
+        };
+      });
 
     const provideCompletionItems = (model: monaco.editor.ITextModel, position: monaco.Position) => {
       return {
@@ -78,7 +101,7 @@ export default memo<IProps>((props) => {
       provideCompletionItems: (model, position) => {
         const range = buildRange(model, position);
         return {
-          suggestions: keywordHintList.map((item) => {
+          suggestions: (isMongodb ? mongodbKeywordHintList : keywordHintList).map((item) => {
             return {
               insertText: item,
               kind: monaco.languages.CompletionItemKind.Keyword,
@@ -93,10 +116,15 @@ export default memo<IProps>((props) => {
   };
 
   const search = () => {
-    const whereValue = whereSingleFileMonacoEditorRef.current?.getAllContent().trim() || '';
-    const orderByValue = orderBySingleFileMonacoEditorRef.current?.getAllContent().trim() || '';
-    let sql = whereValue ? notChangedSql + ' WHERE ' + whereValue : notChangedSql;
-    sql = orderByValue ? sql + ' ORDER BY ' + orderByValue : sql;
+    const filterValue = whereSingleFileMonacoEditorRef.current?.getAllContent().trim() || '';
+    const sortValue = orderBySingleFileMonacoEditorRef.current?.getAllContent().trim() || '';
+    let sql: string;
+    if (isMongodb && tableName) {
+      sql = buildMongodbFindQuery(tableName, filterValue, sortValue);
+    } else {
+      sql = filterValue ? notChangedSql + ' WHERE ' + filterValue : notChangedSql;
+      sql = sortValue ? sql + ' ORDER BY ' + sortValue : sql;
+    }
     getTableData({ sql });
   };
 
@@ -114,7 +142,7 @@ export default memo<IProps>((props) => {
               [styles.activeTitle]: true,
             })}
           >
-            WHERE
+            {isMongodb ? 'FILTER' : 'WHERE'}
           </div>
         </div>
         <SingleFileMonacoEditor
@@ -132,7 +160,7 @@ export default memo<IProps>((props) => {
               [styles.activeTitle]: true,
             })}
           >
-            ORDER BY
+            {isMongodb ? 'SORT' : 'ORDER BY'}
           </div>
         </div>
         <SingleFileMonacoEditor

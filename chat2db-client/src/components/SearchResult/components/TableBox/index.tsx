@@ -1129,7 +1129,14 @@ export default function TableBox(props: ITableProps) {
               </Dropdown>
             </div>
           </div>
-          {concealTabHeader && <ScreeningResult getTableData={getTableData} promptWord={queryResultData.headerList} />}
+          {concealTabHeader && (
+            <ScreeningResult
+              getTableData={getTableData}
+              promptWord={queryResultData.headerList}
+              databaseType={props.executeSqlParams?.databaseType}
+              tableName={props.executeSqlParams?.tableName}
+            />
+          )}
           {isActive ? (
             <RightClickMenu menuList={rowRightClickMenu}>
               <div

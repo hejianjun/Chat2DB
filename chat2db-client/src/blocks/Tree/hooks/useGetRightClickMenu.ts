@@ -28,7 +28,7 @@ import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecated
 import { viewDDL } from '../functions/viewDDL';
 
 // ----- utils -----
-import { compatibleDataBaseName } from '@/utils/database';
+import { buildMongodbFindQuery, compatibleDataBaseName } from '@/utils/database';
 
 interface IProps {
   treeNodeData: ITreeNode;
@@ -98,6 +98,13 @@ const REDIS_EXCLUDED_OPERATIONS = new Set<OperationColumn>([
 
 const isDlcTableNode = (treeNodeData: ITreeNode) =>
   treeNodeData.treeNodeType === TreeNodeType.TABLE && treeNodeData.extraParams?.databaseType === DatabaseTypeCode.DLC;
+
+const getTableQuery = (tableName: string, databaseType: DatabaseTypeCode, schemaName?: string) => {
+  if (databaseType === DatabaseTypeCode.MONGODB) {
+    return buildMongodbFindQuery(tableName);
+  }
+  return `select * from ${compatibleDataBaseName(tableName, databaseType, schemaName)}`;
+};
 
 const getTableRelationTitle = (treeNodeData: ITreeNode) => {
   const { databaseName, schemaName, tableName } = treeNodeData.extraParams || {};
@@ -274,9 +281,9 @@ export const useGetRightClickMenu = (props: IProps) => {
         doubleClickTrigger: treeNodeData.treeNodeType === TreeNodeType.REDIS_QUERY,
         handle: () => {
           const isRedis = treeNodeData.extraParams?.databaseType === DatabaseTypeCode.REDIS;
-          const tableName = isRedis
+          const tableQuery = isRedis
             ? ''
-            : compatibleDataBaseName(
+            : getTableQuery(
                 treeNodeData.name!,
                 treeNodeData.extraParams!.databaseType,
                 treeNodeData.extraParams?.schemaName,
@@ -287,7 +294,7 @@ export const useGetRightClickMenu = (props: IProps) => {
             databaseType: treeNodeData.extraParams!.databaseType!,
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
-            ddl: isRedis ? '' : `select * from ${tableName}`,
+            ddl: tableQuery,
           });
         },
       },
@@ -494,7 +501,7 @@ export const useGetRightClickMenu = (props: IProps) => {
         icon: '\ue618',
         doubleClickTrigger: !isDlcTableNode(treeNodeData),
         handle: () => {
-          const databaseName = compatibleDataBaseName(
+          const tableQuery = getTableQuery(
             treeNodeData.name!,
             treeNodeData.extraParams!.databaseType,
             treeNodeData.extraParams?.schemaName,
@@ -509,7 +516,7 @@ export const useGetRightClickMenu = (props: IProps) => {
               databaseName: treeNodeData.extraParams?.databaseName,
               schemaName: treeNodeData.extraParams?.schemaName,
               tableName: treeNodeData.name,
-              sql: 'select * from ' + databaseName,
+              sql: tableQuery,
             },
           });
         },
@@ -880,9 +887,9 @@ export const getRightClickMenu = (props: IProps) => {
       doubleClickTrigger: treeNodeData.treeNodeType === TreeNodeType.REDIS_QUERY,
       handle: () => {
         const isRedis = treeNodeData.extraParams?.databaseType === DatabaseTypeCode.REDIS;
-        const tableName = isRedis
+        const tableQuery = isRedis
           ? ''
-          : compatibleDataBaseName(
+          : getTableQuery(
               treeNodeData.name!,
               treeNodeData.extraParams!.databaseType,
               treeNodeData.extraParams?.schemaName,
@@ -893,7 +900,7 @@ export const getRightClickMenu = (props: IProps) => {
           databaseType: treeNodeData.extraParams!.databaseType!,
           databaseName: treeNodeData.extraParams?.databaseName,
           schemaName: treeNodeData.extraParams?.schemaName,
-          ddl: isRedis ? '' : `select * from ${tableName}`,
+          ddl: tableQuery,
         });
       },
     },
@@ -1069,7 +1076,7 @@ export const getRightClickMenu = (props: IProps) => {
       icon: '\ue618',
       doubleClickTrigger: !isDlcTableNode(treeNodeData),
       handle: () => {
-        const databaseName = compatibleDataBaseName(
+        const tableQuery = getTableQuery(
           treeNodeData.name!,
           treeNodeData.extraParams!.databaseType,
           treeNodeData.extraParams?.schemaName,
@@ -1084,7 +1091,7 @@ export const getRightClickMenu = (props: IProps) => {
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
             tableName: treeNodeData.name,
-            sql: 'select * from ' + databaseName,
+            sql: tableQuery,
           },
         });
       },
