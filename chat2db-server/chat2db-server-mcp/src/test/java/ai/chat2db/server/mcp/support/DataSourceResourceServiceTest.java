@@ -109,7 +109,7 @@ class DataSourceResourceServiceTest {
         assertThat(resources.get(0).resource().name()).isEqualTo("orders");
 
         assertThat(resources.get(0).resource().title()).isNull();
-        assertThat(resources.get(0).resource().description()).isEqualTo("env=prod");
+        assertThat(resources.get(0).resource().description()).isEqualTo("type=MYSQL;env=prod");
         assertThat(resources.get(0).resource().mimeType()).isEqualTo("application/json");
         ArgumentCaptor<DataSourcePageQueryParam> paramCaptor = ArgumentCaptor.forClass(DataSourcePageQueryParam.class);
         verify(dataSourceService).queryPage(paramCaptor.capture(), any(DataSourceSelector.class));
@@ -118,7 +118,7 @@ class DataSourceResourceServiceTest {
     }
 
     @Test
-    void resourceListOmitsDescriptionWhenEnvironmentIsBlank() {
+    void resourceListKeepsDatasourceTypeWhenEnvironmentIsBlank() {
         DataSource dataSource = dataSource();
         dataSource.setEnvironment(null);
         dataSource.setEnvType(null);
@@ -127,7 +127,19 @@ class DataSourceResourceServiceTest {
 
         McpSchema.Resource resource = dataSourceResourceService.resourceSpecifications().get(0).resource();
 
-        assertThat(resource.description()).isNull();
+        assertThat(resource.description()).isEqualTo("type=MYSQL");
+    }
+
+    @Test
+    void resourceListFallsBackToEnvironmentWhenDatasourceTypeIsBlank() {
+        DataSource dataSource = dataSource();
+        dataSource.setType(null);
+        when(dataSourceService.queryPage(any(DataSourcePageQueryParam.class), any(DataSourceSelector.class)))
+            .thenReturn(ServicePage.of(List.of(dataSource), 1L, 1, 1000));
+
+        McpSchema.Resource resource = dataSourceResourceService.resourceSpecifications().get(0).resource();
+
+        assertThat(resource.description()).isEqualTo("env=prod");
     }
 
     @Test

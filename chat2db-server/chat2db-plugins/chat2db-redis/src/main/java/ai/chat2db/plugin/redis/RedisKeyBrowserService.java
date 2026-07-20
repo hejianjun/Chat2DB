@@ -123,30 +123,6 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     }
 
     @Override
-    public void partialUpdateKey(String databaseName, String keyName, String keyType,
-                                  Map<String, String> addedFields, List<String> removedFields, Long ttl) {
-        try (RedisConnectionProvider.RedisConnectionContext context =
-                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
-            RedisAsyncCommands<String, String> commands = context.connection().async();
-            selectDatabase(commands, databaseName)
-                    .thenCompose(ignored -> {
-                        if (addedFields != null && !addedFields.isEmpty()) {
-                            return commands.hset(keyName, addedFields).toCompletableFuture();
-                        }
-                        return CompletableFuture.completedFuture(null);
-                    })
-                    .thenCompose(ignored -> {
-                        if (removedFields != null && !removedFields.isEmpty()) {
-                            return commands.hdel(keyName, removedFields.toArray(new String[0])).toCompletableFuture();
-                        }
-                        return CompletableFuture.completedFuture(null);
-                    })
-                    .thenCompose(ignored -> applyTtl(commands, keyName, ttl))
-                    .join();
-        }
-    }
-
-    @Override
     public void deleteKey(String databaseName, String keyName) {
         try (RedisConnectionProvider.RedisConnectionContext context =
                      RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {

@@ -177,8 +177,12 @@ public class DataSourceResourceService {
     }
 
     private String resourceDescription(DataSource dataSource) {
+        String type = StringUtils.trimToEmpty(dataSource.getType());
         String environment = environmentText(dataSource);
-        return StringUtils.isBlank(environment) ? null : "env=" + environment;
+        if (StringUtils.isBlank(type)) {
+            return StringUtils.isBlank(environment) ? null : "env=" + environment;
+        }
+        return StringUtils.isBlank(environment) ? "type=" + type : "type=" + type + ";env=" + environment;
     }
 
     private String description(DataSource dataSource) {

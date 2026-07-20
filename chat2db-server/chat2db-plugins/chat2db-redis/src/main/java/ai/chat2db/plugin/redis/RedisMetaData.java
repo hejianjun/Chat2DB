@@ -137,12 +137,6 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     }
 
     @Override
-    public void partialUpdateKey(String databaseName, String keyName, String keyType,
-                                  Map<String, String> addedFields, List<String> removedFields, Long ttl) {
-        keyBrowser.partialUpdateKey(databaseName, keyName, keyType, addedFields, removedFields, ttl);
-    }
-
-    @Override
     public void partialUpdateKey(String databaseName, RedisKeyMutation mutation) {
         keyBrowser.partialUpdateKey(databaseName, mutation);
     }

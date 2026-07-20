@@ -27,8 +27,7 @@ class RedisToolsTest {
 
         assertThat(specifications).extracting(specification -> specification.tool().name())
                 .containsExactlyInAnyOrder("searchRedisKeys", "getRedisKey", "searchRedisKeyPrefixes",
-                        "sampleRedisKeyPrefix", "getRedisKeyPrefixStatus", "refreshRedisKeyPrefixes",
-                        "updateRedisKeyPrefixComment", "deleteRedisKeyPrefixMetadata", "prepareRedisKeyChange",
-                        "executePreparedRedisKeyChange");
+                        "getRedisKeyPrefixStatus", "refreshRedisKeyPrefixes", "updateRedisKeyPrefixComment",
+                        "deleteRedisKeyPrefixMetadata", "prepareRedisKeyChange", "executePreparedRedisKeyChange");
     }
 }

@@ -105,16 +105,6 @@ public class RedisTools {
         });
     }
 
-    @McpTool(description = "Sample representative Redis keys under one prefix.",
-        annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
-    public String sampleRedisKeyPrefix(
-        @McpToolParam(description = "Datasource resource URI") String datasourceUri,
-        @McpToolParam(description = "Redis database number/name") String databaseName,
-        @McpToolParam(description = "Redis key prefix") String prefix) {
-        return connectionScope.run(datasourceUri, databaseName, null, dataSource ->
-                json(browser().sampleKeys(databaseName, prefix, 1000).join()));
-    }
-
     @McpTool(description = "Get Redis prefix-cache refresh status.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
     public String getRedisKeyPrefixStatus(
