@@ -108,6 +108,8 @@ export interface IRedisKeyPartialUpdateParams {
   removedFields?: string[];
   hashUpserts?: Record<string, string>;
   hashDeletes?: string[];
+  listUpdates?: Record<number, string>;
+  listAppends?: string[];
   setAdds?: string[];
   setRemoves?: string[];
   zsetUpserts?: Record<string, number>;

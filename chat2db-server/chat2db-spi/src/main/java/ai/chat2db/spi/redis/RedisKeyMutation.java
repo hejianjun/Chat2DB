@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * Structured partial mutation for hash, set and sorted-set keys.
+ * Structured partial mutation for hash, list, set and sorted-set keys.
  */
 @Data
 @Builder
@@ -22,6 +22,12 @@ public class RedisKeyMutation {
     private Map<String, String> hashUpserts;
 
     private List<String> hashDeletes;
+
+    /** Existing LIST indexes to replace with LSET. */
+    private Map<Long, String> listUpdates;
+
+    /** Values to append to the LIST tail with RPUSH. */
+    private List<String> listAppends;
 
     private List<String> setAdds;
 

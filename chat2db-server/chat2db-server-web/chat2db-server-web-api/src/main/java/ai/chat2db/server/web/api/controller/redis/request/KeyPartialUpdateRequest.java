@@ -26,6 +26,10 @@ public class KeyPartialUpdateRequest extends DataSourceBaseRequest {
 
     private List<String> hashDeletes;
 
+    private Map<Long, String> listUpdates;
+
+    private List<String> listAppends;
+
     private List<String> setAdds;
 
     private List<String> setRemoves;

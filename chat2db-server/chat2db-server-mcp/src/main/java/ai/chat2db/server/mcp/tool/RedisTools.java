@@ -152,13 +152,15 @@ public class RedisTools {
     public String prepareRedisKeyChange(
         @McpToolParam(description = "Datasource resource URI") String datasourceUri,
         @McpToolParam(description = "Redis database number/name") String databaseName,
-        @McpToolParam(description = "CREATE, REPLACE, PATCH_HASH, PATCH_SET, PATCH_ZSET, RENAME, SET_TTL or DELETE") String operation,
+        @McpToolParam(description = "CREATE, REPLACE, PATCH_HASH, PATCH_LIST, PATCH_SET, PATCH_ZSET, RENAME, SET_TTL or DELETE") String operation,
         @McpToolParam(description = "Redis key") String key,
         @McpToolParam(description = "STRING, HASH, LIST, SET or ZSET", required = false) String keyType,
         @McpToolParam(description = "Complete value for CREATE or REPLACE", required = false) Object value,
         @McpToolParam(description = "New key name for RENAME", required = false) String newKey,
         @McpToolParam(description = "HASH fields to upsert", required = false) Map<String, String> hashUpserts,
         @McpToolParam(description = "HASH fields to delete", required = false) List<String> hashDeletes,
+        @McpToolParam(description = "LIST existing indexes to replace", required = false) Map<Long, String> listUpdates,
+        @McpToolParam(description = "LIST values to append to the tail", required = false) List<String> listAppends,
         @McpToolParam(description = "SET members to add", required = false) List<String> setAdds,
         @McpToolParam(description = "SET members to remove", required = false) List<String> setRemoves,
         @McpToolParam(description = "ZSET member-to-score upserts", required = false) Map<String, Double> zsetUpserts,
@@ -169,7 +171,7 @@ public class RedisTools {
             RedisKeyBrowser browser = browser();
             String normalizedOperation = StringUtils.upperCase(StringUtils.trim(operation), Locale.ROOT);
             validateChange(normalizedOperation, key, keyType, value, newKey, ttlSeconds, hashUpserts, hashDeletes,
-                    setAdds, setRemoves, zsetUpserts, zsetRemoves);
+                    listUpdates, listAppends, setAdds, setRemoves, zsetUpserts, zsetRemoves);
             String fingerprint = browser.fingerprintKey(databaseName, key);
             if ("CREATE".equals(normalizedOperation) && fingerprint != null) {
                 throw new IllegalArgumentException("Redis key already exists: " + key);
@@ -180,7 +182,8 @@ public class RedisTools {
             PreparedRedisChange change = changeStore.prepare(PreparedRedisChange.builder()
                     .operation(normalizedOperation).datasourceUri(datasourceUri).databaseName(databaseName)
                     .key(key).newKey(newKey).keyType(normalizeType(keyType)).value(value)
-                    .hashUpserts(hashUpserts).hashDeletes(hashDeletes).setAdds(setAdds).setRemoves(setRemoves)
+                    .hashUpserts(hashUpserts).hashDeletes(hashDeletes).listUpdates(listUpdates)
+                    .listAppends(listAppends).setAdds(setAdds).setRemoves(setRemoves)
                     .zsetUpserts(zsetUpserts).zsetRemoves(zsetRemoves).ttlSeconds(ttlSeconds)
                     .fingerprint(fingerprint).target(dataSource.getSummary() + "/" + databaseName + "/" + key)
                     .build());
@@ -227,9 +230,10 @@ public class RedisTools {
                 browser.updateKey(change.getDatabaseName(), change.getKey(), change.getKey(), change.getKeyType(),
                         change.getValue(), ttl);
             }
-            case "PATCH_HASH", "PATCH_SET", "PATCH_ZSET" -> browser.partialUpdateKey(change.getDatabaseName(),
+            case "PATCH_HASH", "PATCH_LIST", "PATCH_SET", "PATCH_ZSET" -> browser.partialUpdateKey(change.getDatabaseName(),
                     RedisKeyMutation.builder().keyName(change.getKey()).keyType(change.getKeyType())
                             .hashUpserts(change.getHashUpserts()).hashDeletes(change.getHashDeletes())
+                            .listUpdates(change.getListUpdates()).listAppends(change.getListAppends())
                             .setAdds(change.getSetAdds()).setRemoves(change.getSetRemoves())
                             .zsetUpserts(change.getZsetUpserts()).zsetRemoves(change.getZsetRemoves())
                             .ttl(change.getTtlSeconds()).build());
@@ -243,10 +247,11 @@ public class RedisTools {
     }
 
     private void validateChange(String operation, String key, String keyType, Object value, String newKey, Long ttl,
-                                Map<String, String> hashUpserts, List<String> hashDeletes, List<String> setAdds,
+                                Map<String, String> hashUpserts, List<String> hashDeletes,
+                                Map<Long, String> listUpdates, List<String> listAppends, List<String> setAdds,
                                 List<String> setRemoves, Map<String, Double> zsetUpserts, List<String> zsetRemoves) {
-        if (!List.of("CREATE", "REPLACE", "PATCH_HASH", "PATCH_SET", "PATCH_ZSET", "RENAME", "SET_TTL", "DELETE")
-                .contains(operation)) {
+        if (!List.of("CREATE", "REPLACE", "PATCH_HASH", "PATCH_LIST", "PATCH_SET", "PATCH_ZSET", "RENAME",
+                "SET_TTL", "DELETE").contains(operation)) {
             throw new IllegalArgumentException("Unsupported Redis operation: " + operation);
         }
         if (StringUtils.isBlank(key)) {
@@ -271,6 +276,16 @@ public class RedisTools {
         if ("PATCH_HASH".equals(operation) && empty(hashUpserts) && empty(hashDeletes)) {
             throw new IllegalArgumentException("PATCH_HASH requires field changes.");
         }
+        if ("PATCH_LIST".equals(operation) && empty(listUpdates) && empty(listAppends)) {
+            throw new IllegalArgumentException("PATCH_LIST requires index updates or appended values.");
+        }
+        if ("PATCH_LIST".equals(operation) && listUpdates != null && listUpdates.entrySet().stream()
+                .anyMatch(entry -> entry.getKey() == null || entry.getKey() < 0 || entry.getValue() == null)) {
+            throw new IllegalArgumentException("PATCH_LIST contains an invalid index or value.");
+        }
+        if ("PATCH_LIST".equals(operation) && listAppends != null && listAppends.stream().anyMatch(item -> item == null)) {
+            throw new IllegalArgumentException("PATCH_LIST append values must not be null.");
+        }
         if ("PATCH_SET".equals(operation) && empty(setAdds) && empty(setRemoves)) {
             throw new IllegalArgumentException("PATCH_SET requires member changes.");
         }
@@ -281,8 +296,15 @@ public class RedisTools {
         if (value instanceof Collection<?> collection && collection.size() > config.getMaxFullWriteElements()) {
             throw new IllegalArgumentException("Redis full write exceeds maxFullWriteElements.");
         }
+        if (listAppends != null && listAppends.size() > config.getMaxFullWriteElements()) {
+            throw new IllegalArgumentException("Redis LIST append exceeds maxFullWriteElements.");
+        }
         if (String.valueOf(value).getBytes(StandardCharsets.UTF_8).length > config.getMaxWriteBytes()) {
             throw new IllegalArgumentException("Redis write exceeds maxWriteBytes.");
+        }
+        if ((String.valueOf(listUpdates) + String.valueOf(listAppends)).getBytes(StandardCharsets.UTF_8).length
+                > config.getMaxWriteBytes()) {
+            throw new IllegalArgumentException("Redis LIST patch exceeds maxWriteBytes.");
         }
     }
 

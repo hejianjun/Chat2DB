@@ -9,6 +9,7 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
 import io.lettuce.core.ScoredValue;
+import io.lettuce.core.TransactionResult;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -20,6 +21,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.CompletableFuture;
@@ -256,6 +258,12 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                      RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
             RedisAsyncCommands<String, String> commands = context.connection().async();
             selectDatabase(commands, databaseName).join();
+            String targetKey = StringUtils.defaultIfBlank(mutation.getUpdateKey(), mutation.getKeyName());
+            if (StringUtils.equals(targetKey, mutation.getKeyName())) {
+                commands.watch(mutation.getKeyName()).toCompletableFuture().join();
+            } else {
+                commands.watch(mutation.getKeyName(), targetKey).toCompletableFuture().join();
+            }
             String actualType = getTypeAsync(commands, mutation.getKeyName()).join();
             String requestedType = StringUtils.lowerCase(StringUtils.trimToEmpty(mutation.getKeyType()));
             if ("none".equals(actualType)) {
@@ -265,7 +273,9 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                 throw new IllegalArgumentException("Redis key 类型已变化: " + actualType);
             }
             validatePartialMutation(requestedType, mutation);
-            String targetKey = StringUtils.defaultIfBlank(mutation.getUpdateKey(), mutation.getKeyName());
+            if ("list".equals(requestedType)) {
+                validateListIndexes(commands.llen(mutation.getKeyName()).toCompletableFuture().join(), mutation);
+            }
             if (!StringUtils.equals(targetKey, mutation.getKeyName())) {
                 if (commands.exists(targetKey).toCompletableFuture().join() > 0) {
                     throw new IllegalArgumentException("Redis key 已存在: " + targetKey);
@@ -277,30 +287,51 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
             }
             queuePartialMutation(commands, targetKey, requestedType, mutation);
             queueOptionalTtl(commands, targetKey, mutation.getTtl());
-            commands.exec().toCompletableFuture().join();
+            TransactionResult result = commands.exec().toCompletableFuture().join();
+            if (result.wasDiscarded()) {
+                throw new IllegalStateException("Redis key changed during partial update. Retry the operation.");
+            }
         }
     }
 
     private void validatePartialMutation(String type, RedisKeyMutation mutation) {
         switch (type) {
             case "hash" -> {
-                requireAbsent(mutation.getSetAdds(), mutation.getSetRemoves(), mutation.getZsetUpserts(),
-                        mutation.getZsetRemoves());
+                requireAbsent(mutation.getListUpdates(), mutation.getListAppends(), mutation.getSetAdds(),
+                        mutation.getSetRemoves(), mutation.getZsetUpserts(), mutation.getZsetRemoves());
                 requireDisjoint(mutation.getHashUpserts() == null ? Set.of() : mutation.getHashUpserts().keySet(),
                         mutation.getHashDeletes());
             }
+            case "list" -> {
+                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getSetAdds(),
+                        mutation.getSetRemoves(), mutation.getZsetUpserts(), mutation.getZsetRemoves());
+                if (mutation.getListUpdates() != null && mutation.getListUpdates().entrySet().stream()
+                        .anyMatch(entry -> entry.getKey() == null || entry.getKey() < 0 || entry.getValue() == null)) {
+                    throw new IllegalArgumentException("Redis LIST update contains an invalid index or value");
+                }
+                if (mutation.getListAppends() != null && mutation.getListAppends().stream().anyMatch(Objects::isNull)) {
+                    throw new IllegalArgumentException("Redis LIST append value must not be null");
+                }
+            }
             case "set" -> {
-                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getZsetUpserts(),
-                        mutation.getZsetRemoves());
+                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getListUpdates(),
+                        mutation.getListAppends(), mutation.getZsetUpserts(), mutation.getZsetRemoves());
                 requireDisjoint(mutation.getSetAdds(), mutation.getSetRemoves());
             }
             case "zset" -> {
-                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getSetAdds(),
-                        mutation.getSetRemoves());
+                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getListUpdates(),
+                        mutation.getListAppends(), mutation.getSetAdds(), mutation.getSetRemoves());
                 requireDisjoint(mutation.getZsetUpserts() == null ? Set.of() : mutation.getZsetUpserts().keySet(),
                         mutation.getZsetRemoves());
             }
             default -> throw new IllegalArgumentException("暂不支持部分编辑 Redis 类型: " + type);
+        }
+    }
+
+    private void validateListIndexes(long listLength, RedisKeyMutation mutation) {
+        if (mutation.getListUpdates() != null && mutation.getListUpdates().keySet().stream()
+                .anyMatch(index -> index >= listLength)) {
+            throw new IllegalArgumentException("Redis LIST index is out of range");
         }
     }
 
@@ -331,6 +362,14 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                 }
                 if (mutation.getHashDeletes() != null && !mutation.getHashDeletes().isEmpty()) {
                     commands.hdel(key, mutation.getHashDeletes().toArray(String[]::new));
+                }
+            }
+            case "list" -> {
+                if (mutation.getListUpdates() != null) {
+                    mutation.getListUpdates().forEach((index, value) -> commands.lset(key, index, value));
+                }
+                if (mutation.getListAppends() != null && !mutation.getListAppends().isEmpty()) {
+                    commands.rpush(key, mutation.getListAppends().toArray(String[]::new));
                 }
             }
             case "set" -> {

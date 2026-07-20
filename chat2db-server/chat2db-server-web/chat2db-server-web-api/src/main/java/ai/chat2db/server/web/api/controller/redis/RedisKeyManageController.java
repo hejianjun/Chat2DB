@@ -201,6 +201,8 @@ public class RedisKeyManageController {
                 .keyType(request.getKeyType())
                 .hashUpserts(hashUpserts)
                 .hashDeletes(hashDeletes)
+                .listUpdates(request.getListUpdates())
+                .listAppends(request.getListAppends())
                 .setAdds(request.getSetAdds())
                 .setRemoves(request.getSetRemoves())
                 .zsetUpserts(request.getZsetUpserts())

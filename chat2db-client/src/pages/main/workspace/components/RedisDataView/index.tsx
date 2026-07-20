@@ -95,6 +95,7 @@ const RedisDataView = memo((props: IProps) => {
   const [originalHashFields, setOriginalHashFields] = useState<Record<string, string>>({});
   const [hashFieldFilter, setHashFieldFilter] = useState('');
   const [collectionRows, setCollectionRows] = useState<ICollectionValueRow[]>([]);
+  const [originalListValues, setOriginalListValues] = useState<Record<number, string>>({});
   const [originalSetValues, setOriginalSetValues] = useState<Set<string>>(new Set());
   const [originalZsetValues, setOriginalZsetValues] = useState<Record<string, number>>({});
   const [valuePage, setValuePage] = useState<IRedisKeyValuePage | null>(null);
@@ -462,7 +463,9 @@ const RedisDataView = memo((props: IProps) => {
 
   const hasUnsavedChanges = () => {
     if (!detail || creating) {
-      return creating && Boolean(editorKey || textValue || hashFields.some((row) => row.field || row.value));
+      return creating && Boolean(
+        editorKey || textValue || hashFields.some((row) => row.field || row.value) || collectionRows.length,
+      );
     }
     if (editorKey.trim() !== detail.name || editorTtl !== (detail.ttl ?? NO_TTL)) {
       return true;
@@ -471,6 +474,11 @@ const RedisDataView = memo((props: IProps) => {
     if (type === 'hash') {
       const diff = computeHashDiff(originalHashFields, hashFields);
       return Object.keys(diff.addedFields).length > 0 || diff.removedFields.length > 0;
+    }
+    if (type === 'list') {
+      return collectionRows.some(
+        (row) => row.index === undefined || originalListValues[Number(row.index)] !== row.value,
+      );
     }
     if (type === 'set') {
       const current = new Set(collectionRows.map((row) => row.value).filter(Boolean));
@@ -615,7 +623,14 @@ const RedisDataView = memo((props: IProps) => {
       score: type === 'zset' ? Number(item.score ?? 0) : undefined,
       index: type === 'list' ? Number(item.index ?? 0) : undefined,
     }));
-    setCollectionRows((current) => (append ? current.concat(rows) : rows));
+    setCollectionRows((current) => {
+      if (type !== 'list' || !append) {
+        return append ? current.concat(rows) : rows;
+      }
+      return current
+        .filter((row) => row.index !== undefined)
+        .concat(rows, current.filter((row) => row.index === undefined));
+    });
     if (type === 'set') {
       setOriginalSetValues((current) => new Set([...(append ? current : []), ...rows.map((row) => row.value)]));
     }
@@ -626,12 +641,12 @@ const RedisDataView = memo((props: IProps) => {
       }));
     }
     if (type === 'list') {
-      setTextValue((current) => (append ? [current, ...rows.map((row) => row.value)].filter(Boolean).join('\n') : rows.map((row) => row.value).join('\n')));
-      setOriginalTextValue((current) =>
-        append
-          ? [current, ...rows.map((row) => row.value)].filter(Boolean).join('\n')
-          : rows.map((row) => row.value).join('\n'),
-      );
+      setOriginalListValues((current) => ({
+        ...(append ? current : {}),
+        ...Object.fromEntries(rows.map((row) => [Number(row.index), row.value])),
+      }));
+      setTextValue('');
+      setOriginalTextValue('');
     }
   };
 
@@ -684,6 +699,31 @@ const RedisDataView = memo((props: IProps) => {
         setSaving(false);
         return;
       }
+    } else if (type === 'list') {
+      const listUpdates = Object.fromEntries(
+        collectionRows
+          .filter((row) => row.index !== undefined && originalListValues[Number(row.index)] !== row.value)
+          .map((row) => [Number(row.index), row.value]),
+      );
+      const listAppends = collectionRows.filter((row) => row.index === undefined).map((row) => row.value);
+      const hasTtlChange = editorTtl !== (detail!.ttl ?? NO_TTL);
+      const hasKeyChange = nextKey !== detail!.name;
+      if (Object.keys(listUpdates).length > 0 || listAppends.length > 0 || hasTtlChange || hasKeyChange) {
+        saveRequest = redisService.partialUpdateKey({
+          dataSourceId: uniqueData.dataSourceId,
+          databaseName: uniqueData.databaseName,
+          keyName: detail!.name,
+          keyType: type,
+          listUpdates,
+          listAppends,
+          updateKey: nextKey,
+          updateTtl: hasTtlChange ? editorTtl ?? NO_TTL : undefined,
+        });
+      } else {
+        message.info('没有修改内容');
+        setSaving(false);
+        return;
+      }
     } else if (type === 'set' || type === 'zset') {
       const currentValues = new Set(collectionRows.map((row) => row.value).filter(Boolean));
       const hasTtlChange = editorTtl !== (detail!.ttl ?? NO_TTL);
@@ -714,7 +754,7 @@ const RedisDataView = memo((props: IProps) => {
         });
       }
     } else {
-      if ((type === 'list' || type === 'string') && !valuePage?.fullyLoaded) {
+      if (type === 'string' && !valuePage?.fullyLoaded) {
         message.warning(`${type.toUpperCase()} 必须完整加载后才能保存`);
         setSaving(false);
         return;
@@ -773,6 +813,7 @@ const RedisDataView = memo((props: IProps) => {
     setHashFields([{ id: uuid(), field: '', value: '' }]);
     setOriginalHashFields({});
     setCollectionRows([]);
+    setOriginalListValues({});
     setOriginalSetValues(new Set());
     setOriginalZsetValues({});
     setValuePage(null);
@@ -1372,9 +1413,7 @@ const RedisDataView = memo((props: IProps) => {
                   disabled={
                     (!detail && !creating) ||
                     !isEditableType(creating ? editorType : detail?.type) ||
-                    (!creating &&
-                      ['list', 'string'].includes(normalizeType(detail?.type)) &&
-                      !valuePage?.fullyLoaded)
+                    (!creating && normalizeType(detail?.type) === 'string' && !valuePage?.fullyLoaded)
                   }
                 >
                   应用
@@ -1549,24 +1588,67 @@ const RedisDataView = memo((props: IProps) => {
         </>
       );
     }
-    if (type === 'list' && !creating && !valuePage?.fullyLoaded) {
+    if (type === 'list') {
       const listColumns: ColumnsType<ICollectionValueRow> = [
-        { title: '索引', dataIndex: 'index', width: 100 },
-        { title: '值', dataIndex: 'value' },
+        {
+          title: '索引',
+          dataIndex: 'index',
+          width: 100,
+          render: (index?: number) => index ?? '尾部新增',
+        },
+        {
+          title: '值',
+          dataIndex: 'value',
+          render: (value, record) => (
+            <Input
+              value={value}
+              onChange={(event) =>
+                setCollectionRows((current) =>
+                  current.map((item) =>
+                    item.id === record.id ? { ...item, value: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+          ),
+        },
+        {
+          title: '',
+          dataIndex: 'action',
+          width: 44,
+          render: (_, record) =>
+            record.index === undefined ? (
+              <Button
+                icon={<DeleteOutlined />}
+                size="small"
+                type="text"
+                onClick={() => setCollectionRows((current) => current.filter((item) => item.id !== record.id))}
+              />
+            ) : null,
+        },
       ];
+      const loadedCount = collectionRows.filter((row) => row.index !== undefined).length;
+      const appendCount = collectionRows.length - loadedCount;
       return (
         <>
           <Table columns={listColumns} dataSource={collectionRows} pagination={false} rowKey="id" size="small" />
           <div className={styles.fieldToolbar}>
+            <Button
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={() => setCollectionRows((current) => current.concat({ id: uuid(), value: '' }))}
+            >
+              尾部元素
+            </Button>
             <span>
-              已加载 {collectionRows.length}/{valuePage?.total ?? collectionRows.length}
+              已加载 {loadedCount}/{valuePage?.total ?? loadedCount}
+              {appendCount > 0 ? `，待追加 ${appendCount}` : ''}
             </span>
-            <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(false)}>
-              加载更多
-            </Button>
-            <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(true)}>
-              加载全部并编辑
-            </Button>
+            {valuePage?.hasMore && (
+              <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(false)}>
+                加载更多
+              </Button>
+            )}
           </div>
         </>
       );
@@ -1999,7 +2081,7 @@ function buildEditorValue(
     return Object.fromEntries(collectionRows.filter((item) => item.value).map((item) => [item.value, item.score || 0]));
   }
   if (type === 'list') {
-    return textValue.split('\n').filter((item) => item.length > 0);
+    return collectionRows.map((item) => item.value);
   }
   return textValue;
 }

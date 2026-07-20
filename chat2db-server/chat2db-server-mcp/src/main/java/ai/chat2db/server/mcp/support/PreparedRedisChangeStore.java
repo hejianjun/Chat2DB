@@ -78,6 +78,8 @@ public class PreparedRedisChangeStore {
         private Object value;
         private Map<String, String> hashUpserts;
         private List<String> hashDeletes;
+        private Map<Long, String> listUpdates;
+        private List<String> listAppends;
         private List<String> setAdds;
         private List<String> setRemoves;
         private Map<String, Double> zsetUpserts;
@@ -93,9 +95,10 @@ public class PreparedRedisChangeStore {
             return String.join("|", StringUtils.defaultString(operation), StringUtils.defaultString(datasourceUri),
                     StringUtils.defaultString(databaseName), StringUtils.defaultString(key),
                     StringUtils.defaultString(newKey), StringUtils.defaultString(keyType), String.valueOf(value),
-                    String.valueOf(hashUpserts), String.valueOf(hashDeletes), String.valueOf(setAdds),
-                    String.valueOf(setRemoves), String.valueOf(zsetUpserts), String.valueOf(zsetRemoves),
-                    String.valueOf(ttlSeconds), StringUtils.defaultString(fingerprint));
+                    String.valueOf(hashUpserts), String.valueOf(hashDeletes), String.valueOf(listUpdates),
+                    String.valueOf(listAppends), String.valueOf(setAdds), String.valueOf(setRemoves),
+                    String.valueOf(zsetUpserts), String.valueOf(zsetRemoves), String.valueOf(ttlSeconds),
+                    StringUtils.defaultString(fingerprint));
         }
     }
 }
