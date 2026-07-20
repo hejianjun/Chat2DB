@@ -76,7 +76,7 @@ class DataSourceResourceServiceTest {
     }
 
     @Test
-    void resourceReadReturnsSafeDatasourceMetadataOnly() {
+    void resourceReadReturnsDatasourceUrlWithoutSeparateCredentials() {
         DataSource dataSource = dataSource();
         when(dataSourceService.queryExistent(eq(1L), any(DataSourceSelector.class))).thenReturn(dataSource);
 
@@ -88,9 +88,8 @@ class DataSourceResourceServiceTest {
         String text = ((McpSchema.TextResourceContents) result.contents().get(0)).text();
         assertThat(text).contains("\"uri\":\"chat2db://datasources/1\"");
         assertThat(text).contains("\"type\":\"MYSQL\"");
-        assertThat(text).contains("\"description\":\"alias=orders;type=MYSQL;env=prod;kind=\"");
+        assertThat(text).contains("\"description\":\"jdbc:mysql://localhost:3306/orders\"");
         assertThat(text).doesNotContain("secret");
-        assertThat(text).doesNotContain("jdbc:mysql");
         assertThat(text).doesNotContain("root");
         assertThat(text).doesNotContain("password");
         assertThat(text).doesNotContain("url");
@@ -109,10 +108,38 @@ class DataSourceResourceServiceTest {
         assertThat(resources.get(0).resource().uri()).isEqualTo("chat2db://datasources/1");
         assertThat(resources.get(0).resource().name()).isEqualTo("orders");
 
+        assertThat(resources.get(0).resource().title()).isNull();
+        assertThat(resources.get(0).resource().description()).isEqualTo("env=prod");
+        assertThat(resources.get(0).resource().mimeType()).isEqualTo("application/json");
         ArgumentCaptor<DataSourcePageQueryParam> paramCaptor = ArgumentCaptor.forClass(DataSourcePageQueryParam.class);
         verify(dataSourceService).queryPage(paramCaptor.capture(), any(DataSourceSelector.class));
         assertThat(paramCaptor.getValue().getPageNo()).isEqualTo(1);
         assertThat(paramCaptor.getValue().getPageSize()).isEqualTo(1000);
+    }
+
+    @Test
+    void resourceListOmitsDescriptionWhenEnvironmentIsBlank() {
+        DataSource dataSource = dataSource();
+        dataSource.setEnvironment(null);
+        dataSource.setEnvType(null);
+        when(dataSourceService.queryPage(any(DataSourcePageQueryParam.class), any(DataSourceSelector.class)))
+            .thenReturn(ServicePage.of(List.of(dataSource), 1L, 1, 1000));
+
+        McpSchema.Resource resource = dataSourceResourceService.resourceSpecifications().get(0).resource();
+
+        assertThat(resource.description()).isNull();
+    }
+
+    @Test
+    void resourceTemplateOmitsDuplicateTitle() {
+        McpSchema.ResourceTemplate resourceTemplate = dataSourceResourceService.resourceTemplateSpecifications()
+            .get(0)
+            .resourceTemplate();
+
+        assertThat(resourceTemplate.name()).isEqualTo("Chat2DB datasource");
+        assertThat(resourceTemplate.title()).isNull();
+        assertThat(resourceTemplate.description()).isEqualTo("Safe metadata for a Chat2DB datasource resource.");
+        assertThat(resourceTemplate.mimeType()).isEqualTo("application/json");
     }
 
     @Test

@@ -62,8 +62,7 @@ public class DataSourceResourceService {
                 McpSchema.Resource.builder()
                     .uri(uri(dataSource))
                     .name(StringUtils.defaultString(dataSource.getAlias()))
-                    .title(StringUtils.defaultString(dataSource.getAlias()))
-                    .description("Safe metadata for Chat2DB datasource " + summary(dataSource) + ".")
+                    .description(resourceDescription(dataSource))
                     .mimeType(MIME_TYPE)
                     .build(),
                 (exchange, request) -> readDatasource(request.uri())))
@@ -75,7 +74,6 @@ public class DataSourceResourceService {
             McpSchema.ResourceTemplate.builder()
                 .uriTemplate(DATASOURCE_URI_TEMPLATE)
                 .name("Chat2DB datasource")
-                .title("Chat2DB datasource")
                 .description("Safe metadata for a Chat2DB datasource resource.")
                 .mimeType(MIME_TYPE)
                 .build(),
@@ -96,7 +94,7 @@ public class DataSourceResourceService {
         if (dataSource == null || dataSource.getId() == null) {
             throw new IllegalArgumentException(INVALID_DATASOURCE_URI);
         }
-        // Keep the URI stable across datasource renames; alias stays in resource name/title for readability.
+        // Keep the URI stable across datasource renames; alias stays in the resource name for readability.
         return CATALOG_URI + "/" + dataSource.getId();
     }
 
@@ -178,12 +176,13 @@ public class DataSourceResourceService {
         return StringUtils.defaultString(dataSource.getEnvType());
     }
 
+    private String resourceDescription(DataSource dataSource) {
+        String environment = environmentText(dataSource);
+        return StringUtils.isBlank(environment) ? null : "env=" + environment;
+    }
+
     private String description(DataSource dataSource) {
-        return String.format(Locale.ROOT, "alias=%s;type=%s;env=%s;kind=%s",
-            StringUtils.defaultString(dataSource.getAlias()),
-            StringUtils.defaultString(dataSource.getType()),
-            environmentText(dataSource),
-            StringUtils.defaultString(dataSource.getKind()));
+        return StringUtils.defaultString(dataSource.getUrl());
     }
 
     private String toJson(Object value) {
