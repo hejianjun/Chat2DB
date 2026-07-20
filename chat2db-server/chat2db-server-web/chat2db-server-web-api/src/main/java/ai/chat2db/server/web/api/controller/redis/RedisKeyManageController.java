@@ -13,7 +13,9 @@ import ai.chat2db.server.web.api.controller.redis.vo.KeyVO;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
+import ai.chat2db.spi.redis.RedisKeyMutation;
 import ai.chat2db.spi.redis.RedisKeyScanResult;
+import ai.chat2db.spi.redis.RedisKeyValuePage;
 import ai.chat2db.spi.sql.Chat2DBContext;
 
 import org.springframework.beans.BeanUtils;
@@ -30,6 +32,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,6 +51,11 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RedisKeyManageController {
 
     private static final int DEFAULT_KEY_COUNT = 1000;
+    private static final int DEFAULT_VALUE_PAGE_SIZE = 50;
+    private static final int MAX_VALUE_PAGE_SIZE = 200;
+    private static final int MAX_STRING_PAGE_BYTES = 64 * 1024;
+    private static final int MAX_FULL_WRITE_ELEMENTS = 10_000;
+    private static final int MAX_WRITE_BYTES = 1024 * 1024;
     private static final long STREAM_TIMEOUT = 30 * 60 * 1000L;
 
     /**
@@ -129,6 +137,15 @@ public class RedisKeyManageController {
         return DataResult.of(toVO(keyInfo));
     }
 
+    /** Returns one bounded page without loading the complete Redis value. */
+    @GetMapping("/value-page")
+    public DataResult<RedisKeyValuePage> valuePage(KeyQueryRequest request) {
+        int count = request.getCount() == null || request.getCount() <= 0
+                ? DEFAULT_VALUE_PAGE_SIZE : Math.min(request.getCount(), MAX_VALUE_PAGE_SIZE);
+        return DataResult.of(getRedisKeyBrowser().queryKeyPage(request.getDatabaseName(), request.getKeyName(),
+                request.getCursor(), count, MAX_STRING_PAGE_BYTES));
+    }
+
     /**
      * 新增Key
      *
@@ -137,6 +154,7 @@ public class RedisKeyManageController {
      */
     @PostMapping("/create")
     public ActionResult create(@RequestBody KeyCreateRequest request) {
+        validateFullWrite(request.getKeyType(), request.getValue());
         getRedisKeyBrowser().createKey(request.getDatabaseName(), request.getName(), request.getKeyType(),
                 request.getValue(), request.getTtl());
         return ActionResult.isSuccess();
@@ -150,6 +168,12 @@ public class RedisKeyManageController {
      */
     @RequestMapping(value = "/update",method = {RequestMethod.POST, RequestMethod.PUT})
     public ActionResult update(@RequestBody KeyUpdateRequest request) {
+        validateFullWrite(request.getKeyType(), request.getValue());
+        if ("list".equalsIgnoreCase(request.getKeyType()) && request.getExpectedElementCount() != null
+                && request.getValue() instanceof Collection<?> values
+                && values.size() != request.getExpectedElementCount()) {
+            throw new BusinessException("redis.listMustBeFullyLoaded");
+        }
         Object updateTtl = request.getUpdateTtl();
         Long ttl = updateTtl == null ? null : Long.valueOf(String.valueOf(updateTtl));
         getRedisKeyBrowser().updateKey(request.getDatabaseName(), request.getOriginalKey(), request.getUpdateKey(),
@@ -158,7 +182,7 @@ public class RedisKeyManageController {
     }
 
     /**
-     * 部分更新key（仅修改hash的增量字段）
+     * 部分更新 hash、set 或 zset，并可同时更新 key 名称和 TTL。
      *
      * @param request
      * @return
@@ -167,8 +191,22 @@ public class RedisKeyManageController {
     public ActionResult partialUpdate(@RequestBody KeyPartialUpdateRequest request) {
         Object updateTtl = request.getUpdateTtl();
         Long ttl = updateTtl == null ? null : Long.valueOf(String.valueOf(updateTtl));
-        getRedisKeyBrowser().partialUpdateKey(request.getDatabaseName(), request.getKeyName(),
-                request.getKeyType(), request.getAddedFields(), request.getRemovedFields(), ttl);
+        Map<String, String> hashUpserts = request.getHashUpserts() == null
+                ? request.getAddedFields() : request.getHashUpserts();
+        List<String> hashDeletes = request.getHashDeletes() == null
+                ? request.getRemovedFields() : request.getHashDeletes();
+        getRedisKeyBrowser().partialUpdateKey(request.getDatabaseName(), RedisKeyMutation.builder()
+                .keyName(request.getKeyName())
+                .updateKey(request.getUpdateKey())
+                .keyType(request.getKeyType())
+                .hashUpserts(hashUpserts)
+                .hashDeletes(hashDeletes)
+                .setAdds(request.getSetAdds())
+                .setRemoves(request.getSetRemoves())
+                .zsetUpserts(request.getZsetUpserts())
+                .zsetRemoves(request.getZsetRemoves())
+                .ttl(ttl)
+                .build());
         return ActionResult.isSuccess();
     }
 
@@ -191,6 +229,16 @@ public class RedisKeyManageController {
             return browser;
         }
         throw new BusinessException("当前数据源不是 Redis");
+    }
+
+    private void validateFullWrite(String keyType, Object value) {
+        if ("list".equalsIgnoreCase(keyType) && value instanceof Collection<?> values
+                && values.size() > MAX_FULL_WRITE_ELEMENTS) {
+            throw new BusinessException("redis.fullWriteTooManyElements");
+        }
+        if (String.valueOf(value).getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_WRITE_BYTES) {
+            throw new BusinessException("redis.fullWriteTooLarge");
+        }
     }
 
     private KeyVO toVO(RedisKeyInfo keyInfo) {

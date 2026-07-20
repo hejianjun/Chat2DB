@@ -45,4 +45,7 @@ public class KeyUpdateRequest extends DataSourceBaseRequest {
      * 更新后ttl值
      */
     private Object updateTtl;
+
+    /** Original LIST length proving that a paged editor loaded the complete value. */
+    private Long expectedElementCount;
 }

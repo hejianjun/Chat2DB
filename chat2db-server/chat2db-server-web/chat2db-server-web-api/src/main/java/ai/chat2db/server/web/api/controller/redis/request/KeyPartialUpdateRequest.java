@@ -22,5 +22,19 @@ public class KeyPartialUpdateRequest extends DataSourceBaseRequest {
 
     private List<String> removedFields;
 
+    private Map<String, String> hashUpserts;
+
+    private List<String> hashDeletes;
+
+    private List<String> setAdds;
+
+    private List<String> setRemoves;
+
+    private Map<String, Double> zsetUpserts;
+
+    private List<String> zsetRemoves;
+
+    private String updateKey;
+
     private Object updateTtl;
 }

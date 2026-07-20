@@ -21,9 +21,18 @@ export interface IRedisKeyItem {
 export interface IRedisKeyPrefixItem {
   name: string;
   comment?: string;
+  aiComment?: string;
   keyCount?: number;
   sampleTypes?: string;
   building?: boolean;
+}
+
+export interface IRedisKeyValuePage extends Omit<IRedisKeyItem, 'value'> {
+  items: Array<Record<string, any>>;
+  nextCursor: string;
+  hasMore: boolean;
+  total?: number;
+  fullyLoaded: boolean;
 }
 
 export interface IRedisKeyPrefixSearchParams {
@@ -74,6 +83,11 @@ export interface IRedisKeyQueryParams {
   keyName: string;
 }
 
+export interface IRedisKeyValuePageParams extends IRedisKeyQueryParams {
+  cursor?: string;
+  count?: number;
+}
+
 export interface IRedisKeyUpdateParams {
   dataSourceId: number;
   databaseName?: string;
@@ -82,6 +96,7 @@ export interface IRedisKeyUpdateParams {
   keyType: string;
   value: any;
   updateTtl?: number;
+  expectedElementCount?: number;
 }
 
 export interface IRedisKeyPartialUpdateParams {
@@ -91,6 +106,13 @@ export interface IRedisKeyPartialUpdateParams {
   keyType: string;
   addedFields?: Record<string, string>;
   removedFields?: string[];
+  hashUpserts?: Record<string, string>;
+  hashDeletes?: string[];
+  setAdds?: string[];
+  setRemoves?: string[];
+  zsetUpserts?: Record<string, number>;
+  zsetRemoves?: string[];
+  updateKey?: string;
   updateTtl?: number;
 }
 
@@ -142,6 +164,10 @@ const searchKeyPrefixes = createRequest<IRedisKeyPrefixSearchParams, IRedisKeyPr
 );
 
 const sampleKeyPrefixTypes = createRequest<IRedisKeyPrefixSampleParams, IRedisKeyItem[]>('/api/redis/key-prefix/sample', {
+  method: 'get',
+});
+
+const getKeyValuePage = createRequest<IRedisKeyValuePageParams, IRedisKeyValuePage>('/api/redis/key/value-page', {
   method: 'get',
 });
 
@@ -272,6 +298,7 @@ export default {
   createKey,
   deleteKey,
   getKeyPrefixBuildStatus,
+  getKeyValuePage,
   getKeyList,
   partialUpdateKey,
   queryKey,

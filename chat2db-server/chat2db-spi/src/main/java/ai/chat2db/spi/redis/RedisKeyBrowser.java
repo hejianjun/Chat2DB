@@ -12,6 +12,9 @@ public interface RedisKeyBrowser {
 
     RedisKeyInfo queryKey(String databaseName, String keyName);
 
+    RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
+                                   int maxStringBytes);
+
     /**
      * Samples at most one key for each Redis type under a key prefix.
      */
@@ -31,4 +34,11 @@ public interface RedisKeyBrowser {
 
     void partialUpdateKey(String databaseName, String keyName, String keyType,
                           Map<String, String> addedFields, List<String> removedFields, Long ttl);
+
+    void partialUpdateKey(String databaseName, RedisKeyMutation mutation);
+
+    void updateKeyMetadata(String databaseName, String keyName, String updateKey, Long ttl);
+
+    /** Returns a SHA-256 fingerprint of TYPE + DUMP, or null when the key does not exist. */
+    String fingerprintKey(String databaseName, String keyName);
 }

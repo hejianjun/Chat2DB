@@ -88,6 +88,19 @@ public class McpServerConfigService {
         return effective;
     }
 
+    public McpProperties.Redis getEffectiveRedis() {
+        McpProperties.Redis source = properties.getRedis();
+        McpProperties.Redis copy = new McpProperties.Redis();
+        copy.setDefaultKeyLimit(source.getDefaultKeyLimit());
+        copy.setMaxKeyLimit(source.getMaxKeyLimit());
+        copy.setDefaultValuePageSize(source.getDefaultValuePageSize());
+        copy.setMaxValuePageSize(source.getMaxValuePageSize());
+        copy.setMaxStringPageBytes(source.getMaxStringPageBytes());
+        copy.setMaxFullWriteElements(source.getMaxFullWriteElements());
+        copy.setMaxWriteBytes(source.getMaxWriteBytes());
+        return copy;
+    }
+
     private McpProperties.Sql copySql(McpProperties.Sql source) {
         McpProperties.Sql copy = new McpProperties.Sql();
         copy.setReadOnly(source.isReadOnly());

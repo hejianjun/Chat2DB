@@ -14,7 +14,12 @@ import {
 import type { ColumnsType, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { v4 as uuid } from 'uuid';
 
-import redisService, { IRedisKeyItem, IRedisKeyPrefixBuildStatus, IRedisKeyPrefixItem } from '@/service/redis';
+import redisService, {
+  IRedisKeyItem,
+  IRedisKeyPrefixBuildStatus,
+  IRedisKeyPrefixItem,
+  IRedisKeyValuePage,
+} from '@/service/redis';
 import {
   IRedisKeyPrefixCommentResult,
   setCurrentWorkspaceExtend,
@@ -84,10 +89,16 @@ const RedisDataView = memo((props: IProps) => {
   const [editorType, setEditorType] = useState('string');
   const [editorTtl, setEditorTtl] = useState<number | null>(NO_TTL);
   const [textValue, setTextValue] = useState('');
+  const [originalTextValue, setOriginalTextValue] = useState('');
   const [isJsonString, setIsJsonString] = useState(false);
   const [hashFields, setHashFields] = useState<IHashFieldRow[]>([]);
   const [originalHashFields, setOriginalHashFields] = useState<Record<string, string>>({});
   const [hashFieldFilter, setHashFieldFilter] = useState('');
+  const [collectionRows, setCollectionRows] = useState<ICollectionValueRow[]>([]);
+  const [originalSetValues, setOriginalSetValues] = useState<Set<string>>(new Set());
+  const [originalZsetValues, setOriginalZsetValues] = useState<Record<string, number>>({});
+  const [valuePage, setValuePage] = useState<IRedisKeyValuePage | null>(null);
+  const [valuePageLoading, setValuePageLoading] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
   const [keyLimit, setKeyLimit] = useState(DEFAULT_LIMIT);
   const [scanCursor, setScanCursor] = useState('0');
@@ -123,12 +134,15 @@ const RedisDataView = memo((props: IProps) => {
         })),
       );
       setTextValue('');
+      setOriginalTextValue('');
       return;
     }
     setOriginalHashFields({});
     setHashFields([]);
     if (Array.isArray(value)) {
-      setTextValue(value.map((item) => String(item ?? '')).join('\n'));
+      const nextValue = value.map((item) => String(item ?? '')).join('\n');
+      setTextValue(nextValue);
+      setOriginalTextValue(nextValue);
       return;
     }
     const nextTextValue = value === undefined || value === null ? '' : String(value);
@@ -136,11 +150,13 @@ const RedisDataView = memo((props: IProps) => {
       const formattedJson = formatJson(nextTextValue);
       if (formattedJson !== null) {
         setTextValue(formattedJson);
+        setOriginalTextValue(formattedJson);
         setIsJsonString(true);
         return;
       }
     }
     setTextValue(nextTextValue);
+    setOriginalTextValue(nextTextValue);
   };
 
   const loadPrefixBuildStatus = async () => {
@@ -444,7 +460,32 @@ const RedisDataView = memo((props: IProps) => {
     });
   };
 
-  const loadKeyDetail = (keyName: string) => {
+  const hasUnsavedChanges = () => {
+    if (!detail || creating) {
+      return creating && Boolean(editorKey || textValue || hashFields.some((row) => row.field || row.value));
+    }
+    if (editorKey.trim() !== detail.name || editorTtl !== (detail.ttl ?? NO_TTL)) {
+      return true;
+    }
+    const type = normalizeType(detail.type);
+    if (type === 'hash') {
+      const diff = computeHashDiff(originalHashFields, hashFields);
+      return Object.keys(diff.addedFields).length > 0 || diff.removedFields.length > 0;
+    }
+    if (type === 'set') {
+      const current = new Set(collectionRows.map((row) => row.value).filter(Boolean));
+      return [...current].some((value) => !originalSetValues.has(value))
+        || [...originalSetValues].some((value) => !current.has(value));
+    }
+    if (type === 'zset') {
+      const current = Object.fromEntries(collectionRows.map((row) => [row.value, row.score || 0]));
+      return Object.keys(current).some((member) => current[member] !== originalZsetValues[member])
+        || Object.keys(originalZsetValues).some((member) => current[member] === undefined);
+    }
+    return textValue !== originalTextValue;
+  };
+
+  const performLoadKeyDetail = (keyName: string) => {
     if (!uniqueData?.dataSourceId || !keyName) {
       return;
     }
@@ -456,17 +497,22 @@ const RedisDataView = memo((props: IProps) => {
     setDetail(null);
     setDetailLoading(true);
     redisService
-      .queryKey({
+      .getKeyValuePage({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
         keyName,
+        cursor: '0',
+        count: 50,
       })
-      .then((keyDetail) => {
+      .then((page) => {
         if (detailRequestRef.current !== requestId) {
           return;
         }
+        const keyDetail = pageToKeyDetail(page);
+        setValuePage(page);
         setDetail(keyDetail);
         hydrateEditor(keyDetail);
+        hydrateCollectionPage(page, false);
       })
       .catch((error) => {
         message.error(String(error || 'Redis key 详情加载失败'));
@@ -476,6 +522,117 @@ const RedisDataView = memo((props: IProps) => {
           setDetailLoading(false);
         }
       });
+  };
+
+  const loadKeyDetail = (keyName: string) => {
+    if (selectedKey && selectedKey !== keyName && hasUnsavedChanges()) {
+      Modal.confirm({
+        title: '放弃未保存的 Redis 修改？',
+        content: '切换 key 后当前修改将丢失。',
+        okText: '放弃并切换',
+        cancelText: '继续编辑',
+        onOk: () => performLoadKeyDetail(keyName),
+      });
+      return;
+    }
+    performLoadKeyDetail(keyName);
+  };
+
+  const closeKeyEditor = () => {
+    const close = () => {
+      setDetail(null);
+      setSelectedKey('');
+      setSelectedPrefix('');
+      setCreating(false);
+      setIsJsonString(false);
+    };
+    if (hasUnsavedChanges()) {
+      Modal.confirm({
+        title: '放弃未保存的 Redis 修改？',
+        okText: '放弃',
+        cancelText: '继续编辑',
+        onOk: close,
+      });
+      return;
+    }
+    close();
+  };
+
+  const loadMoreValue = async (loadAll = false) => {
+    if (!uniqueData?.dataSourceId || !detail?.name || !valuePage?.hasMore || valuePageLoading) {
+      return;
+    }
+    setValuePageLoading(true);
+    try {
+      let current = valuePage;
+      do {
+        const next = await redisService.getKeyValuePage({
+          dataSourceId: uniqueData.dataSourceId,
+          databaseName: uniqueData.databaseName,
+          keyName: detail.name,
+          cursor: current.nextCursor,
+          count: 200,
+        });
+        if (loadAll && normalizeType(detail.type) === 'list' && (next.total || 0) > 10_000) {
+          message.warning('LIST 超过 10000 项，只支持分页查看');
+          break;
+        }
+        hydrateCollectionPage(next, true);
+        current = next;
+        setValuePage(next);
+      } while (loadAll && current.hasMore);
+    } catch (error) {
+      message.error(String(error || 'Redis 值分页加载失败'));
+    } finally {
+      setValuePageLoading(false);
+    }
+  };
+
+  const hydrateCollectionPage = (page: IRedisKeyValuePage, append: boolean) => {
+    const type = normalizeType(page.type);
+    if (type === 'string') {
+      const value = String(page.items[0]?.value ?? '');
+      setTextValue((current) => (append ? current + value : value));
+      setOriginalTextValue((current) => (append ? current + value : value));
+      return;
+    }
+    if (type === 'hash') {
+      const rows = page.items.map((item) => ({
+        id: uuid(),
+        field: String(item.field ?? ''),
+        value: String(item.value ?? ''),
+      }));
+      setHashFields((current) => (append ? current.concat(rows) : rows));
+      setOriginalHashFields((current) => ({
+        ...(append ? current : {}),
+        ...Object.fromEntries(rows.map((row) => [row.field, row.value])),
+      }));
+      return;
+    }
+    const rows = page.items.map((item) => ({
+      id: uuid(),
+      value: String(type === 'zset' ? item.member ?? '' : item.value ?? ''),
+      score: type === 'zset' ? Number(item.score ?? 0) : undefined,
+      index: type === 'list' ? Number(item.index ?? 0) : undefined,
+    }));
+    setCollectionRows((current) => (append ? current.concat(rows) : rows));
+    if (type === 'set') {
+      setOriginalSetValues((current) => new Set([...(append ? current : []), ...rows.map((row) => row.value)]));
+    }
+    if (type === 'zset') {
+      setOriginalZsetValues((current) => ({
+        ...(append ? current : {}),
+        ...Object.fromEntries(rows.map((row) => [row.value, row.score || 0])),
+      }));
+    }
+    if (type === 'list') {
+      setTextValue((current) => (append ? [current, ...rows.map((row) => row.value)].filter(Boolean).join('\n') : rows.map((row) => row.value).join('\n')));
+      setOriginalTextValue((current) =>
+        append
+          ? [current, ...rows.map((row) => row.value)].filter(Boolean).join('\n')
+          : rows.map((row) => row.value).join('\n'),
+      );
+    }
   };
 
   const saveKey = () => {
@@ -497,7 +654,7 @@ const RedisDataView = memo((props: IProps) => {
     let saveRequest: Promise<any>;
 
     if (creating) {
-      const value = buildEditorValue(type, textValue, hashFields);
+      const value = buildEditorValue(type, textValue, hashFields, collectionRows);
       saveRequest = redisService.createKey({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
@@ -506,27 +663,63 @@ const RedisDataView = memo((props: IProps) => {
         value,
         ttl: editorTtl ?? NO_TTL,
       });
-    } else if (type === 'hash' && nextKey === detail!.name) {
+    } else if (type === 'hash') {
       const { addedFields, removedFields } = computeHashDiff(originalHashFields, hashFields);
       const hasFieldChanges = Object.keys(addedFields).length > 0 || removedFields.length > 0;
       const hasTtlChange = editorTtl !== (detail!.ttl ?? NO_TTL);
-      if (hasFieldChanges || hasTtlChange) {
+      const hasKeyChange = nextKey !== detail!.name;
+      if (hasFieldChanges || hasTtlChange || hasKeyChange) {
         saveRequest = redisService.partialUpdateKey({
           dataSourceId: uniqueData.dataSourceId,
           databaseName: uniqueData.databaseName,
-          keyName: nextKey,
+          keyName: detail!.name,
           keyType: type,
-          addedFields,
-          removedFields,
-          updateTtl: editorTtl ?? NO_TTL,
+          hashUpserts: addedFields,
+          hashDeletes: removedFields,
+          updateKey: nextKey,
+          updateTtl: hasTtlChange ? editorTtl ?? NO_TTL : undefined,
         });
       } else {
         message.info('没有修改内容');
         setSaving(false);
         return;
       }
+    } else if (type === 'set' || type === 'zset') {
+      const currentValues = new Set(collectionRows.map((row) => row.value).filter(Boolean));
+      const hasTtlChange = editorTtl !== (detail!.ttl ?? NO_TTL);
+      const update = {
+        dataSourceId: uniqueData.dataSourceId,
+        databaseName: uniqueData.databaseName,
+        keyName: detail!.name,
+        updateKey: nextKey,
+        keyType: type,
+        updateTtl: hasTtlChange ? editorTtl ?? NO_TTL : undefined,
+      };
+      if (type === 'set') {
+        saveRequest = redisService.partialUpdateKey({
+          ...update,
+          setAdds: [...currentValues].filter((value) => !originalSetValues.has(value)),
+          setRemoves: [...originalSetValues].filter((value) => !currentValues.has(value)),
+        });
+      } else {
+        const current = Object.fromEntries(
+          collectionRows.filter((row) => row.value).map((row) => [row.value, row.score || 0]),
+        );
+        saveRequest = redisService.partialUpdateKey({
+          ...update,
+          zsetUpserts: Object.fromEntries(
+            Object.entries(current).filter(([member, score]) => originalZsetValues[member] !== score),
+          ),
+          zsetRemoves: Object.keys(originalZsetValues).filter((member) => current[member] === undefined),
+        });
+      }
     } else {
-      const value = buildEditorValue(type, textValue, hashFields);
+      if ((type === 'list' || type === 'string') && !valuePage?.fullyLoaded) {
+        message.warning(`${type.toUpperCase()} 必须完整加载后才能保存`);
+        setSaving(false);
+        return;
+      }
+      const value = buildEditorValue(type, textValue, hashFields, collectionRows);
       saveRequest = redisService.updateKey({
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
@@ -535,6 +728,7 @@ const RedisDataView = memo((props: IProps) => {
         keyType: type,
         value,
         updateTtl: editorTtl ?? NO_TTL,
+        expectedElementCount: type === 'list' ? valuePage?.total : undefined,
       });
     }
 
@@ -543,7 +737,7 @@ const RedisDataView = memo((props: IProps) => {
         message.success(creating ? 'Redis key 已新增' : 'Redis key 已保存');
         setCreating(false);
         setSelectedKey(nextKey);
-        loadKeyDetail(nextKey);
+        performLoadKeyDetail(nextKey);
         loadData(searchKey, keyLimit);
       })
       .catch((error) => {
@@ -574,9 +768,14 @@ const RedisDataView = memo((props: IProps) => {
     setEditorType('string');
     setEditorTtl(NO_TTL);
     setTextValue('');
+    setOriginalTextValue('');
     setIsJsonString(false);
     setHashFields([{ id: uuid(), field: '', value: '' }]);
     setOriginalHashFields({});
+    setCollectionRows([]);
+    setOriginalSetValues(new Set());
+    setOriginalZsetValues({});
+    setValuePage(null);
     setHashFieldFilter('');
   };
 
@@ -613,6 +812,21 @@ const RedisDataView = memo((props: IProps) => {
   };
 
   const refreshData = () => {
+    if (hasUnsavedChanges()) {
+      Modal.confirm({
+        title: '放弃未保存的 Redis 修改并刷新？',
+        okText: '放弃并刷新',
+        cancelText: '继续编辑',
+        onOk: () => {
+          if (searchMode === SEARCH_MODE_PREFIX) {
+            searchPrefixes(searchKey);
+          } else {
+            loadData(searchKey, keyLimit);
+          }
+        },
+      });
+      return;
+    }
     if (searchMode === SEARCH_MODE_PREFIX) {
       searchPrefixes(searchKey);
       return;
@@ -1147,13 +1361,7 @@ const RedisDataView = memo((props: IProps) => {
                 <Button
                   icon={<CloseOutlined />}
                   size="small"
-                  onClick={() => {
-                    setDetail(null);
-                    setSelectedKey('');
-                    setSelectedPrefix('');
-                    setCreating(false);
-                    setIsJsonString(false);
-                  }}
+                  onClick={closeKeyEditor}
                 />
                 <Button
                   icon={<SaveOutlined />}
@@ -1161,7 +1369,13 @@ const RedisDataView = memo((props: IProps) => {
                   size="small"
                   type="primary"
                   onClick={saveKey}
-                  disabled={(!detail && !creating) || !isEditableType(creating ? editorType : detail?.type)}
+                  disabled={
+                    (!detail && !creating) ||
+                    !isEditableType(creating ? editorType : detail?.type) ||
+                    (!creating &&
+                      ['list', 'string'].includes(normalizeType(detail?.type)) &&
+                      !valuePage?.fullyLoaded)
+                  }
                 >
                   应用
                 </Button>
@@ -1184,6 +1398,9 @@ const RedisDataView = memo((props: IProps) => {
                       setTextValue('');
                       setIsJsonString(false);
                       setHashFields(value === 'hash' ? [{ id: uuid(), field: '', value: '' }] : []);
+                      setCollectionRows(
+                        value === 'set' || value === 'zset' ? [{ id: uuid(), value: '', score: 0 }] : [],
+                      );
                       setHashFieldFilter('');
                     }}
                   />
@@ -1249,6 +1466,107 @@ const RedisDataView = memo((props: IProps) => {
               字段
             </Button>
             <span>{hashFields.length} 个字段</span>
+            {valuePage?.hasMore && (
+              <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(false)}>
+                加载更多
+              </Button>
+            )}
+          </div>
+        </>
+      );
+    }
+    if (type === 'set' || type === 'zset') {
+      const valueColumns: ColumnsType<ICollectionValueRow> = [
+        {
+          title: type === 'zset' ? '成员' : '值',
+          dataIndex: 'value',
+          render: (value, record) => (
+            <Input
+              value={value}
+              onChange={(event) =>
+                setCollectionRows((current) =>
+                  current.map((item) => (item.id === record.id ? { ...item, value: event.target.value } : item)),
+                )
+              }
+            />
+          ),
+        },
+        ...(type === 'zset'
+          ? ([
+              {
+                title: 'Score',
+                dataIndex: 'score',
+                width: 160,
+                render: (score: number, record: ICollectionValueRow) => (
+                  <InputNumber
+                    value={score}
+                    onChange={(value) =>
+                      setCollectionRows((current) =>
+                        current.map((item) =>
+                          item.id === record.id ? { ...item, score: Number(value ?? 0) } : item,
+                        ),
+                      )
+                    }
+                  />
+                ),
+              },
+            ] as ColumnsType<ICollectionValueRow>)
+          : []),
+        {
+          title: '',
+          dataIndex: 'action',
+          width: 44,
+          render: (_, record) => (
+            <Button
+              icon={<DeleteOutlined />}
+              size="small"
+              type="text"
+              onClick={() => setCollectionRows((current) => current.filter((item) => item.id !== record.id))}
+            />
+          ),
+        },
+      ];
+      return (
+        <>
+          <Table columns={valueColumns} dataSource={collectionRows} pagination={false} rowKey="id" size="small" />
+          <div className={styles.fieldToolbar}>
+            <Button
+              icon={<PlusOutlined />}
+              size="small"
+              onClick={() => setCollectionRows((current) => current.concat({ id: uuid(), value: '', score: 0 }))}
+            >
+              成员
+            </Button>
+            <span>
+              已加载 {collectionRows.length}/{valuePage?.total ?? collectionRows.length}
+            </span>
+            {valuePage?.hasMore && (
+              <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(false)}>
+                加载更多
+              </Button>
+            )}
+          </div>
+        </>
+      );
+    }
+    if (type === 'list' && !creating && !valuePage?.fullyLoaded) {
+      const listColumns: ColumnsType<ICollectionValueRow> = [
+        { title: '索引', dataIndex: 'index', width: 100 },
+        { title: '值', dataIndex: 'value' },
+      ];
+      return (
+        <>
+          <Table columns={listColumns} dataSource={collectionRows} pagination={false} rowKey="id" size="small" />
+          <div className={styles.fieldToolbar}>
+            <span>
+              已加载 {collectionRows.length}/{valuePage?.total ?? collectionRows.length}
+            </span>
+            <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(false)}>
+              加载更多
+            </Button>
+            <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(true)}>
+              加载全部并编辑
+            </Button>
           </div>
         </>
       );
@@ -1273,6 +1591,11 @@ const RedisDataView = memo((props: IProps) => {
               格式化 JSON
             </Button>
             {isJsonString && <span>JSON 编辑模式</span>}
+            {valuePage?.hasMore && (
+              <Button loading={valuePageLoading} size="small" onClick={() => loadMoreValue(true)}>
+                加载完整字符串后编辑
+              </Button>
+            )}
           </div>
         )}
         <Input.TextArea
@@ -1292,6 +1615,13 @@ function formatJson(value: string) {
   } catch {
     return null;
   }
+}
+
+interface ICollectionValueRow {
+  id: string;
+  value: string;
+  score?: number;
+  index?: number;
 }
 
 function buildRows(keys: IRedisKeyItem[], prefixCommentMap: Record<string, IRedisKeyPrefixItem>) {
@@ -1647,7 +1977,12 @@ function isEditableType(type?: string) {
   return ['string', 'hash', 'list', 'set', 'zset'].includes(normalizeType(type));
 }
 
-function buildEditorValue(type: string, textValue: string, hashFields: IHashFieldRow[]) {
+function buildEditorValue(
+  type: string,
+  textValue: string,
+  hashFields: IHashFieldRow[],
+  collectionRows: ICollectionValueRow[],
+) {
   if (type === 'hash') {
     return hashFields.reduce<Record<string, string>>((result, item) => {
       const field = item.field.trim();
@@ -1657,10 +1992,31 @@ function buildEditorValue(type: string, textValue: string, hashFields: IHashFiel
       return result;
     }, {});
   }
-  if (type === 'list' || type === 'set' || type === 'zset') {
+  if (type === 'set') {
+    return collectionRows.map((item) => item.value).filter(Boolean);
+  }
+  if (type === 'zset') {
+    return Object.fromEntries(collectionRows.filter((item) => item.value).map((item) => [item.value, item.score || 0]));
+  }
+  if (type === 'list') {
     return textValue.split('\n').filter((item) => item.length > 0);
   }
   return textValue;
+}
+
+function pageToKeyDetail(page: IRedisKeyValuePage): IRedisKeyItem {
+  const type = normalizeType(page.type);
+  let value: any = '';
+  if (type === 'string') {
+    value = String(page.items[0]?.value ?? '');
+  } else if (type === 'hash') {
+    value = Object.fromEntries(page.items.map((item) => [String(item.field ?? ''), String(item.value ?? '')]));
+  } else if (type === 'zset') {
+    value = page.items.map((item) => `${String(item.member ?? '')}\t${Number(item.score ?? 0)}`);
+  } else {
+    value = page.items.map((item) => String(item.value ?? ''));
+  }
+  return { name: page.name || '', type: page.type, ttl: page.ttl, size: page.size, value };
 }
 
 function formatTtl(ttl?: number) {

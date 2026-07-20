@@ -2,14 +2,19 @@ package ai.chat2db.plugin.redis;
 
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
+import ai.chat2db.spi.redis.RedisKeyMutation;
 import ai.chat2db.spi.redis.RedisKeyScanResult;
+import ai.chat2db.spi.redis.RedisKeyValuePage;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
+import io.lettuce.core.ScoredValue;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -266,6 +271,189 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
         }
     }
 
+    @Override
+    public void partialUpdateKey(String databaseName, RedisKeyMutation mutation) {
+        if (mutation == null || StringUtils.isBlank(mutation.getKeyName())) {
+            throw new IllegalArgumentException("Redis key 不能为空");
+        }
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
+            String actualType = getTypeAsync(commands, mutation.getKeyName()).join();
+            String requestedType = StringUtils.lowerCase(StringUtils.trimToEmpty(mutation.getKeyType()));
+            if ("none".equals(actualType)) {
+                throw new IllegalArgumentException("Redis key 不存在: " + mutation.getKeyName());
+            }
+            if (!StringUtils.equals(actualType, requestedType)) {
+                throw new IllegalArgumentException("Redis key 类型已变化: " + actualType);
+            }
+            validatePartialMutation(requestedType, mutation);
+            String targetKey = StringUtils.defaultIfBlank(mutation.getUpdateKey(), mutation.getKeyName());
+            if (!StringUtils.equals(targetKey, mutation.getKeyName())) {
+                if (commands.exists(targetKey).toCompletableFuture().join() > 0) {
+                    throw new IllegalArgumentException("Redis key 已存在: " + targetKey);
+                }
+            }
+            commands.multi().toCompletableFuture().join();
+            if (!StringUtils.equals(targetKey, mutation.getKeyName())) {
+                commands.rename(mutation.getKeyName(), targetKey);
+            }
+            queuePartialMutation(commands, targetKey, requestedType, mutation);
+            queueOptionalTtl(commands, targetKey, mutation.getTtl());
+            commands.exec().toCompletableFuture().join();
+        }
+    }
+
+    private void validatePartialMutation(String type, RedisKeyMutation mutation) {
+        switch (type) {
+            case "hash" -> {
+                requireAbsent(mutation.getSetAdds(), mutation.getSetRemoves(), mutation.getZsetUpserts(),
+                        mutation.getZsetRemoves());
+                requireDisjoint(mutation.getHashUpserts() == null ? Set.of() : mutation.getHashUpserts().keySet(),
+                        mutation.getHashDeletes());
+            }
+            case "set" -> {
+                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getZsetUpserts(),
+                        mutation.getZsetRemoves());
+                requireDisjoint(mutation.getSetAdds(), mutation.getSetRemoves());
+            }
+            case "zset" -> {
+                requireAbsent(mutation.getHashUpserts(), mutation.getHashDeletes(), mutation.getSetAdds(),
+                        mutation.getSetRemoves());
+                requireDisjoint(mutation.getZsetUpserts() == null ? Set.of() : mutation.getZsetUpserts().keySet(),
+                        mutation.getZsetRemoves());
+            }
+            default -> throw new IllegalArgumentException("暂不支持部分编辑 Redis 类型: " + type);
+        }
+    }
+
+    private void requireAbsent(Object... values) {
+        for (Object value : values) {
+            if (value instanceof Collection<?> collection && !collection.isEmpty()
+                    || value instanceof Map<?, ?> map && !map.isEmpty()) {
+                throw new IllegalArgumentException("Redis 部分更新包含与 key 类型不匹配的字段");
+            }
+        }
+    }
+
+    private void requireDisjoint(Collection<String> additions, Collection<String> removals) {
+        if (additions == null || removals == null) {
+            return;
+        }
+        if (additions.stream().anyMatch(removals::contains)) {
+            throw new IllegalArgumentException("Redis 元素不能同时新增和删除");
+        }
+    }
+
+    private void queuePartialMutation(RedisAsyncCommands<String, String> commands, String key, String type,
+                                      RedisKeyMutation mutation) {
+        switch (type) {
+            case "hash" -> {
+                if (mutation.getHashUpserts() != null && !mutation.getHashUpserts().isEmpty()) {
+                    commands.hset(key, mutation.getHashUpserts());
+                }
+                if (mutation.getHashDeletes() != null && !mutation.getHashDeletes().isEmpty()) {
+                    commands.hdel(key, mutation.getHashDeletes().toArray(String[]::new));
+                }
+            }
+            case "set" -> {
+                if (mutation.getSetAdds() != null && !mutation.getSetAdds().isEmpty()) {
+                    commands.sadd(key, mutation.getSetAdds().toArray(String[]::new));
+                }
+                if (mutation.getSetRemoves() != null && !mutation.getSetRemoves().isEmpty()) {
+                    commands.srem(key, mutation.getSetRemoves().toArray(String[]::new));
+                }
+            }
+            case "zset" -> {
+                if (mutation.getZsetUpserts() != null) {
+                    mutation.getZsetUpserts().forEach((member, score) -> commands.zadd(key, score, member));
+                }
+                if (mutation.getZsetRemoves() != null && !mutation.getZsetRemoves().isEmpty()) {
+                    commands.zrem(key, mutation.getZsetRemoves().toArray(String[]::new));
+                }
+            }
+            default -> throw new IllegalArgumentException("暂不支持部分编辑 Redis 类型: " + type);
+        }
+    }
+
+    private void queueOptionalTtl(RedisAsyncCommands<String, String> commands, String key, Long ttl) {
+        if (ttl == null) {
+            return;
+        }
+        if (ttl == 0) {
+            throw new IllegalArgumentException("Redis TTL 不能为 0");
+        }
+        if (ttl < 0) {
+            commands.persist(key);
+        } else {
+            commands.expire(key, ttl);
+        }
+    }
+
+    @Override
+    public String fingerprintKey(String databaseName, String keyName) {
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
+            String type = getTypeAsync(commands, keyName).join();
+            if ("none".equals(type)) {
+                return null;
+            }
+            byte[] dump = commands.dump(keyName).toCompletableFuture().join();
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(type.getBytes(StandardCharsets.UTF_8));
+            if (dump != null) {
+                digest.update(dump);
+            }
+            return toHex(digest.digest());
+        } catch (Exception e) {
+            throw new IllegalStateException("Redis key fingerprint failed", e);
+        }
+    }
+
+    @Override
+    public void updateKeyMetadata(String databaseName, String keyName, String updateKey, Long ttl) {
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
+            if (commands.exists(keyName).toCompletableFuture().join() == 0) {
+                throw new IllegalArgumentException("Redis key 不存在: " + keyName);
+            }
+            String targetKey = StringUtils.defaultIfBlank(updateKey, keyName);
+            if (!StringUtils.equals(keyName, targetKey)) {
+                if (commands.exists(targetKey).toCompletableFuture().join() > 0) {
+                    throw new IllegalArgumentException("Redis key 已存在: " + targetKey);
+                }
+                commands.rename(keyName, targetKey).toCompletableFuture().join();
+            }
+            applyOptionalTtl(commands, targetKey, ttl).join();
+        }
+    }
+
+    @Override
+    public RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
+                                          int maxStringBytes) {
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
+            String type = getTypeAsync(commands, keyName).join();
+            if ("none".equals(type)) {
+                throw new IllegalArgumentException("Redis key 不存在: " + keyName);
+            }
+            PageData page = readPage(commands, keyName, type, cursor, Math.max(1, count), maxStringBytes);
+            Long ttl = commands.ttl(keyName).toCompletableFuture().join();
+            Long size = commands.memoryUsage(keyName).toCompletableFuture().exceptionally(e -> null).join();
+            return RedisKeyValuePage.builder()
+                    .name(keyName).type(type).ttl(ttl).size(size).items(page.items())
+                    .nextCursor(page.nextCursor()).hasMore(page.hasMore()).total(page.total())
+                    .fullyLoaded(!page.hasMore()).build();
+        }
+    }
+
     private long normalizeLimit(int count) {
         return count < 0 ? Long.MAX_VALUE : count == 0 ? KEY_SCAN_BATCH_SIZE : count;
     }
@@ -435,6 +623,151 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
         }
     }
 
+    private PageData readPage(RedisAsyncCommands<String, String> commands, String key, String type, String cursor,
+                              int count, int maxStringBytes) {
+        return switch (StringUtils.lowerCase(type)) {
+            case "string" -> readStringPage(commands, key, cursor, maxStringBytes);
+            case "hash" -> {
+                var result = commands.hscan(key, buildScanCursor(cursor), new ScanArgs().limit(count))
+                        .toCompletableFuture().join();
+                List<Map<String, Object>> items = result.getMap().entrySet().stream()
+                        .map(entry -> item("field", entry.getKey(), "value", entry.getValue())).toList();
+                yield new PageData(items, result.getCursor(), !result.isFinished(),
+                        commands.hlen(key).toCompletableFuture().join());
+            }
+            case "set" -> {
+                var result = commands.sscan(key, buildScanCursor(cursor), new ScanArgs().limit(count))
+                        .toCompletableFuture().join();
+                List<Map<String, Object>> items = result.getValues().stream()
+                        .map(value -> item("value", value)).toList();
+                yield new PageData(items, result.getCursor(), !result.isFinished(),
+                        commands.scard(key).toCompletableFuture().join());
+            }
+            case "list" -> {
+                long offset = parseOffset(cursor);
+                long total = commands.llen(key).toCompletableFuture().join();
+                List<String> values = commands.lrange(key, offset, offset + count - 1).toCompletableFuture().join();
+                List<Map<String, Object>> items = new ArrayList<>();
+                for (int i = 0; i < values.size(); i++) {
+                    items.add(item("index", offset + i, "value", values.get(i)));
+                }
+                long next = offset + values.size();
+                yield new PageData(items, Long.toString(next), next < total, total);
+            }
+            case "zset" -> {
+                long offset = parseOffset(cursor);
+                long total = commands.zcard(key).toCompletableFuture().join();
+                List<ScoredValue<String>> values = commands.zrangeWithScores(key, offset, offset + count - 1)
+                        .toCompletableFuture().join();
+                List<Map<String, Object>> items = values.stream()
+                        .map(value -> item("member", value.getValue(), "score", value.getScore())).toList();
+                long next = offset + values.size();
+                yield new PageData(items, Long.toString(next), next < total, total);
+            }
+            default -> new PageData(List.of(), "0", false, 0L);
+        };
+    }
+
+    private PageData readStringPage(RedisAsyncCommands<String, String> commands, String key, String cursor,
+                                    int maxStringBytes) {
+        String value = StringUtils.defaultString(commands.get(key).toCompletableFuture().join());
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        int start = (int) Math.min(parseOffset(cursor), bytes.length);
+        int end = Math.min(bytes.length, start + Math.max(1, maxStringBytes));
+        while (end < bytes.length && end > start && (bytes[end] & 0xC0) == 0x80) {
+            end--;
+        }
+        String slice = new String(bytes, start, end - start, StandardCharsets.UTF_8);
+        return new PageData(List.of(item("value", slice)), Integer.toString(end), end < bytes.length,
+                (long) bytes.length);
+    }
+
+    private CompletableFuture<Void> applyPartialMutation(RedisAsyncCommands<String, String> commands, String key,
+                                                          String type, RedisKeyMutation mutation) {
+        CompletableFuture<?> operation = switch (type) {
+            case "hash" -> applyHashMutation(commands, key, mutation);
+            case "set" -> applySetMutation(commands, key, mutation);
+            case "zset" -> applyZsetMutation(commands, key, mutation);
+            default -> throw new IllegalArgumentException("暂不支持部分编辑 Redis 类型: " + type);
+        };
+        return operation.thenApply(ignored -> null);
+    }
+
+    private CompletableFuture<?> applyHashMutation(RedisAsyncCommands<String, String> commands, String key,
+                                                    RedisKeyMutation mutation) {
+        CompletableFuture<?> future = mutation.getHashUpserts() == null || mutation.getHashUpserts().isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : commands.hset(key, mutation.getHashUpserts()).toCompletableFuture();
+        return future.thenCompose(ignored -> mutation.getHashDeletes() == null || mutation.getHashDeletes().isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : commands.hdel(key, mutation.getHashDeletes().toArray(String[]::new)).toCompletableFuture());
+    }
+
+    private CompletableFuture<?> applySetMutation(RedisAsyncCommands<String, String> commands, String key,
+                                                   RedisKeyMutation mutation) {
+        CompletableFuture<?> future = mutation.getSetAdds() == null || mutation.getSetAdds().isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : commands.sadd(key, mutation.getSetAdds().toArray(String[]::new)).toCompletableFuture();
+        return future.thenCompose(ignored -> mutation.getSetRemoves() == null || mutation.getSetRemoves().isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : commands.srem(key, mutation.getSetRemoves().toArray(String[]::new)).toCompletableFuture());
+    }
+
+    private CompletableFuture<?> applyZsetMutation(RedisAsyncCommands<String, String> commands, String key,
+                                                    RedisKeyMutation mutation) {
+        CompletableFuture<?> future = CompletableFuture.completedFuture(null);
+        if (mutation.getZsetUpserts() != null) {
+            for (Map.Entry<String, Double> entry : mutation.getZsetUpserts().entrySet()) {
+                future = future.thenCompose(ignored -> commands.zadd(key, entry.getValue(), entry.getKey())
+                        .toCompletableFuture());
+            }
+        }
+        return future.thenCompose(ignored -> mutation.getZsetRemoves() == null || mutation.getZsetRemoves().isEmpty()
+                ? CompletableFuture.completedFuture(null)
+                : commands.zrem(key, mutation.getZsetRemoves().toArray(String[]::new)).toCompletableFuture());
+    }
+
+    private CompletableFuture<Void> applyOptionalTtl(RedisAsyncCommands<String, String> commands, String key,
+                                                      Long ttl) {
+        if (ttl == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (ttl == 0) {
+            throw new IllegalArgumentException("Redis TTL 不能为 0");
+        }
+        return applyTtl(commands, key, ttl);
+    }
+
+    private long parseOffset(String cursor) {
+        if (StringUtils.isBlank(cursor) || "0".equals(cursor)) {
+            return 0;
+        }
+        try {
+            return Math.max(0, Long.parseLong(cursor));
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Redis cursor 无效: " + cursor, e);
+        }
+    }
+
+    private Map<String, Object> item(Object... values) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (int i = 0; i < values.length; i += 2) {
+            result.put(String.valueOf(values[i]), values[i + 1]);
+        }
+        return result;
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            builder.append(String.format("%02x", value));
+        }
+        return builder.toString();
+    }
+
+    private record PageData(List<Map<String, Object>> items, String nextCursor, boolean hasMore, Long total) {
+    }
+
     // ======================== 值写入 ========================
 
     /**
@@ -469,6 +802,18 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                 yield CompletableFuture.completedFuture(null);
             }
             case "zset" -> {
+                if (value instanceof Map<?, ?> map) {
+                    CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        if (entry.getKey() == null || entry.getValue() == null) {
+                            continue;
+                        }
+                        double score = Double.parseDouble(String.valueOf(entry.getValue()));
+                        future = future.thenCompose(ignored -> commands.zadd(key, score,
+                                String.valueOf(entry.getKey())).toCompletableFuture().thenApply(result -> null));
+                    }
+                    yield future;
+                }
                 List<String> values = toStringList(value);
                 yield addZsetMembers(commands, key, values, 0);
             }

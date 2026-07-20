@@ -7,6 +7,7 @@ import ai.chat2db.server.mcp.tool.ForeignKeyTools;
 import ai.chat2db.server.mcp.tool.MetadataTools;
 import ai.chat2db.server.mcp.tool.MongoTools;
 import ai.chat2db.server.mcp.tool.QueryTools;
+import ai.chat2db.server.mcp.tool.RedisTools;
 import ai.chat2db.server.mcp.tool.SchemaInsightTools;
 import ai.chat2db.server.mcp.support.DataSourceResourceService;
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -27,9 +28,9 @@ public class McpServerConfiguration {
     @Bean
     public List<McpServerFeatures.SyncToolSpecification> chat2dbMcpTools(MetadataTools metadataTools,
         QueryTools queryTools, DangerousSqlTools dangerousSqlTools, MongoTools mongoTools,
-        ForeignKeyTools foreignKeyTools, SchemaInsightTools schemaInsightTools) {
+        ForeignKeyTools foreignKeyTools, SchemaInsightTools schemaInsightTools, RedisTools redisTools) {
         return SyncMcpAnnotationProviders.toolSpecifications(List.of(metadataTools, queryTools, dangerousSqlTools,
-            mongoTools, foreignKeyTools, schemaInsightTools));
+            mongoTools, foreignKeyTools, schemaInsightTools, redisTools));
     }
 
     @Bean

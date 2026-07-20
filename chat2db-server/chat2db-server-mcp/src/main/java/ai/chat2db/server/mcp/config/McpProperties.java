@@ -22,6 +22,9 @@ public class McpProperties {
     /** MongoDB execution policy exposed to MCP tools. */
     private Mongo mongodb = new Mongo();
 
+    /** Redis read and write payload limits. */
+    private Redis redis = new Redis();
+
     /**
      * Shared MCP safety policy. Write covers SQL DML and MongoDB document writes; DDL covers SQL DDL and
      * MongoDB collection/index administration.
@@ -49,5 +52,16 @@ public class McpProperties {
     public static class Mongo {
         /** Maximum number of documents accepted by one INSERT_MANY prepare request. */
         private int maxBatchDocuments = 100;
+    }
+
+    @Data
+    public static class Redis {
+        private int defaultKeyLimit = 100;
+        private int maxKeyLimit = 1000;
+        private int defaultValuePageSize = 50;
+        private int maxValuePageSize = 200;
+        private int maxStringPageBytes = 65536;
+        private int maxFullWriteElements = 10000;
+        private int maxWriteBytes = 1048576;
     }
 }

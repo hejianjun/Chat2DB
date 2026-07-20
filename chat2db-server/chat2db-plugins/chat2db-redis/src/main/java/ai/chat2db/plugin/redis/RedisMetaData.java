@@ -9,7 +9,9 @@ import ai.chat2db.spi.model.Table;
 import ai.chat2db.spi.redis.RedisCommandMonitor;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
+import ai.chat2db.spi.redis.RedisKeyMutation;
 import ai.chat2db.spi.redis.RedisKeyScanResult;
+import ai.chat2db.spi.redis.RedisKeyValuePage;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -107,6 +109,12 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     }
 
     @Override
+    public RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
+                                          int maxStringBytes) {
+        return keyBrowser.queryKeyPage(databaseName, keyName, cursor, count, maxStringBytes);
+    }
+
+    @Override
     public CompletableFuture<List<RedisKeyInfo>> sampleKeys(String databaseName, String prefix, int maxCount) {
         return keyBrowser.sampleKeys(databaseName, prefix, maxCount);
     }
@@ -132,6 +140,21 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     public void partialUpdateKey(String databaseName, String keyName, String keyType,
                                   Map<String, String> addedFields, List<String> removedFields, Long ttl) {
         keyBrowser.partialUpdateKey(databaseName, keyName, keyType, addedFields, removedFields, ttl);
+    }
+
+    @Override
+    public void partialUpdateKey(String databaseName, RedisKeyMutation mutation) {
+        keyBrowser.partialUpdateKey(databaseName, mutation);
+    }
+
+    @Override
+    public String fingerprintKey(String databaseName, String keyName) {
+        return keyBrowser.fingerprintKey(databaseName, keyName);
+    }
+
+    @Override
+    public void updateKeyMetadata(String databaseName, String keyName, String updateKey, Long ttl) {
+        keyBrowser.updateKeyMetadata(databaseName, keyName, updateKey, ttl);
     }
 
     @Override
