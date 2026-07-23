@@ -17,6 +17,7 @@ import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.InsertManyResult;
 import com.mongodb.client.result.InsertOneResult;
 import com.mongodb.client.result.UpdateResult;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+@Slf4j
 public class MongodbCommandExecutor implements CommandExecutor {
 
     private static final int DEFAULT_PAGE_SIZE = 200;
@@ -158,8 +160,7 @@ public class MongodbCommandExecutor implements CommandExecutor {
                     1, 1, false);
             case "aggregate" -> executeAggregate(collection, call.arguments(), chain, requestedPageNo,
                     requestedPageSize, result);
-            case "countDocuments" -> scalarResult(result, "count",
-                    collection.countDocuments(optionalDocument(call.arguments(), 0)));
+            case "countDocuments" -> executeCountDocuments(collection, call.arguments(), result);
             case "insertOne" -> insertedResult(result, collection.insertOne(document(call.arguments(), 0)));
             case "insertMany" -> insertedManyResult(result, collection.insertMany(documentList(call.arguments(), 0)));
             case "updateOne" -> updateResult(result, collection.updateOne(document(call.arguments(), 0),
@@ -181,6 +182,17 @@ public class MongodbCommandExecutor implements CommandExecutor {
             }
             default -> throw new IllegalArgumentException("Unsupported MongoDB collection method: " + call.name());
         }
+    }
+
+    private void executeCountDocuments(MongoCollection<Document> collection, List<String> arguments,
+                                       ExecuteResult result) {
+        Document filter = optionalDocument(arguments, 0);
+        log.info("Executing MongoDB countDocuments: namespace={}, filter={}",
+                collection.getNamespace().getFullName(), filter.toJson());
+        long count = collection.countDocuments(filter);
+        log.info("MongoDB countDocuments completed: namespace={}, count={}",
+                collection.getNamespace().getFullName(), count);
+        scalarResult(result, "count", count);
     }
 
     private void executeFind(MongoCollection<Document> collection, List<String> arguments,

@@ -17,6 +17,7 @@ import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.ValueHandler;
 import ai.chat2db.spi.enums.SqlTypeEnum;
 import ai.chat2db.spi.model.*;
+import ai.chat2db.spi.mongodb.MqlSyntaxParser;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import ai.chat2db.spi.util.JdbcUtils;
@@ -171,6 +172,9 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         if (StringUtils.isBlank(param.getSql())) {
             return 0L;
         }
+        if (DataSourceTypeEnum.MONGODB.getCode().equalsIgnoreCase(Chat2DBContext.getConnectInfo().getDbType())) {
+            return countMongoDocuments(param.getSql());
+        }
         DbType dbType =
                 JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
         String sql = param.getSql();
@@ -194,6 +198,74 @@ public class DlTemplateServiceImpl implements DlTemplateService {
                     .build();
         }
 
+        return extractCount(executeResult);
+    }
+
+    private Long countMongoDocuments(String mql) {
+        String countMql;
+        try {
+            countMql = buildMongoCountMql(mql);
+        } catch (IllegalArgumentException e) {
+            log.warn("Unable to build MongoDB count query from MQL: {}", mql, e);
+            throw new BusinessException("dataSource.sqlAnalysisError");
+        }
+        log.info("Generated MongoDB count MQL: sourceMql={}, countMql={}", mql, countMql);
+
+        ExecuteResult executeResult;
+        try {
+            executeResult = Chat2DBContext.getMetaData().getCommandExecutor().execute(countMql, null, true,
+                    null, null, Chat2DBContext.getMetaData().getValueHandler());
+        } catch (SQLException e) {
+            log.warn("Failed to execute MongoDB count query: {}", countMql, e);
+            throw new BusinessException("dataSource.sqlAnalysisError");
+        }
+        if (!Boolean.TRUE.equals(executeResult.getSuccess())) {
+            log.warn("MongoDB count query failed: {}, message: {}", countMql, executeResult.getMessage());
+            throw new BusinessException("dataSource.sqlAnalysisError");
+        }
+        return extractCount(executeResult);
+    }
+
+    String buildMongoCountMql(String mql) {
+        List<MqlSyntaxParser.StatementPosition> statements = MqlSyntaxParser.splitStatements(mql);
+        if (statements.size() != 1) {
+            throw new IllegalArgumentException("MongoDB count requires exactly one statement");
+        }
+
+        String statement = statements.get(0).statement().trim();
+        if (!statement.startsWith("db.")) {
+            throw new IllegalArgumentException("MQL must start with db.");
+        }
+
+        String expression = statement.substring(3).trim();
+        String collectionReference;
+        List<MqlSyntaxParser.MethodCall> calls;
+        if (expression.startsWith("getCollection(")) {
+            calls = new ArrayList<>(MqlSyntaxParser.parseMethodCalls(expression));
+            if (calls.size() < 2 || !"getCollection".equals(calls.get(0).name())
+                    || calls.get(0).arguments().size() != 1) {
+                throw new IllegalArgumentException("Invalid db.getCollection() query");
+            }
+            collectionReference = "db.getCollection(" + calls.remove(0).arguments().get(0) + ")";
+        } else {
+            int dot = expression.indexOf('.');
+            if (dot <= 0) {
+                throw new IllegalArgumentException("MQL must include a collection and method");
+            }
+            collectionReference = "db." + expression.substring(0, dot).trim();
+            calls = MqlSyntaxParser.parseMethodCalls(expression.substring(dot + 1));
+        }
+
+        if (calls.isEmpty() || !("find".equals(calls.get(0).name())
+                || "countDocuments".equals(calls.get(0).name()))) {
+            throw new IllegalArgumentException("MongoDB total count supports find() queries only");
+        }
+        List<String> arguments = calls.get(0).arguments();
+        String filter = arguments.isEmpty() || StringUtils.isBlank(arguments.get(0)) ? "{}" : arguments.get(0);
+        return collectionReference + ".countDocuments(" + filter + ")";
+    }
+
+    private Long extractCount(ExecuteResult executeResult) {
         List<List<String>> dataList = executeResult.getDataList();
         if (CollectionUtils.isEmpty(dataList)) {
             return 0L;

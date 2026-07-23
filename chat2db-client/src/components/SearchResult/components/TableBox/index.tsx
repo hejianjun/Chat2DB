@@ -470,8 +470,8 @@ export default function TableBox(props: ITableProps) {
       return total;
     }
     const res = await sqlService.getDMLCount({
-      sql: queryResultData.originalSql,
       ...(props.executeSqlParams || {}),
+      sql: queryResultData.originalSql,
     });
     setPaginationConfig({ ...paginationConfig, total: res });
     return res;
