@@ -12,6 +12,7 @@ import ai.chat2db.spi.model.TableColumn;
 import ai.chat2db.spi.model.TableIndex;
 import ai.chat2db.spi.model.TableIndexColumn;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import com.mongodb.MongoException;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import org.apache.commons.lang3.StringUtils;
@@ -56,12 +57,18 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
                 if (StringUtils.isNotBlank(tableName) && !StringUtils.equals(tableName, collectionName)) {
                     continue;
                 }
-                tables.add(Table.builder()
+                Table table = Table.builder()
                         .name(collectionName)
                         .databaseName(databaseName)
                         .dbType("MONGODB")
                         .type("TABLE")
-                        .build());
+                        .build();
+                Long rowCount = estimatedDocumentCount(context.client().getDatabase(databaseName)
+                        .getCollection(collectionName));
+                if (rowCount != null) {
+                    table.setRowCount(rowCount);
+                }
+                tables.add(table);
             }
             return tables;
         }
@@ -164,6 +171,18 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
 
     private MongodbConnectionProvider.MongodbConnectionContext open() {
         return MongodbConnectionProvider.open(Chat2DBContext.getConnectInfo());
+    }
+
+    /**
+     * Uses MongoDB's metadata-based estimate instead of scanning the collection.
+     * Views and collections without collStats permission may not support this operation.
+     */
+    private Long estimatedDocumentCount(MongoCollection<Document> collection) {
+        try {
+            return collection.estimatedDocumentCount();
+        } catch (MongoException e) {
+            return null;
+        }
     }
 
     private void mergeField(Map<String, FieldInfo> fields, String name, Object value) {
