@@ -24,7 +24,9 @@ import org.bson.conversions.Bson;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -404,9 +406,12 @@ public class MongodbCommandExecutor implements CommandExecutor {
         return DataTypeEnum.STRING.getCode();
     }
 
-    private String formatValue(Object value) {
+    static String formatValue(Object value) {
         if (value == null) {
             return null;
+        }
+        if (value instanceof Date date) {
+            return DateTimeFormatter.ISO_INSTANT.format(date.toInstant());
         }
         if (value instanceof Document document) {
             return document.toJson();
