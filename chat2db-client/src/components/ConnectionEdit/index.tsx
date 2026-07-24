@@ -418,10 +418,17 @@ function RenderForm(props: IRenderFormProps) {
     }
   }
 
-  function extractObj(url: any) {
-    const { template, pattern } = dataSourceFormConfig.baseInfo;
+  function extractObj(url: string, connectionConfig: IConnectionConfig = dataSourceFormConfig) {
+    const { template, pattern, parseUrl } = connectionConfig.baseInfo;
+    if (parseUrl) {
+      return parseUrl(url);
+    }
+
     // 提取关键词对应的内容 value
-    const matches = url.match(pattern)!;
+    const matches = url.match(pattern);
+    if (!matches) {
+      return null;
+    }
     // 提取花括号内的关键词 key
     const reg = /{(.*?)}/g;
     let match;
@@ -442,16 +449,13 @@ function RenderForm(props: IRenderFormProps) {
     dataObj: { [key: string]: any },
     _dataSourceFormConfig?: IConnectionConfig,
   ) {
-    const { template, pattern } = (_dataSourceFormConfig || dataSourceFormConfig).baseInfo;
+    const { template } = (_dataSourceFormConfig || dataSourceFormConfig).baseInfo;
     const keyName = Object.keys(variableData)[0];
     const keyValue = variableData[Object.keys(variableData)[0]];
     let newData: any = {};
 
     if (keyName === 'url') {
-      //先判断url是否符合规定的正则
-      if (pattern.test(keyValue)) {
-        newData = extractObj(keyValue);
-      }
+      newData = extractObj(keyValue, _dataSourceFormConfig || dataSourceFormConfig) || {};
     } else if (keyName === 'alias') {
       aliasChanged = true;
     } else {

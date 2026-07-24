@@ -157,6 +157,76 @@ const DLC_URL_TEMPLATE =
   '&datasource_connection_name={datasourceConnection}&region={region}&data_engine_name={dataEngineName}' +
   '&result_type={resultType}&read_type={readType}&resource_group_name={resourceGroupName}';
 
+const parseDlcUrl = (url: string) => {
+  const matches = url.match(/^jdbc:dlc:([^?]+)\?(.*)$/);
+  if (!matches) {
+    return null;
+  }
+
+  const searchParams = new URLSearchParams(matches[2]);
+  const requiredParams = [
+    'task_type',
+    'database_name',
+    'datasource_connection_name',
+    'region',
+    'data_engine_name',
+  ];
+  if (requiredParams.some((name) => !searchParams.has(name))) {
+    return null;
+  }
+
+  return {
+    host: matches[1],
+    taskType: searchParams.get('task_type') || '',
+    databaseName: searchParams.get('database_name') || '',
+    datasourceConnection: searchParams.get('datasource_connection_name') || '',
+    region: searchParams.get('region') || '',
+    dataEngineName: searchParams.get('data_engine_name') || '',
+    resultType: searchParams.get('result_type') || '',
+    readType: searchParams.get('read_type') || '',
+    resourceGroupName: searchParams.get('resource_group_name') || '',
+  };
+};
+
+const parseMongoDbUrl = (url: string) => {
+  const matches = url.match(/^mongodb(\+srv)?:\/\/([^/?#]+)(?:\/([^?#]*))?(?:\?[^#]*)?(?:#.*)?$/);
+  if (!matches) {
+    return null;
+  }
+
+  const authority = matches[2].slice(matches[2].lastIndexOf('@') + 1);
+  if (authority.includes(',')) {
+    return null;
+  }
+
+  let host = authority;
+  let port = '';
+  if (authority.startsWith('[')) {
+    const ipv6Matches = authority.match(/^(\[[^\]]+\])(?::(\d+))?$/);
+    if (!ipv6Matches) {
+      return null;
+    }
+    host = ipv6Matches[1];
+    port = ipv6Matches[2] || '';
+  } else {
+    const portSeparatorIndex = authority.lastIndexOf(':');
+    if (portSeparatorIndex >= 0) {
+      const portValue = authority.slice(portSeparatorIndex + 1);
+      if (!/^\d+$/.test(portValue)) {
+        return null;
+      }
+      host = authority.slice(0, portSeparatorIndex);
+      port = portValue;
+    }
+  }
+
+  return {
+    host,
+    port,
+    database: matches[3] || '',
+  };
+};
+
 export const dataSourceFormConfigs: IConnectionConfig[] = [
   // MYSQL
   {
@@ -1624,6 +1694,7 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
       ],
       pattern: DLC_URL_PATTERN,
       template: DLC_URL_TEMPLATE,
+      parseUrl: parseDlcUrl,
       // excludes: [OperationColumn.EditTable]
     },
     ssh: sshConfig,
@@ -2218,6 +2289,7 @@ export const dataSourceFormConfigs: IConnectionConfig[] = [
       ],
       pattern: /mongodb(?:\+srv)?:\/\/.+/,
       template: 'mongodb://{host}:{port}/{database}',
+      parseUrl: parseMongoDbUrl,
       excludes: [OperationColumn.ViewDDL, OperationColumn.CreateTable, OperationColumn.EditTable],
     },
     ssh: sshConfig,

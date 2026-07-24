@@ -38,6 +38,7 @@ export type IConnectionConfig = {
     items: IFormItem[];
     pattern: RegExp;
     template: string;
+    parseUrl?: (url: string) => Record<string, string> | null;
     excludes?: OperationColumn[];
   },
   driver?: {
