@@ -1,5 +1,19 @@
 import { AIType } from './ai';
 
+export enum DateTimeFormat {
+  DATE_TIME = 'YYYY-MM-DD HH:mm:ss',
+  DATE_TIME_MILLIS = 'YYYY-MM-DD HH:mm:ss.SSS',
+  DATE_TIME_SLASH = 'YYYY/MM/DD HH:mm:ss',
+  ISO_8601 = 'ISO_8601',
+}
+
+export const SYSTEM_TIME_ZONE = 'SYSTEM';
+
+export interface IDateTimeDisplayConfig {
+  format: DateTimeFormat;
+  timeZone: string;
+}
+
 export interface IAnthropicConfig {
   aiSqlSource: AIType.ANTHROPIC;
   apiKey: string;

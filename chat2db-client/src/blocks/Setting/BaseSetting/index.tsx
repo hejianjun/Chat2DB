@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { LangType, ThemeType } from '@/constants';
 import i18n, { currentLang } from '@/i18n';
 import classnames from 'classnames';
@@ -9,6 +9,13 @@ import { Select } from 'antd';
 import Iconfont from '@/components/Iconfont';
 import { setLang as setLangLocalStorage } from '@/utils/localStorage';
 import { useTheme } from '@/hooks/useTheme';
+import {
+  DEFAULT_DATE_TIME_DISPLAY,
+  setDateTimeDisplay,
+  useSettingStore,
+} from '@/store/setting';
+import { DateTimeFormat, SYSTEM_TIME_ZONE } from '@/typings/setting';
+import { getSupportedTimeZones, getSystemTimeZone, isValidTimeZone } from '@/utils/dateTime';
 
 import styles from './index.less';
 
@@ -95,6 +102,50 @@ export default function BaseSetting() {
   const [appTheme, setAppTheme] = useTheme();
   const [currentTheme, setCurrentTheme] = useState<ThemeType>(appTheme.backgroundColor);
   const [currentPrimaryColor, setCurrentPrimaryColor] = useState(localStorage.getItem('primary-color'));
+  const dateTimeDisplay =
+    useSettingStore((state) => state.dateTimeDisplay) || DEFAULT_DATE_TIME_DISPLAY;
+  const systemTimeZone = getSystemTimeZone();
+  const selectedTimeZone =
+    dateTimeDisplay.timeZone === SYSTEM_TIME_ZONE || isValidTimeZone(dateTimeDisplay.timeZone)
+      ? dateTimeDisplay.timeZone
+      : SYSTEM_TIME_ZONE;
+  const timeZoneOptions = useMemo(
+    () => [
+      {
+        value: SYSTEM_TIME_ZONE,
+        label: i18n('setting.option.systemTimeZone', systemTimeZone),
+      },
+      {
+        value: 'UTC',
+        label: 'UTC',
+      },
+      ...getSupportedTimeZones()
+        .filter((timeZone) => timeZone !== 'UTC')
+        .map((timeZone) => ({
+          value: timeZone,
+          label: timeZone,
+        })),
+    ],
+    [systemTimeZone],
+  );
+  const dateTimeFormatOptions = [
+    {
+      value: DateTimeFormat.DATE_TIME,
+      label: DateTimeFormat.DATE_TIME,
+    },
+    {
+      value: DateTimeFormat.DATE_TIME_MILLIS,
+      label: DateTimeFormat.DATE_TIME_MILLIS,
+    },
+    {
+      value: DateTimeFormat.DATE_TIME_SLASH,
+      label: DateTimeFormat.DATE_TIME_SLASH,
+    },
+    {
+      value: DateTimeFormat.ISO_8601,
+      label: i18n('setting.option.iso8601'),
+    },
+  ];
 
   const changePrimaryColor = (item: any) => {
     const html = document.documentElement;
@@ -156,6 +207,40 @@ export default function BaseSetting() {
           value={currentLang}
           options={languageOptions}
         />
+      </div>
+      <div className={styles.title}>{i18n('setting.title.dateTimeDisplay')}</div>
+      <div className={styles.dateTimeSetting}>
+        <div className={styles.settingField}>
+          <div className={styles.settingLabel}>{i18n('setting.label.dateTimeFormat')}</div>
+          <Select
+            style={{ width: 240 }}
+            value={dateTimeDisplay.format}
+            options={dateTimeFormatOptions}
+            onChange={(format: DateTimeFormat) => {
+              setDateTimeDisplay({
+                ...dateTimeDisplay,
+                format,
+                timeZone: selectedTimeZone,
+              });
+            }}
+          />
+        </div>
+        <div className={styles.settingField}>
+          <div className={styles.settingLabel}>{i18n('setting.label.timeZone')}</div>
+          <Select
+            showSearch
+            style={{ width: 240 }}
+            value={selectedTimeZone}
+            options={timeZoneOptions}
+            optionFilterProp="label"
+            onChange={(timeZone: string) => {
+              setDateTimeDisplay({
+                ...dateTimeDisplay,
+                timeZone,
+              });
+            }}
+          />
+        </div>
       </div>
       <div className={styles.title}>{i18n('setting.title.themeColor')}</div>
       <ul className={styles.primaryColorList}>

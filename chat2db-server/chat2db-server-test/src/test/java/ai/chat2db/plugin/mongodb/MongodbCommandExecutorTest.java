@@ -1,5 +1,6 @@
 package ai.chat2db.plugin.mongodb;
 
+import ai.chat2db.spi.enums.DataTypeEnum;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -13,5 +14,6 @@ class MongodbCommandExecutorTest {
         Date date = Date.from(Instant.parse("2026-04-21T16:00:00.123Z"));
 
         Assertions.assertEquals("2026-04-21T16:00:00.123Z", MongodbCommandExecutor.formatValue(date));
+        Assertions.assertEquals(DataTypeEnum.DATETIME.getCode(), MongodbCommandExecutor.dataType(date));
     }
 }

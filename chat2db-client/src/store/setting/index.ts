@@ -3,17 +3,23 @@ import { devtools, persist } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { StoreApi } from 'zustand';
 
-import { IAiConfig } from '@/typings/setting';
+import { DateTimeFormat, IAiConfig, IDateTimeDisplayConfig, SYSTEM_TIME_ZONE } from '@/typings/setting';
 import { AIType, IRemainingUse } from '@/typings/ai';
 import configService from '@/service/config';
 import aiService from '@/service/ai';
 
 export interface ISettingState {
   aiConfig: IAiConfig;
+  dateTimeDisplay: IDateTimeDisplayConfig;
   remainingUse?: IRemainingUse;
   hasWhite: boolean;
   holdingService: boolean;
 }
+
+export const DEFAULT_DATE_TIME_DISPLAY: IDateTimeDisplayConfig = {
+  format: DateTimeFormat.DATE_TIME,
+  timeZone: SYSTEM_TIME_ZONE,
+};
 
 const initSetting: ISettingState = {
   remainingUse: undefined,
@@ -21,6 +27,7 @@ const initSetting: ISettingState = {
     aiSqlSource: AIType.OPENAI,
     apiKey: '',
   },
+  dateTimeDisplay: DEFAULT_DATE_TIME_DISPLAY,
   hasWhite: false,
   holdingService: false,
 };
@@ -35,6 +42,7 @@ export const useSettingStore: UseBoundStoreWithEqualityFn<StoreApi<ISettingState
         // 工作区的状态只保存 layout布局信息
         partialize: (state: ISettingState) => ({
           holdingService: state.holdingService,
+          dateTimeDisplay: state.dateTimeDisplay,
         }),
       },
     ),
@@ -73,4 +81,8 @@ export const fetchRemainingUse = (apiKey: string) => {
 
 export const setHoldingService = (holdingService: boolean) => {
   useSettingStore.setState({ holdingService });
+};
+
+export const setDateTimeDisplay = (dateTimeDisplay: IDateTimeDisplayConfig) => {
+  useSettingStore.setState({ dateTimeDisplay });
 };

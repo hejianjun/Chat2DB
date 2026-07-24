@@ -390,12 +390,15 @@ public class MongodbCommandExecutor implements CommandExecutor {
         return arguments.get(index);
     }
 
-    private String dataType(Object value) {
+    static String dataType(Object value) {
         if (value instanceof Number) {
             return DataTypeEnum.NUMERIC.getCode();
         }
         if (value instanceof Boolean) {
             return DataTypeEnum.BOOLEAN.getCode();
+        }
+        if (value instanceof Date) {
+            return DataTypeEnum.DATETIME.getCode();
         }
         if (value instanceof List<?>) {
             return DataTypeEnum.ARRAY.getCode();

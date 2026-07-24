@@ -13,6 +13,7 @@ import ScreeningResult from '@/components/SearchResult/components/ScreeningResul
 import styles from './index.less';
 
 // 工具函数
+import { formatDateTimeValue } from '@/utils/dateTime';
 import { compareStrings } from '@/utils/sort';
 import { transformInputValue } from '../../utils';
 
@@ -28,6 +29,7 @@ import taskService, { ITask } from '@/service/task';
 
 // store
 import { setFocusedContent } from '@/store/common/copyFocusedContent';
+import { DEFAULT_DATE_TIME_DISPLAY, useSettingStore } from '@/store/setting';
 
 // 依赖组件
 import ExecuteSQL from '@/components/ExecuteSQL';
@@ -110,6 +112,8 @@ export const TableContext = React.createContext({} as any);
 export default function TableBox(props: ITableProps) {
   // const {} = useContext(Context);
   const { className, outerQueryResultData, isActive, concealTabHeader } = props;
+  const dateTimeDisplay =
+    useSettingStore((state) => state.dateTimeDisplay) || DEFAULT_DATE_TIME_DISPLAY;
   const [viewTableCellData, setViewTableCellData] = useState<IViewTableCellData | null>(null);
   const [, contextHolder] = message.useMessage();
   const [paginationConfig, setPaginationConfig] = useState<IResultConfig>({
@@ -735,7 +739,11 @@ export default function TableBox(props: ITableProps) {
         ),
         render: (value: any, rowData) => {
           const rowId = rowData[colNoCode];
-          const content = renderTableCellValue(value);
+          const displayValue =
+            dataType === TableDataType.DATETIME && typeof value === 'string'
+              ? formatDateTimeValue(value, dateTimeDisplay)
+              : value;
+          const content = renderTableCellValue(displayValue);
           return (
             <div
               data-chat2db-general-can-copy-element
@@ -771,7 +779,14 @@ export default function TableBox(props: ITableProps) {
         features: { sortable: isNumber ? compareStrings : true },
       };
     });
-  }, [queryResultData.headerList, editingCell, editingData, curOperationRowNo, oldDataList]);
+  }, [
+    queryResultData.headerList,
+    editingCell,
+    editingData,
+    curOperationRowNo,
+    oldDataList,
+    dateTimeDisplay,
+  ]);
 
   const hasColumnComment = queryResultData.headerList?.some((item) => item.comment?.trim());
 
