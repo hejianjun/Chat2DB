@@ -31,6 +31,7 @@ import java.util.Map;
 public class MongodbMetaData extends DefaultMetaService implements MetaData {
 
     private static final int FIELD_SAMPLE_SIZE = 100;
+    private static final int UNAUTHORIZED_ERROR_CODE = 13;
     private static final CommandExecutor COMMAND_EXECUTOR = new MongodbCommandExecutor();
 
     @Override
@@ -54,6 +55,9 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
         try (MongodbConnectionProvider.MongodbConnectionContext context = open()) {
             List<Table> tables = new ArrayList<>();
             for (String collectionName : context.client().getDatabase(databaseName).listCollectionNames()) {
+                if (collectionName.startsWith("system.")) {
+                    continue;
+                }
                 if (StringUtils.isNotBlank(tableName) && !StringUtils.equals(tableName, collectionName)) {
                     continue;
                 }
@@ -95,8 +99,15 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
         try (MongodbConnectionProvider.MongodbConnectionContext context = open()) {
             MongoCollection<Document> collection = context.client().getDatabase(databaseName).getCollection(tableName);
             Map<String, FieldInfo> fields = new LinkedHashMap<>();
-            for (Document document : collection.find().limit(FIELD_SAMPLE_SIZE)) {
-                document.forEach((name, value) -> mergeField(fields, name, value));
+            try {
+                for (Document document : collection.find().limit(FIELD_SAMPLE_SIZE)) {
+                    document.forEach((name, value) -> mergeField(fields, name, value));
+                }
+            } catch (MongoException e) {
+                if (e.getCode() == UNAUTHORIZED_ERROR_CODE) {
+                    return Collections.emptyList();
+                }
+                throw e;
             }
             List<TableColumn> columns = new ArrayList<>();
             int position = 1;
