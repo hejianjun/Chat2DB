@@ -29,6 +29,11 @@ public class DataExportRequest extends DataSourceBaseRequest {
     private Long operationLogId;
 
     /**
+     * Source table or collection name.
+     */
+    private String tableName;
+
+    /**
      * export type
      *
      * @see ExportTypeEnum

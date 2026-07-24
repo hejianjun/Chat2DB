@@ -16,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 @Component
@@ -68,29 +69,50 @@ public class InsertExportStrategy extends AbstractExportStrategy {
     }
 
     @Override
-    protected void doExportCached(ai.chat2db.spi.model.ExecuteResult result, ExportContext exportContext) {
+    protected void doExportResults(Iterable<ai.chat2db.spi.model.ExecuteResult> results,
+                                   ExportContext exportContext) {
         try (PrintWriter printWriter = new PrintWriter(exportContext.getFile(), StandardCharsets.UTF_8)) {
-            List<SQLIdentifierExpr> headerList = new ArrayList<>(result.getHeaderList().size());
-            result.getHeaderList().forEach(header -> headerList.add(new SQLIdentifierExpr(header.getName())));
-            List<List<String>> rows = result.getDataList();
-            if (rows == null) {
-                rows = java.util.Collections.emptyList();
+            Iterator<ai.chat2db.spi.model.ExecuteResult> iterator = results.iterator();
+            if (!iterator.hasNext()) {
+                return;
             }
-            for (List<String> row : rows) {
+            ai.chat2db.spi.model.ExecuteResult firstResult = iterator.next();
+            List<String> headerNames = firstResult.getHeaderList().stream()
+                    .map(ai.chat2db.spi.model.Header::getName)
+                    .toList();
+            List<SQLIdentifierExpr> headerList = new ArrayList<>(headerNames.size());
+            headerNames.forEach(name -> headerList.add(new SQLIdentifierExpr(name)));
+            DbType outputDbType = exportContext.getDbType() == null ? DbType.mysql : exportContext.getDbType();
+
+            int processedCount = writeResult(firstResult, headerNames, headerList, outputDbType, printWriter,
+                    exportContext, 0);
+            while (iterator.hasNext()) {
+                processedCount = writeResult(iterator.next(), headerNames, headerList, outputDbType, printWriter,
+                        exportContext, processedCount);
+            }
+            updateProgress(processedCount, exportContext);
+        } catch (IOException e) {
+            throw new ai.chat2db.server.tools.base.excption.BusinessException(
+                    "dataSource.exportError", new Object[]{e.getMessage()}, e);
+        }
+    }
+
+    private int writeResult(ai.chat2db.spi.model.ExecuteResult result, List<String> headerNames,
+                            List<SQLIdentifierExpr> headerList, DbType outputDbType, PrintWriter printWriter,
+                            ExportContext exportContext, int processedCount) {
+        for (List<String> row : rowsForHeaders(result, headerNames)) {
                 SQLInsertStatement statement = new SQLInsertStatement();
-                statement.setDbType(exportContext.getDbType());
+                statement.setDbType(outputDbType);
                 statement.setTableSource(new SQLExprTableSource(exportContext.getTableName()));
                 statement.getColumns().addAll(headerList);
                 SQLInsertStatement.ValuesClause values = new SQLInsertStatement.ValuesClause();
                 row.forEach(values::addValue);
                 statement.setValues(values);
                 printWriter.println(SQLUtils.toSQLString(
-                        statement, exportContext.getDbType(), INSERT_FORMAT_OPTION) + ";");
-            }
-            updateProgress(rows.size(), exportContext);
-        } catch (IOException e) {
-            throw new ai.chat2db.server.tools.base.excption.BusinessException(
-                    "dataSource.exportError", new Object[]{e.getMessage()}, e);
+                    statement, outputDbType, INSERT_FORMAT_OPTION) + ";");
+            processedCount++;
         }
+        updateProgress(processedCount, exportContext);
+        return processedCount;
     }
 }

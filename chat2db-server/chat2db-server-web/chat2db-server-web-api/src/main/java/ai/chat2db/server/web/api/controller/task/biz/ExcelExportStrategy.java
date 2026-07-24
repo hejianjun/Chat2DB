@@ -14,6 +14,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -59,10 +60,16 @@ public class ExcelExportStrategy extends AbstractExportStrategy {
     }
 
     @Override
-    protected void doExportCached(ai.chat2db.spi.model.ExecuteResult result, ExportContext exportContext) {
+    protected void doExportResults(Iterable<ai.chat2db.spi.model.ExecuteResult> results,
+                                   ExportContext exportContext) {
         ExcelWrapper excelWrapper = new ExcelWrapper();
         try {
-            List<String> headerNames = result.getHeaderList().stream()
+            Iterator<ai.chat2db.spi.model.ExecuteResult> iterator = results.iterator();
+            if (!iterator.hasNext()) {
+                return;
+            }
+            ai.chat2db.spi.model.ExecuteResult firstResult = iterator.next();
+            List<String> headerNames = firstResult.getHeaderList().stream()
                     .map(ai.chat2db.spi.model.Header::getName)
                     .collect(Collectors.toList());
             ExcelWriterBuilder builder = EasyExcel.write(exportContext.getFile())
@@ -70,15 +77,27 @@ public class ExcelExportStrategy extends AbstractExportStrategy {
                     .head(EasyCollectionUtils.toList(headerNames, name -> Lists.newArrayList(name)));
             excelWrapper.setExcelWriter(builder.build());
             excelWrapper.setWriteSheet(EasyExcel.writerSheet(0).build());
-            List<List<String>> rows = result.getDataList() == null ? Lists.newArrayList() : result.getDataList();
-            if (!rows.isEmpty()) {
-                excelWrapper.getExcelWriter().write(rows, excelWrapper.getWriteSheet());
+            int processedCount = writeResult(firstResult, headerNames, excelWrapper, 0, exportContext);
+            while (iterator.hasNext()) {
+                processedCount = writeResult(iterator.next(), headerNames, excelWrapper, processedCount,
+                        exportContext);
             }
-            updateProgress(rows.size(), exportContext);
+            updateProgress(processedCount, exportContext);
         } finally {
             if (excelWrapper.getExcelWriter() != null) {
                 excelWrapper.getExcelWriter().finish();
             }
         }
+    }
+
+    private int writeResult(ai.chat2db.spi.model.ExecuteResult result, List<String> headerNames,
+                            ExcelWrapper excelWrapper, int processedCount, ExportContext exportContext) {
+        List<List<String>> rows = rowsForHeaders(result, headerNames);
+        if (!rows.isEmpty()) {
+            excelWrapper.getExcelWriter().write(rows, excelWrapper.getWriteSheet());
+            processedCount += rows.size();
+            updateProgress(processedCount, exportContext);
+        }
+        return processedCount;
     }
 }

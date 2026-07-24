@@ -18,4 +18,5 @@ public class ExportContext {
     private Long taskId;
     private Consumer<Integer> progressUpdater;
     private ExecuteResult cachedResult;
+    private Iterable<ExecuteResult> commandResults;
 }

@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.task.biz;
 
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.spi.jdbc.DefaultValueHandler;
+import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import lombok.extern.slf4j.Slf4j;
 
@@ -11,15 +12,22 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 public abstract class AbstractExportStrategy implements ExportStrategy {
 
     @Override
     public void exportData(ExportContext exportContext) {
+        if (exportContext.getCommandResults() != null) {
+            doExportResults(exportContext.getCommandResults(), exportContext);
+            return;
+        }
         if (exportContext.getCachedResult() != null) {
-            doExportCached(exportContext.getCachedResult(), exportContext);
+            doExportResults(Collections.singletonList(exportContext.getCachedResult()), exportContext);
             return;
         }
         DefaultValueHandler valueHandler = new DefaultValueHandler();
@@ -54,8 +62,29 @@ public abstract class AbstractExportStrategy implements ExportStrategy {
                                      int columnCount, DefaultValueHandler valueHandler,
                                      ExportContext exportContext) throws SQLException;
 
-    protected abstract void doExportCached(ai.chat2db.spi.model.ExecuteResult result,
-                                           ExportContext exportContext);
+    protected abstract void doExportResults(Iterable<ExecuteResult> results, ExportContext exportContext);
+
+    protected List<List<String>> rowsForHeaders(ExecuteResult result, List<String> headerNames) {
+        if (result.getDataList() == null || result.getDataList().isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, Integer> sourceIndexes = new HashMap<>();
+        if (result.getHeaderList() != null) {
+            for (int i = 0; i < result.getHeaderList().size(); i++) {
+                sourceIndexes.put(result.getHeaderList().get(i).getName(), i);
+            }
+        }
+        List<List<String>> rows = new ArrayList<>(result.getDataList().size());
+        for (List<String> sourceRow : result.getDataList()) {
+            List<String> row = new ArrayList<>(headerNames.size());
+            for (String headerName : headerNames) {
+                Integer sourceIndex = sourceIndexes.get(headerName);
+                row.add(sourceIndex != null && sourceIndex < sourceRow.size() ? sourceRow.get(sourceIndex) : null);
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
 
     protected void updateProgress(int processedCount, ExportContext exportContext) {
         exportContext.getProgressUpdater().accept(processedCount);

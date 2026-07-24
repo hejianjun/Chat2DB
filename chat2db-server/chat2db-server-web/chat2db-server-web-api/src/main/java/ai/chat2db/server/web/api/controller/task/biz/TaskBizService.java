@@ -12,6 +12,7 @@ import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.common.model.Context;
 import ai.chat2db.server.tools.common.model.LoginUser;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.server.web.api.controller.rdb.converter.RdbWebConverter;
 import ai.chat2db.server.web.api.controller.rdb.doc.conf.ExportOptions;
 import ai.chat2db.server.web.api.controller.rdb.request.DataExportRequest;
@@ -82,7 +83,7 @@ public class TaskBizService {
 
         CompletableFuture.runAsync(() -> {
             buildContext(loginUser, connectInfo);
-            doExportStreaming(sql, file, dbType, tableName, request.getExportType(), dataResult.getData(), cachedResult);
+            doExportStreaming(request, sql, file, dbType, tableName, dataResult.getData(), cachedResult);
         }).whenComplete((aVoid, throwable) -> {
             updateStatus(dataResult.getData(), file, throwable);
             removeContext();
@@ -168,27 +169,49 @@ public class TaskBizService {
         if (throwable != null) {
             log.error("export error", throwable);
             updateParam.setTaskStatus(TaskStatusEnum.ERROR.name());
+            Throwable cause = unwrap(throwable);
+            if (cause instanceof BusinessException businessException) {
+                updateParam.setContent(I18nUtils.getMessage(businessException.getCode(), businessException.getArgs()));
+            } else {
+                updateParam.setContent(StringUtils.defaultIfBlank(cause.getMessage(), cause.getClass().getSimpleName()));
+            }
         } else {
             updateParam.setTaskStatus(TaskStatusEnum.FINISH.name());
         }
         taskService.updateStatus(updateParam);
     }
 
-    private void doExportStreaming(String sql, File file, DbType dbType, String tableName, String exportType,
-                                   Long taskId, ai.chat2db.spi.model.ExecuteResult cachedResult) {
-        ExportStrategy strategy = exportStrategyFactory.getStrategy(exportType);
+    private Throwable unwrap(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause.getCause() != null
+                && (cause instanceof java.util.concurrent.CompletionException
+                || cause instanceof java.util.concurrent.ExecutionException)) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
 
-        ExportContext exportContext = ExportContext.builder()
+    private void doExportStreaming(DataExportRequest request, String sql, File file, DbType dbType, String tableName,
+                                   Long taskId, ai.chat2db.spi.model.ExecuteResult cachedResult) {
+        ExportStrategy strategy = exportStrategyFactory.getStrategy(request.getExportType());
+
+        ExportContext.ExportContextBuilder exportContextBuilder = ExportContext.builder()
                 .sql(sql)
                 .file(file)
                 .dbType(dbType)
                 .tableName(tableName)
                 .taskId(taskId)
                 .cachedResult(cachedResult)
-                .progressUpdater(count -> updateProgressCount(taskId, count))
-                .build();
+                .progressUpdater(count -> updateProgressCount(taskId, count));
 
-        strategy.exportData(exportContext);
+        if ("MONGODB".equalsIgnoreCase(Chat2DBContext.getConnectInfo().getDbType())) {
+            boolean allPages = ExportSizeEnum.ALL.getCode().equals(request.getExportSize());
+            exportContextBuilder.commandResults(new CommandResultIterable(
+                    Chat2DBContext.getMetaData().getCommandExecutor(), sql, request.getDataSourceId(),
+                    request.getDatabaseName(), request.getSchemaName(), allPages));
+        }
+
+        strategy.exportData(exportContextBuilder.build());
     }
 
     private ai.chat2db.spi.model.ExecuteResult getCachedResult(
@@ -251,7 +274,8 @@ public class TaskBizService {
             }
             tableName = SqlUtils.getTableName(sql, dbType);
         } else {
-            tableName = StringUtils.join(Lists.newArrayList(request.getDatabaseName(), request.getSchemaName()), "_");
+            tableName = StringUtils.defaultIfBlank(request.getTableName(),
+                    StringUtils.join(Lists.newArrayList(request.getDatabaseName(), request.getSchemaName()), "_"));
         }
         return tableName;
     }
