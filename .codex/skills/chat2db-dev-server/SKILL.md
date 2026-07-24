@@ -52,6 +52,9 @@ SSH connections, caches, and other managed resources. The script waits up to 15 
 released. It falls back to `Stop-Process -Force` only when the graceful shutdown request fails or the port remains
 open after the timeout.
 
+Start and restart operations wait up to 60 seconds for each requested service port to begin listening before
+reporting status.
+
 ## Verification
 
 After starting or restarting:

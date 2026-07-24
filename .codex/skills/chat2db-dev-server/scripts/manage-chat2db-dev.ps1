@@ -34,6 +34,19 @@ function Stop-Port {
         }
 }
 
+function Wait-Port {
+    param([int]$Port, [int]$TimeoutSeconds = 60)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    Write-Warning "Port $Port did not start listening within $TimeoutSeconds seconds."
+}
+
 function Stop-Backend {
     $listeners = @(Get-NetTCPConnection -LocalPort $backendPort -State Listen -ErrorAction SilentlyContinue)
     if ($listeners.Count -eq 0) {
@@ -121,7 +134,12 @@ if ($Action -in @("start", "restart")) {
         $frontend = Start-Frontend
         Write-Host "frontendPid=$($frontend.Id)"
     }
-    Start-Sleep -Seconds 12
+    if ($Component -in @("all", "backend")) {
+        Wait-Port -Port $backendPort
+    }
+    if ($Component -in @("all", "frontend")) {
+        Wait-Port -Port $frontendPort
+    }
 }
 
 Show-Status
