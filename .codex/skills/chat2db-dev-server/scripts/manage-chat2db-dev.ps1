@@ -34,6 +34,32 @@ function Stop-Port {
         }
 }
 
+function Stop-Backend {
+    $listeners = @(Get-NetTCPConnection -LocalPort $backendPort -State Listen -ErrorAction SilentlyContinue)
+    if ($listeners.Count -eq 0) {
+        return
+    }
+
+    try {
+        Invoke-WebRequest -Uri "http://localhost:$backendPort/api/system/stop?forceQuit=false" `
+            -Method Post -UseBasicParsing -TimeoutSec 5 | Out-Null
+
+        $deadline = (Get-Date).AddSeconds(15)
+        do {
+            Start-Sleep -Milliseconds 500
+            $listeners = @(Get-NetTCPConnection -LocalPort $backendPort -State Listen -ErrorAction SilentlyContinue)
+        } while ($listeners.Count -gt 0 -and (Get-Date) -lt $deadline)
+    } catch {
+        Write-Warning "Graceful backend shutdown failed: $($_.Exception.Message)"
+        $listeners = @(Get-NetTCPConnection -LocalPort $backendPort -State Listen -ErrorAction SilentlyContinue)
+    }
+
+    if ($listeners.Count -gt 0) {
+        Write-Warning "Backend did not stop gracefully within 15 seconds; forcing the listener process to stop."
+        Stop-Port -Port $backendPort
+    }
+}
+
 function Install-BackendDependencies {
     $env:JAVA_HOME = $JavaHome
     Push-Location (Join-Path $Workspace "chat2db-server")
@@ -78,7 +104,7 @@ if ($Action -in @("restart", "stop")) {
         Stop-Port -Port $frontendPort
     }
     if ($Component -in @("all", "backend")) {
-        Stop-Port -Port $backendPort
+        Stop-Backend
     }
     Start-Sleep -Seconds 2
 }

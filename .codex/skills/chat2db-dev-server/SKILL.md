@@ -44,6 +44,14 @@ This is required after changes in:
 - `chat2db-server-domain-repository`
 - `chat2db-server-web-api`
 
+## Backend Shutdown Rule
+
+Backend stop and restart operations first call
+`POST http://localhost:10821/api/system/stop?forceQuit=false` so Spring can close its application context,
+SSH connections, caches, and other managed resources. The script waits up to 15 seconds for port `10821` to be
+released. It falls back to `Stop-Process -Force` only when the graceful shutdown request fails or the port remains
+open after the timeout.
+
 ## Verification
 
 After starting or restarting:
