@@ -12,9 +12,11 @@ import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import ai.chat2db.server.tools.common.util.EasyCollectionUtils;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.spi.CommandExecutor;
 import ai.chat2db.spi.SqlBuilder;
 import ai.chat2db.spi.ValueHandler;
+import ai.chat2db.spi.enums.DataTypeEnum;
 import ai.chat2db.spi.enums.SqlTypeEnum;
 import ai.chat2db.spi.model.*;
 import ai.chat2db.spi.mongodb.MqlSyntaxParser;
@@ -68,6 +70,7 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         Command command = commandConverter.param2model(param);
         List<ExecuteResult> results = executor.execute(command);
         for (ExecuteResult executeResult : results) {
+            ensureRowNumberColumn(executeResult, I18nUtils.getMessage("sqlResult.rowNumber"));
             List<Header> headers = executeResult.getHeaderList();
             if (executeResult.getSuccess() && executeResult.isCanEdit() && CollectionUtils.isNotEmpty(headers)) {
                 headers = setColumnInfo(headers, executeResult.getTableName(), param.getSchemaName(),
@@ -162,6 +165,45 @@ public class DlTemplateServiceImpl implements DlTemplateService {
             results.forEach(this::addOperationLog);
         }
         return results;
+    }
+
+    static void ensureRowNumberColumn(ExecuteResult executeResult, String rowNumberName) {
+        if (executeResult == null || !Boolean.TRUE.equals(executeResult.getSuccess())
+                || !SqlTypeEnum.SELECT.getCode().equals(executeResult.getSqlType())
+                || CollectionUtils.isEmpty(executeResult.getHeaderList())) {
+            return;
+        }
+        boolean hasRowNumberColumn = executeResult.getHeaderList().stream()
+                .anyMatch(header -> DataTypeEnum.CHAT2DB_ROW_NUMBER.getCode().equals(header.getDataType()));
+        if (hasRowNumberColumn) {
+            return;
+        }
+
+        List<Header> headers = new ArrayList<>(executeResult.getHeaderList().size() + 1);
+        headers.add(Header.builder()
+                .name(rowNumberName)
+                .dataType(DataTypeEnum.CHAT2DB_ROW_NUMBER.getCode())
+                .build());
+        headers.addAll(executeResult.getHeaderList());
+        executeResult.setHeaderList(headers);
+
+        if (CollectionUtils.isEmpty(executeResult.getDataList())) {
+            return;
+        }
+        int pageNo = executeResult.getPageNo() == null ? 1 : Math.max(executeResult.getPageNo(), 1);
+        int pageSize = executeResult.getPageSize() == null
+                ? executeResult.getDataList().size()
+                : Math.max(executeResult.getPageSize(), 0);
+        int firstRowNumber = 1 + (pageNo - 1) * pageSize;
+        List<List<String>> rows = new ArrayList<>(executeResult.getDataList().size());
+        for (int i = 0; i < executeResult.getDataList().size(); i++) {
+            List<String> row = executeResult.getDataList().get(i);
+            List<String> rowWithNumber = new ArrayList<>(row.size() + 1);
+            rowWithNumber.add(Integer.toString(firstRowNumber + i));
+            rowWithNumber.addAll(row);
+            rows.add(rowWithNumber);
+        }
+        executeResult.setDataList(rows);
     }
 
 

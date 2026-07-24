@@ -818,7 +818,9 @@ export default function TableBox(props: ITableProps) {
         maxSize: 1080,
         sizes: columnResize,
         onChangeSizes: (sizes) => {
-          sizes[0] = 0;
+          if (columns[0]?.code === colNoCode) {
+            sizes[0] = 0;
+          }
           setColumnResize(sizes);
         },
       }),
