@@ -87,13 +87,22 @@ public class FetchSchemaAction extends BaseChatAction {
 
     private String fetchSchemaDdl(ChatContext ctx) {
         ChatQueryRequest request = ctx.getRequest();
+        String dataSourceType = queryDataSourceType(request);
 
-        if (isRedisCommandPrompt(request)) {
+        if (isRedisCommandPrompt(request, dataSourceType)) {
             return queryRedisKeyPrefixContext(request);
         }
 
-        if (isRedis(request)) {
+        if (isDataSourceType(dataSourceType, DataSourceTypeEnum.REDIS)) {
             return "";
+        }
+
+        if (isDataSourceType(dataSourceType, DataSourceTypeEnum.MONGODB)) {
+            return databaseService.queryMongoSchema(
+                    request.getDataSourceId(),
+                    request.getDatabaseName(),
+                    request.getTableNames()
+            );
         }
 
         if (hasTableNames(request)) {
@@ -103,15 +112,18 @@ public class FetchSchemaAction extends BaseChatAction {
         }
     }
 
-    private boolean isRedis(ChatQueryRequest request) {
+    private String queryDataSourceType(ChatQueryRequest request) {
         try {
-            return DataSourceTypeEnum.REDIS.getCode().equalsIgnoreCase(
-                    dataSourceService.queryDatabaseType(request.getDataSourceId()));
+            return dataSourceService.queryDatabaseType(request.getDataSourceId());
         } catch (Exception e) {
             log.warn("[FetchSchemaAction] Query database type failed, dataSourceId: {}, error: {}",
                     request.getDataSourceId(), e.getMessage());
-            return false;
+            return null;
         }
+    }
+
+    private boolean isDataSourceType(String dataSourceType, DataSourceTypeEnum expectedType) {
+        return expectedType.getCode().equalsIgnoreCase(StringUtils.defaultString(dataSourceType));
     }
 
     private boolean hasTableNames(ChatQueryRequest request) {
@@ -135,9 +147,10 @@ public class FetchSchemaAction extends BaseChatAction {
         );
     }
 
-    private boolean isRedisCommandPrompt(ChatQueryRequest request) {
+    private boolean isRedisCommandPrompt(ChatQueryRequest request, String dataSourceType) {
         String promptType = StringUtils.defaultIfBlank(request.getPromptType(), PromptType.NL_2_SQL.getCode());
-        return PromptType.NL_2_SQL.getCode().equals(promptType) && isRedis(request);
+        return PromptType.NL_2_SQL.getCode().equals(promptType)
+                && isDataSourceType(dataSourceType, DataSourceTypeEnum.REDIS);
     }
 
     private String queryRedisKeyPrefixContext(ChatQueryRequest request) {

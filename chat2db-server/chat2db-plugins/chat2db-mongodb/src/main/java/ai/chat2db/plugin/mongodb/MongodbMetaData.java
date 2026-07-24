@@ -199,6 +199,12 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
     private void mergeField(Map<String, FieldInfo> fields, String name, Object value) {
         FieldInfo incoming = resolveField(value);
         fields.merge(name, incoming, (current, next) -> {
+            if ("NULL".equals(current.bsonType())) {
+                return new FieldInfo(next.bsonType(), next.dataType(), true);
+            }
+            if ("NULL".equals(next.bsonType())) {
+                return new FieldInfo(current.bsonType(), current.dataType(), true);
+            }
             if (current.bsonType().equals(next.bsonType())) {
                 return new FieldInfo(current.bsonType(), current.dataType(),
                         current.nullable() || next.nullable());

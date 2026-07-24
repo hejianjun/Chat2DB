@@ -37,8 +37,14 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 
 import static ai.chat2db.server.domain.core.cache.CacheKey.getDataBasesKey;
 import static ai.chat2db.server.domain.core.cache.CacheKey.getDataSourceKey;
@@ -413,6 +419,113 @@ public class DatabaseServiceImpl implements DatabaseService {
             log.error("query table error:{}, do nothing", e.getMessage());
             return "";
         }
+    }
+
+    @Override
+    public String queryMongoSchema(Long dataSourceId, String databaseName, List<String> collectionNames) {
+        try {
+            List<Table> collections;
+            TableSelector selector = TableSelector.builder()
+                    .columnList(true)
+                    .indexList(false)
+                    .foreignKey(false)
+                    .build();
+            if (CollectionUtils.isEmpty(collectionNames)) {
+                TablePageQueryParam param = new TablePageQueryParam();
+                param.setDataSourceId(dataSourceId);
+                param.setDatabaseName(databaseName);
+                param.queryAll();
+                collections = tableService.pageQuery(param, selector);
+            } else {
+                Set<String> distinctNames = collectionNames.stream()
+                        .filter(StringUtils::isNotBlank)
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+                collections = distinctNames.stream()
+                        .flatMap(collectionName -> {
+                            TablePageQueryParam param = new TablePageQueryParam();
+                            param.setDataSourceId(dataSourceId);
+                            param.setDatabaseName(databaseName);
+                            param.setTableName(collectionName);
+                            return tableService.pageQuery(param, selector).stream();
+                        })
+                        .collect(Collectors.toList());
+            }
+            return formatMongoSchema(collections);
+        } catch (Exception e) {
+            log.error("query MongoDB schema error, dataSourceId:{}, databaseName:{}, collectionNames:{}",
+                    dataSourceId, databaseName, collectionNames, e);
+            return "[]";
+        }
+    }
+
+    static String formatMongoSchema(List<Table> collections) {
+        if (CollectionUtils.isEmpty(collections)) {
+            return "[]";
+        }
+        List<Map<String, Object>> schemas = collections.stream()
+                .map(DatabaseServiceImpl::toMongoCollectionSchema)
+                .collect(Collectors.toList());
+        return JSON.toJSONString(schemas, JSONWriter.Feature.PrettyFormat);
+    }
+
+    private static Map<String, Object> toMongoCollectionSchema(Table collection) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        if (!CollectionUtils.isEmpty(collection.getColumnList())) {
+            collection.getColumnList().stream()
+                    .filter(column -> StringUtils.isNotBlank(column.getName()))
+                    .forEach(column -> properties.put(column.getName(), mongoFieldSchema(column)));
+        }
+
+        Map<String, Object> jsonSchema = new LinkedHashMap<>();
+        jsonSchema.put("bsonType", "object");
+        jsonSchema.put("properties", properties);
+
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("$jsonSchema", jsonSchema);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("collection", collection.getName());
+        result.put("source", "sampledDocuments");
+        result.put("schema", schema);
+        return result;
+    }
+
+    private static Map<String, Object> mongoFieldSchema(TableColumn column) {
+        Map<String, Object> field = new LinkedHashMap<>();
+        String bsonType = toMongoBsonType(column.getColumnType());
+        String comment = StringUtils.defaultIfBlank(column.getComment(), column.getAiComment());
+        if (StringUtils.isNotBlank(bsonType)) {
+            field.put("bsonType", bsonType);
+        } else if (StringUtils.isNotBlank(comment)) {
+            field.put("description", comment + "; multiple BSON types observed in sampled documents");
+        } else {
+            field.put("description", "Multiple BSON types observed in sampled documents");
+        }
+        if (StringUtils.isNotBlank(bsonType) && StringUtils.isNotBlank(comment)) {
+            field.put("description", comment);
+        }
+        return field;
+    }
+
+    private static String toMongoBsonType(String sampledType) {
+        if (StringUtils.isBlank(sampledType) || "MIXED".equalsIgnoreCase(sampledType)) {
+            return null;
+        }
+        return switch (sampledType.toUpperCase()) {
+            case "OBJECT_ID" -> "objectId";
+            case "STRING", "CHARACTER", "CHAR" -> "string";
+            case "BOOLEAN" -> "bool";
+            case "DATE", "LOCALDATE", "LOCALDATETIME", "INSTANT" -> "date";
+            case "BINARY", "BYTE[]" -> "binData";
+            case "ARRAY", "LIST" -> "array";
+            case "DOCUMENT", "MAP" -> "object";
+            case "NULL" -> "null";
+            case "BYTE", "SHORT", "INTEGER", "ATOMICINTEGER" -> "int";
+            case "LONG", "ATOMICLONG" -> "long";
+            case "FLOAT", "DOUBLE" -> "double";
+            case "BIGDECIMAL", "BIGINTEGER", "DECIMAL128" -> "decimal";
+            default -> "string";
+        };
     }
 
     @Override

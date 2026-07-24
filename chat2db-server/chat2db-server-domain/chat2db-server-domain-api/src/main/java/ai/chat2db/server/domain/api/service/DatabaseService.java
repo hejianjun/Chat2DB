@@ -131,6 +131,16 @@ public interface DatabaseService {
     String queryDatabaseTables(Long dataSourceId, String databaseName, String schemaName);
 
     /**
+     * Query MongoDB collection structures inferred from sampled documents.
+     *
+     * @param dataSourceId datasource ID
+     * @param databaseName database name
+     * @param collectionNames selected collection names; empty means all collections
+     * @return MongoDB-style JSON Schema array
+     */
+    String queryMongoSchema(Long dataSourceId, String databaseName, java.util.List<String> collectionNames);
+
+    /**
      * 查询 Redis Schema 信息
      *
      * @param dataSourceId 数据源 ID

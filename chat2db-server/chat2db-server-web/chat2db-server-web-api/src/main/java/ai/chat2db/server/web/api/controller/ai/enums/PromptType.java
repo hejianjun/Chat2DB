@@ -20,6 +20,11 @@ public enum PromptType implements BaseEnum<String> {
     NL_2_SQL("将自然语言转换成SQL"),
 
     /**
+     * 自然语言转换成 MongoDB MQL
+     */
+    NL_2_MQL("将自然语言转换成MongoDB MQL"),
+
+    /**
      * 解释SQL
      */
     SQL_EXPLAIN("解释SQL"),
@@ -82,6 +87,11 @@ public enum PromptType implements BaseEnum<String> {
     SQL_COMPLETION("SQL补全"),
 
     /**
+     * MongoDB MQL 补全
+     */
+    MQL_COMPLETION("MongoDB MQL补全"),
+
+    /**
      * 自然语言转换成 Redis 命令
      */
     REDIS_NL_2_COMMAND("将自然语言转换成Redis命令"),
@@ -98,7 +108,7 @@ public enum PromptType implements BaseEnum<String> {
     public boolean isSimpleTask() {
         return this == SELECT_TABLES || this == TITLE_GENERATION || this == NL_2_COMMENT_BATCH
                 || this == NL_2_COMMENT || this == REDIS_KEYS_COMMENT || this == NL_2_FIELD_MAPPING
-                || this == NL_2_DATA_EXPRESSION || this == SQL_COMPLETION;
+                || this == NL_2_DATA_EXPRESSION || this == SQL_COMPLETION || this == MQL_COMPLETION;
     }
 
     PromptType(String description) {

@@ -17,9 +17,9 @@ export interface IAiSqlCompletionTask {
 
 const extractSqlFromContent = (content: string): string => {
   const trimmedContent = content.trim();
-  const sqlBlockMatch = trimmedContent.match(/```sql\s*([\s\S]*?)```/i);
-  if (sqlBlockMatch?.[1]) {
-    return sqlBlockMatch[1].trim();
+  const databaseCodeBlockMatch = trimmedContent.match(/```(?:sql|mql|mongodb|javascript|js)\s*([\s\S]*?)```/i);
+  if (databaseCodeBlockMatch?.[1]) {
+    return databaseCodeBlockMatch[1].trim();
   }
 
   const codeBlockMatch = trimmedContent.match(/```\s*([\s\S]*?)```/);
@@ -28,8 +28,8 @@ const extractSqlFromContent = (content: string): string => {
   }
 
   return trimmedContent
-    .replace(/^SQL\s*[:：]\s*/i, '')
-    .replace(/^完整\s*SQL\s*[:：]\s*/i, '')
+    .replace(/^(?:SQL|MQL)\s*[:：]\s*/i, '')
+    .replace(/^完整\s*(?:SQL|MQL)\s*[:：]\s*/i, '')
     .trim();
 };
 
@@ -88,7 +88,7 @@ export const requestAiSqlCompletion = (params: IAiSqlCompletionParams): IAiSqlCo
   const query = formatParams({
     conversationId: sessionId,
     message: params.message,
-    promptType: 'SQL_COMPLETION',
+    promptType: params.boundInfo.databaseType === 'MONGODB' ? 'MQL_COMPLETION' : 'SQL_COMPLETION',
     dataSourceId: params.boundInfo.dataSourceId,
     databaseName: params.boundInfo.databaseName,
     schemaName: params.boundInfo.schemaName,

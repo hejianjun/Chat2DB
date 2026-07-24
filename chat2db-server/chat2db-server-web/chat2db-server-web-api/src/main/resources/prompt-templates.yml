@@ -15,6 +15,24 @@ prompts:
       #
       #
 
+  # 自然语言转 MongoDB MQL
+  nl_2_mql:
+    name: "nl_2_mql"
+    description: "将自然语言转换成MongoDB MQL"
+    template: |
+      ### 任务：根据用户请求和 MongoDB collection schema 生成一条完整、可执行的 MQL。{ext}
+
+      **数据库类型**: MongoDB
+
+      **Collection JSON Schema**:
+      {schema}
+
+      **输出要求**:
+      1. 只输出一条完整 MQL，不要输出 Markdown、代码块、解释或其他文本。
+      2. 使用 db.getCollection("collectionName") 访问集合，正确处理特殊集合名。
+      3. 只能使用 schema 中存在的集合和字段；schema 来源为 sampledDocuments 时，它是采样推断结果而非强制 validator。
+      4. 不要输出 SQL。
+
   # SQL 解释
   sql_explain:
     name: "sql_explain"
@@ -355,6 +373,25 @@ prompts:
       4. 如果上下文不足，请生成最接近当前内容的合法 SQL，不要询问用户。
       5. 如果当前 SQL 片段包含换行，请保留多行格式，不要将 SQL 压缩为单行。
       6. 必须原样保留当前 SQL 片段中的所有注释，包括 -- 行注释和 /* */ 块注释。
+
+  # MongoDB MQL 补全
+  mql_completion:
+    name: "mql_completion"
+    description: "MongoDB MQL补全"
+    template: |
+      ### 任务：根据当前 MQL 片段和 collection schema 生成一条完整、可执行的 MongoDB MQL。
+
+      **Collection JSON Schema**:
+      {schema}
+
+      **当前 MQL 片段**:
+      {message}
+
+      **输出要求**:
+      1. 只输出一条完整 MQL，不要输出 Markdown、代码块、解释或其他文本。
+      2. 使用 db.getCollection("collectionName") 访问集合。
+      3. 基于当前片段补全或改写为最合理的 MQL，不要输出 SQL。
+      4. schema 来源为 sampledDocuments 时，它是采样推断结果，允许集合中存在未采样到的字段。
 
   # 自然语言转 Redis 命令
   redis_nl_2_command:

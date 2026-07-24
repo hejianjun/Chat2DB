@@ -225,7 +225,8 @@ public class ChatController {
 
         String promptType = request.getPromptType();
 
-        if (PromptType.SQL_COMPLETION.getCode().equals(promptType) && !hasTables) {
+        if ((PromptType.SQL_COMPLETION.getCode().equals(promptType)
+                || PromptType.MQL_COMPLETION.getCode().equals(promptType)) && !hasTables) {
             return ChatEvent.TABLES_NOT_NEEDED;
         }
 

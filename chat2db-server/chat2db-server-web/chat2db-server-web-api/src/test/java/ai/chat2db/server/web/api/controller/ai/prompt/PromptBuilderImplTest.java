@@ -52,6 +52,21 @@ class PromptBuilderImplTest {
     }
 
     @Test
+    void mongoNl2SqlUsesMqlTemplateAndJsonSchema() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.NL_2_SQL)
+                .message("查询待支付订单")
+                .schemaDdl("[{\"collection\":\"orders\",\"schema\":{\"$jsonSchema\":{}}}]")
+                .dataSourceType("MONGODB")
+                .build()).build();
+
+        assertTrue(prompt.contains("Collection JSON Schema"));
+        assertTrue(prompt.contains("db.getCollection(\"collectionName\")"));
+        assertTrue(prompt.contains("\"collection\":\"orders\""));
+        assertTrue(prompt.contains("不要输出 SQL"));
+    }
+
+    @Test
     void buildDataExpressionPromptIncludesEnumMockGuidance() {
         String prompt = promptBuilder.context(PromptContext.builder()
                 .promptType(PromptType.NL_2_DATA_EXPRESSION)

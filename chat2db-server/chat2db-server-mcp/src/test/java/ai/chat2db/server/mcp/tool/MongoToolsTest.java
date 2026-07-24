@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 import ai.chat2db.server.domain.api.model.DataSource;
+import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.mcp.config.McpProperties.Mongo;
 import ai.chat2db.server.mcp.config.McpProperties.Sql;
@@ -35,6 +36,7 @@ class MongoToolsTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private DlTemplateService dlTemplateService;
+    private DatabaseService databaseService;
     private MongoTools tools;
 
     @BeforeEach
@@ -67,8 +69,10 @@ class MongoToolsTest {
         MqlGuard mqlGuard = new MqlGuard(configService, sqlGuard);
 
         dlTemplateService = mock(DlTemplateService.class);
+        databaseService = mock(DatabaseService.class);
         MongoToolExecutionSupport executionSupport = new MongoToolExecutionSupport(dlTemplateService, objectMapper);
-        tools = new MongoTools(connectionScope, executionSupport, mqlGuard, new PreparedMongoChangeStore(),
+        tools = new MongoTools(connectionScope, databaseService, executionSupport, mqlGuard,
+            new PreparedMongoChangeStore(),
             new ResultFormatter(objectMapper));
     }
 
@@ -132,12 +136,21 @@ class MongoToolsTest {
     }
 
     @Test
-    void mcpSchemaExposesExactlyFourMongoTools() {
+    void returnsSampledMongoJsonSchema() {
+        String schema = "[{\"collection\":\"orders\",\"source\":\"sampledDocuments\",\"schema\":{}}]";
+        when(databaseService.queryMongoSchema(1L, "app", List.of("orders"))).thenReturn(schema);
+
+        assertThat(tools.getMongoCollectionSchema("chat2db://datasources/1", "app", List.of("orders")))
+            .isEqualTo(schema);
+    }
+
+    @Test
+    void mcpSchemaExposesExactlyFiveMongoTools() {
         List<io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification> specifications =
             org.springframework.ai.mcp.annotation.spring.SyncMcpAnnotationProviders.toolSpecifications(List.of(tools));
 
         assertThat(specifications).extracting(specification -> specification.tool().name())
-            .containsExactlyInAnyOrder("executeMongoQuery", "prepareMongoWriteChange",
+            .containsExactlyInAnyOrder("executeMongoQuery", "getMongoCollectionSchema", "prepareMongoWriteChange",
                 "prepareMongoAdminChange", "executePreparedMongoChange");
     }
 

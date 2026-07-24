@@ -34,6 +34,28 @@ class ChatControllerTest {
     }
 
     @Test
+    void mqlCompletionWithCollectionFetchesSchema() {
+        ChatQueryRequest request = request(PromptType.MQL_COMPLETION);
+        request.setTableNames(List.of("orders"));
+
+        assertEquals(ChatEvent.TABLES_PROVIDED, controller.determineInitialEvent(request));
+    }
+
+    @Test
+    void mqlCompletionWithoutCollectionSkipsAutomaticSelection() {
+        ChatQueryRequest request = request(PromptType.MQL_COMPLETION);
+
+        assertEquals(ChatEvent.TABLES_NOT_NEEDED, controller.determineInitialEvent(request));
+    }
+
+    @Test
+    void nl2MqlWithoutCollectionsUsesAutomaticSelection() {
+        ChatQueryRequest request = request(PromptType.NL_2_MQL);
+
+        assertEquals(ChatEvent.TABLES_NOT_PROVIDED, controller.determineInitialEvent(request));
+    }
+
+    @Test
     void nl2SqlWithoutTablesStillUsesAutomaticSelection() {
         ChatQueryRequest request = request(PromptType.NL_2_SQL);
 

@@ -3,6 +3,7 @@ import { useWorkspaceStore } from './index';
 
 export type IAiChatPromptType =
   | 'NL_2_SQL'
+  | 'NL_2_MQL'
   | 'SQL_EXPLAIN'
   | 'SQL_OPTIMIZER'
   | 'SQL_2_SQL'
@@ -14,7 +15,8 @@ export type IAiChatPromptType =
   | 'NL_2_FIELD_MAPPING'
   | 'NL_2_DATA_EXPRESSION'
   | 'SQL_FIX'
-  | 'SQL_COMPLETION';
+  | 'SQL_COMPLETION'
+  | 'MQL_COMPLETION';
 
 export const SIMPLE_TASK_PROMPT_TYPES = [
   'TITLE_GENERATION',
@@ -25,6 +27,7 @@ export const SIMPLE_TASK_PROMPT_TYPES = [
   'NL_2_FIELD_MAPPING',
   'NL_2_DATA_EXPRESSION',
   'SQL_COMPLETION',
+  'MQL_COMPLETION',
 ] as const;
 
 export const isSimpleTaskPromptType = (promptType?: string | null): boolean => {
@@ -33,6 +36,7 @@ export const isSimpleTaskPromptType = (promptType?: string | null): boolean => {
 
 export const CONVERSATIONAL_SQL_PROMPT_TYPES = [
   'NL_2_SQL',
+  'NL_2_MQL',
   'SQL_EXPLAIN',
   'SQL_OPTIMIZER',
   'SQL_2_SQL',

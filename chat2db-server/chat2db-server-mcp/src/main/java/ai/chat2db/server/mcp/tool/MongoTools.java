@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
 import ai.chat2db.server.mcp.support.MongoToolExecutionSupport;
 import ai.chat2db.server.mcp.support.MqlGuard;
@@ -27,15 +28,18 @@ public class MongoTools {
     private static final String CATEGORY_ADMIN = "ADMIN";
 
     private final ConnectionScope connectionScope;
+    private final DatabaseService databaseService;
     private final MongoToolExecutionSupport executionSupport;
     private final MqlGuard mqlGuard;
     private final PreparedMongoChangeStore preparedChangeStore;
     private final ResultFormatter resultFormatter;
 
-    public MongoTools(ConnectionScope connectionScope, MongoToolExecutionSupport executionSupport,
+    public MongoTools(ConnectionScope connectionScope, DatabaseService databaseService,
+                      MongoToolExecutionSupport executionSupport,
                       MqlGuard mqlGuard, PreparedMongoChangeStore preparedChangeStore,
                       ResultFormatter resultFormatter) {
         this.connectionScope = connectionScope;
+        this.databaseService = databaseService;
         this.executionSupport = executionSupport;
         this.mqlGuard = mqlGuard;
         this.preparedChangeStore = preparedChangeStore;
@@ -57,6 +61,21 @@ public class MongoTools {
             String statement = mqlGuard.requireSingleReadOnlyMql(mql);
             return resultFormatter.formatCsv(executionSupport.execute(resolvedDataSource.getDataSourceId(),
                 databaseName, statement, pageNo == null ? 1 : pageNo, mqlGuard.normalizePageSize(pageSize)));
+        });
+    }
+
+    @McpTool(description = "Get MongoDB collection structures as MongoDB-style JSON Schema inferred from sampled "
+        + "documents. Omit collectionNames to inspect all collections. Read-only metadata operation.",
+        annotations = @McpTool.McpAnnotations(readOnlyHint = true, destructiveHint = false))
+    public String getMongoCollectionSchema(
+        @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
+        @McpToolParam(description = "MongoDB database name") String databaseName,
+        @McpToolParam(description = "Optional collection names; omit to inspect all collections", required = false)
+        List<String> collectionNames) {
+        return connectionScope.run(datasourceUri, requireDatabaseName(databaseName), null, resolvedDataSource -> {
+            mqlGuard.requireMongoDatasource(resolvedDataSource);
+            return databaseService.queryMongoSchema(resolvedDataSource.getDataSourceId(), databaseName,
+                collectionNames);
         });
     }
 

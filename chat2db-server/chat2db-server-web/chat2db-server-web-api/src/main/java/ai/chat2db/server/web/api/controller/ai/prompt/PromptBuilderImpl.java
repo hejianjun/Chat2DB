@@ -111,6 +111,10 @@ public class PromptBuilderImpl implements PromptBuilder {
         }
         if (PromptType.NL_2_SQL.equals(type) && isRedisDataSource(context)) {
             type = PromptType.REDIS_NL_2_COMMAND;
+        } else if (PromptType.NL_2_SQL.equals(type) && isMongoDataSource(context)) {
+            type = PromptType.NL_2_MQL;
+        } else if (PromptType.SQL_COMPLETION.equals(type) && isMongoDataSource(context)) {
+            type = PromptType.MQL_COMPLETION;
         }
 
         PromptTemplate template = templateRegistry.getTemplate(type);
@@ -184,6 +188,10 @@ public class PromptBuilderImpl implements PromptBuilder {
 
     private boolean isRedisDataSource(PromptContext context) {
         return DataSourceTypeEnum.REDIS.getCode().equalsIgnoreCase(context.getDataSourceType());
+    }
+
+    private boolean isMongoDataSource(PromptContext context) {
+        return DataSourceTypeEnum.MONGODB.getCode().equalsIgnoreCase(context.getDataSourceType());
     }
 
     private String appendRevisionContextIfNeeded(String filledTemplate, PromptContext context) {
