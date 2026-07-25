@@ -67,6 +67,22 @@ class PromptBuilderImplTest {
     }
 
     @Test
+    void mongoTableSelectionUsesDatabaseObjectTerminology() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SELECT_TABLES)
+                .message("查询待处理的位置回填任务")
+                .schemaDdl("location_backfill_checkpoint")
+                .dataSourceType("MONGODB")
+                .build()).build();
+
+        assertTrue(prompt.contains("MONGODB database objects (tables or collections)"));
+        assertTrue(prompt.contains("User input: 查询待处理的位置回填任务"));
+        assertTrue(prompt.contains("table_names key is also used for MongoDB collection names"));
+        assertFalse(prompt.contains("SQL tables"));
+        assertFalse(prompt.contains("SQL input"));
+    }
+
+    @Test
     void buildDataExpressionPromptIncludesEnumMockGuidance() {
         String prompt = promptBuilder.context(PromptContext.builder()
                 .promptType(PromptType.NL_2_DATA_EXPRESSION)

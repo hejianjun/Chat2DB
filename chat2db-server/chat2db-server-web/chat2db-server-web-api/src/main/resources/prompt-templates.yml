@@ -29,9 +29,7 @@ prompts:
 
       **输出要求**:
       1. 只输出一条完整 MQL，不要输出 Markdown、代码块、解释或其他文本。
-      2. 使用 db.getCollection("collectionName") 访问集合，正确处理特殊集合名。
-      3. 只能使用 schema 中存在的集合和字段；schema 来源为 sampledDocuments 时，它是采样推断结果而非强制 validator。
-      4. 不要输出 SQL。
+      2. 只能使用 schema 中存在的集合和字段；schema 来源为 sampledDocuments 时，它是采样推断结果而非强制 validator。
 
   # SQL 解释
   sql_explain:
@@ -80,18 +78,18 @@ prompts:
   # 表选择
   select_tables:
     name: "select_tables"
-    description: "Select tables for query"
+    description: "Select database objects for query"
     template: |
-      ### Based on the following table properties and SQL input{description}. {ext}
+      ### Based on the following database object metadata and user input, {description}. {ext}
       #
-      ### {db_type} SQL tables, with their properties:
+      ### {db_type} database objects (tables or collections):
       #
       # {schema}
       #
       #
-      ### SQL input: {message}
+      ### User input: {message}
       
-      Output only JSON in format: {"table_names":["table1","table2"]}. Do not output any other text.
+      Output only JSON in format: {"table_names":["object1","object2"]}. The table_names key is also used for MongoDB collection names. Do not output any other text.
 
   # 文本生成
   text_generation:

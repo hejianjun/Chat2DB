@@ -16,6 +16,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
 import ai.chat2db.server.domain.api.service.DatabaseService;
+import ai.chat2db.server.domain.api.service.DataSourceService;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptBuilder;
 import ai.chat2db.server.web.api.controller.ai.prompt.PromptContext;
@@ -38,6 +39,9 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Autowired
     private DatabaseService databaseService;
+
+    @Autowired
+    private DataSourceService dataSourceService;
 
     @Autowired
     private AiChatConfig aiChatConfig;
@@ -108,6 +112,7 @@ public class SelectTablesAction extends BaseChatAction {
                 .promptType(PromptType.SELECT_TABLES)
                 .message(ctx.getRequest().getMessage())
                 .schemaDdl(schemaDdl)
+                .dataSourceType(dataSourceService.queryDatabaseType(ctx.getRequest().getDataSourceId()))
                 .build();
 
         return promptBuilder.context(promptContext).build();
