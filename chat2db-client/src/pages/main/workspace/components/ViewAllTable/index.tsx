@@ -54,8 +54,10 @@ export default memo<IProps>((props) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [editingTagKey, setEditingTagKey] = useState<string | null>(null);
   const [tagRefreshing, setTagRefreshing] = useState(false);
+  const [tableRenderVersion, setTableRenderVersion] = useState(0);
   const tagSavingRef = useRef(false);
   const tagEditCancelledRef = useRef(false);
+  const tableRequestIdRef = useRef(0);
 
   useEffect(() => {
     getTable({
@@ -71,6 +73,8 @@ export default memo<IProps>((props) => {
   }, [openDropdown]);
 
   const getTable = (params: IPageParams) => {
+    const requestId = tableRequestIdRef.current + 1;
+    tableRequestIdRef.current = requestId;
     setCurrentPageNo(params.pageNo);
     setTableLoading(true);
     const requestParams = {
@@ -79,6 +83,7 @@ export default memo<IProps>((props) => {
     } as any;
     sqlServer.getTableList(requestParams)
       .then((res) => {
+        if (tableRequestIdRef.current !== requestId) return;
         setTableDataTotal(res.total);
         const data = res.data.map((t) => {
           const key = uuid();
@@ -100,8 +105,12 @@ export default memo<IProps>((props) => {
           };
         });
         setTableData(data);
+        // Ant Design 的虚拟表格会复用可视区域中的行。查询结果切换时重新挂载，
+        // 避免搜索后的短列表混入上一批数据的缓存行。
+        setTableRenderVersion((version) => version + 1);
       })
       .finally(() => {
+        if (tableRequestIdRef.current !== requestId) return;
         setTableLoading(false);
       });
   };
@@ -762,6 +771,7 @@ export default memo<IProps>((props) => {
           <div ref={tableBoxRef} className={styles.tableBox}>
             <Form form={form} component={false}>
               <Table
+                key={tableRenderVersion}
                 loading={tableLoading}
                 rowSelection={rowSelection}
                 onChange={handleTableChange}
