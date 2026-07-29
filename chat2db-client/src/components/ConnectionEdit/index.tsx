@@ -418,7 +418,11 @@ function RenderForm(props: IRenderFormProps) {
     }
   }
 
-  function extractObj(url: string, connectionConfig: IConnectionConfig = dataSourceFormConfig) {
+  function extractObj(url: unknown, connectionConfig: IConnectionConfig = dataSourceFormConfig) {
+    if (typeof url !== 'string' || !url) {
+      return null;
+    }
+
     const { template, pattern, parseUrl } = connectionConfig.baseInfo;
     if (parseUrl) {
       return parseUrl(url);
