@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ClearOutlined, DownloadOutlined, SyncOutlined } from '@ant-design/icons';
 import { Button, Empty, Popconfirm, Progress, Table, Tag, Tooltip, message } from 'antd';
@@ -31,6 +31,9 @@ const TaskCenter: React.FC = () => {
   const [tasks, setTasks] = useState<ITask[]>([]);
   const [loading, setLoading] = useState(false);
   const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [pageNo, setPageNo] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const connectionList = useConnectionStore((state) => state.connectionList);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -38,23 +41,23 @@ const TaskCenter: React.FC = () => {
     return new Map((connectionList || []).map((connection) => [connection.id, connection.alias]));
   }, [connectionList]);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
-      const result: any = await taskService.getTaskList({});
+      const result = await taskService.getTaskList({ pageNo, pageSize });
       if (result?.data && Array.isArray(result.data)) {
         setTasks(result.data);
-      } else if (Array.isArray(result)) {
-        setTasks(result);
+        setTotal(result.total || 0);
       } else {
         setTasks([]);
+        setTotal(0);
       }
     } catch (error) {
       console.error('Failed to fetch tasks:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [pageNo, pageSize]);
 
   useEffect(() => {
     fetchTasks();
@@ -65,7 +68,7 @@ const TaskCenter: React.FC = () => {
         clearInterval(pollingRef.current);
       }
     };
-  }, []);
+  }, [fetchTasks]);
 
   const handleDownload = (taskId: number) => {
     const downloadUrl = `${window._BaseURL}/api/task/download/${taskId}`;
@@ -82,7 +85,11 @@ const TaskCenter: React.FC = () => {
     try {
       const count = await taskService.cleanupTasks({});
       message.success(i18n('workspace.taskCenter.cleanupSuccess', count || 0));
-      await fetchTasks();
+      if (pageNo === 1) {
+        await fetchTasks();
+      } else {
+        setPageNo(1);
+      }
     } catch (error) {
       console.error('Failed to cleanup tasks:', error);
     } finally {
@@ -226,7 +233,16 @@ const TaskCenter: React.FC = () => {
           rowKey="id"
           loading={loading}
           size="small"
-          pagination={false}
+          pagination={{
+            current: pageNo,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (nextPageNo, nextPageSize) => {
+              setPageNo(nextPageSize === pageSize ? nextPageNo : 1);
+              setPageSize(nextPageSize);
+            },
+          }}
           locale={{
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={i18n('workspace.taskCenter.empty')} />,
           }}

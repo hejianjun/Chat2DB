@@ -49,4 +49,11 @@ public interface TaskService {
      * @return cleaned task count
      */
     int cleanupFinishedTasks(Long userId);
+
+    /**
+     * Mark tasks that cannot continue after application shutdown as failed.
+     *
+     * @return failed task count
+     */
+    int failUnfinishedTasks();
 }

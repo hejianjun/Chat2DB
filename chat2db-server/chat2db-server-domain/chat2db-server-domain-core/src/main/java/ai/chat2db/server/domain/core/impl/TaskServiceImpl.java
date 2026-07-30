@@ -21,6 +21,8 @@ import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -138,6 +140,30 @@ public class TaskServiceImpl implements TaskService {
                 .in(TaskDO::getTaskStatus, cleanableStatuses)
                 .set(TaskDO::getDeleted, DeletedTypeEnum.Y.name());
         return MapperUtils.getTaskMapper().update(null, updateWrapper);
+    }
+
+    @Override
+    public int failUnfinishedTasks() {
+        List<String> unfinishedStatuses = Lists.newArrayList(
+                TaskStatusEnum.INIT.name(), TaskStatusEnum.PROCESSING.name());
+        LambdaUpdateWrapper<TaskDO> updateWrapper = new LambdaUpdateWrapper<TaskDO>()
+                .and(wrapper -> wrapper.eq(TaskDO::getDeleted, DeletedTypeEnum.N.name())
+                        .or().isNull(TaskDO::getDeleted))
+                .in(TaskDO::getTaskStatus, unfinishedStatuses)
+                .set(TaskDO::getTaskStatus, TaskStatusEnum.ERROR.name());
+        return MapperUtils.getTaskMapper().update(null, updateWrapper);
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    public void failUnfinishedTasksOnShutdown() {
+        try {
+            int failedCount = failUnfinishedTasks();
+            if (failedCount > 0) {
+                log.info("Marked {} unfinished tasks as failed during application shutdown", failedCount);
+            }
+        } catch (Exception e) {
+            log.error("Failed to mark unfinished tasks during application shutdown", e);
+        }
     }
 
     private void deleteTaskTempFile(TaskDO task) {

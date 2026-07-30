@@ -1,3 +1,5 @@
+import { IPageParams, IPageResponse } from '@/typings/common';
+
 import createRequest from './base';
 
 export interface ITask {
@@ -106,7 +108,7 @@ const exportResultData = createRequest<IExportResultDataParams, number>('/api/ex
 const exportSchemaDoc = createRequest<IExportSchemaDocParams, number>('/api/export/export_doc', { method: 'post' });
 const transferData = createRequest<IDataTransferParams, number>('/api/transfer/data', { method: 'post' });
 const getTask = createRequest<{ id: number }, ITask>('/api/task/get/:id', { method: 'get' });
-const getTaskList = createRequest<Record<string, never>, ITask[]>('/api/task/list', { method: 'get' });
+const getTaskList = createRequest<IPageParams, IPageResponse<ITask>>('/api/task/list', { method: 'get' });
 const cleanupTasks = createRequest<Record<string, never>, number>('/api/task/cleanup', { method: 'post' });
 
 const previewFileHeaders = (params: IPreviewHeadersParams): Promise<IPreviewHeadersResult> => {

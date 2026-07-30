@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.task.biz;
 
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.spi.CommandExecutor;
+import ai.chat2db.spi.CommandResultStreamer;
 import ai.chat2db.spi.model.Command;
 import ai.chat2db.spi.model.ExecuteResult;
 import org.apache.commons.lang3.StringUtils;
@@ -40,6 +41,9 @@ class CommandResultIterable implements Iterable<ExecuteResult> {
 
     @Override
     public Iterator<ExecuteResult> iterator() {
+        if (allPages && executor instanceof CommandResultStreamer streamer) {
+            return validatingIterator(streamer.stream(command(1), batchSize).iterator());
+        }
         return new Iterator<>() {
             private int pageNo = 1;
             private ExecuteResult next;
@@ -72,6 +76,14 @@ class CommandResultIterable implements Iterable<ExecuteResult> {
     }
 
     private ExecuteResult executePage(int pageNo) {
+        List<ExecuteResult> results = executor.execute(command(pageNo));
+        if (results == null || results.size() != 1) {
+            throw exportError("The export query must contain exactly one statement");
+        }
+        return validate(results.get(0));
+    }
+
+    private Command command(int pageNo) {
         Command command = new Command();
         command.setScript(sql);
         command.setDataSourceId(dataSourceId);
@@ -79,12 +91,24 @@ class CommandResultIterable implements Iterable<ExecuteResult> {
         command.setSchemaName(schemaName);
         command.setPageNo(pageNo);
         command.setPageSize(batchSize);
+        return command;
+    }
 
-        List<ExecuteResult> results = executor.execute(command);
-        if (results == null || results.size() != 1) {
-            throw exportError("The export query must contain exactly one statement");
-        }
-        ExecuteResult result = results.get(0);
+    private Iterator<ExecuteResult> validatingIterator(Iterator<ExecuteResult> iterator) {
+        return new Iterator<>() {
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public ExecuteResult next() {
+                return validate(iterator.next());
+            }
+        };
+    }
+
+    private ExecuteResult validate(ExecuteResult result) {
         if (!Boolean.TRUE.equals(result.getSuccess())) {
             throw exportError(StringUtils.defaultIfBlank(result.getMessage(), "Command execution failed"));
         }

@@ -7,6 +7,7 @@ package ai.chat2db.server.web.api.controller.system;
 import ai.chat2db.server.domain.api.model.Config;
 import ai.chat2db.server.domain.api.param.SystemConfigParam;
 import ai.chat2db.server.domain.api.service.ConfigService;
+import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.core.cache.CacheManage;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -41,6 +42,9 @@ public class SystemController {
 
     @Autowired
     private Chat2dbProperties chat2dbProperties;
+
+    @Autowired
+    private TaskService taskService;
 
     @Autowired
     private ConfigService configService;
@@ -148,6 +152,12 @@ public class SystemController {
     }
 
     private void stop() {
+        try {
+            int failedCount = taskService.failUnfinishedTasks();
+            log.info("退出应用前已将 {} 个未完成任务设置为失败", failedCount);
+        } catch (Exception e) {
+            log.error("退出应用前更新未完成任务状态失败", e);
+        }
         new Thread(() -> {
             // 会在100ms以后 退出后台
             try {

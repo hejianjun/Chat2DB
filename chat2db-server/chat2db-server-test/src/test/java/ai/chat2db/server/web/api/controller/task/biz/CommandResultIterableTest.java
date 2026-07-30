@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.controller.task.biz;
 
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.spi.CommandExecutor;
+import ai.chat2db.spi.CommandResultStreamer;
 import ai.chat2db.spi.ValueHandler;
 import ai.chat2db.spi.model.Command;
 import ai.chat2db.spi.model.ExecuteResult;
@@ -50,6 +51,26 @@ class CommandResultIterableTest {
     }
 
     @Test
+    void allPagesUsesStreamingExecutorWithoutOffsetQueries() {
+        StreamingRecordingExecutor executor = new StreamingRecordingExecutor(List.of(
+                result(true, "first"),
+                result(false, "second")));
+        CommandResultIterable results = new CommandResultIterable(
+                executor, "db.events.find({})", 9L, "location", null, true, 1000);
+
+        List<String> values = new ArrayList<>();
+        for (ExecuteResult result : results) {
+            values.add(result.getDataList().get(0).get(0));
+        }
+
+        Assertions.assertEquals(List.of("first", "second"), values);
+        Assertions.assertTrue(executor.commands.isEmpty());
+        Assertions.assertEquals(1, executor.streamCommands.size());
+        Assertions.assertEquals(1, executor.streamCommands.get(0).getPageNo());
+        Assertions.assertEquals(1000, executor.streamCommands.get(0).getPageSize());
+    }
+
+    @Test
     void commandFailureBecomesExportError() {
         ExecuteResult failure = ExecuteResult.builder()
                 .success(false)
@@ -75,7 +96,7 @@ class CommandResultIterableTest {
     private static class RecordingExecutor implements CommandExecutor {
 
         private final List<ExecuteResult> results;
-        private final List<Command> commands = new ArrayList<>();
+        protected final List<Command> commands = new ArrayList<>();
 
         private RecordingExecutor(List<ExecuteResult> results) {
             this.results = results;
@@ -96,6 +117,23 @@ class CommandResultIterableTest {
         public ExecuteResult execute(String sql, Connection connection, boolean limitRowSize, Integer offset,
                                      Integer count, ValueHandler valueHandler) throws SQLException {
             throw new UnsupportedOperationException();
+        }
+    }
+
+    private static class StreamingRecordingExecutor extends RecordingExecutor implements CommandResultStreamer {
+
+        private final List<ExecuteResult> streamingResults;
+        private final List<Command> streamCommands = new ArrayList<>();
+
+        private StreamingRecordingExecutor(List<ExecuteResult> results) {
+            super(List.of());
+            this.streamingResults = results;
+        }
+
+        @Override
+        public Iterable<ExecuteResult> stream(Command command, int batchSize) {
+            streamCommands.add(command);
+            return streamingResults;
         }
     }
 }

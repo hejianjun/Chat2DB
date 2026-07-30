@@ -4,6 +4,7 @@ import ai.chat2db.server.domain.api.model.Task;
 import ai.chat2db.server.domain.api.param.TaskPageParam;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
+import ai.chat2db.server.tools.base.wrapper.request.PageQueryRequest;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.web.WebPageResult;
 import ai.chat2db.server.tools.common.util.ContextUtils;
@@ -26,6 +27,8 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.nio.file.Paths;
 
+import jakarta.validation.Valid;
+
 @ConnectionInfoAspect
 @RequestMapping("/api/task")
 @RestController
@@ -40,10 +43,10 @@ public class TaskController {
 
 
     @GetMapping("/list")
-    public WebPageResult<Task> list() {
+    public WebPageResult<Task> list(@Valid PageQueryRequest request) {
         TaskPageParam taskPageParam = new TaskPageParam();
-        taskPageParam.setPageNo(1);
-        taskPageParam.setPageSize(10);
+        taskPageParam.setPageNo(request.getPageNo());
+        taskPageParam.setPageSize(request.getPageSize());
         taskPageParam.setUserId(ContextUtils.getUserId());
         ServicePage<Task> task = taskService.page(taskPageParam);
         return WebPageResult.of(task.getData(), task.getTotal(), task.getPageNo(), task.getPageSize());

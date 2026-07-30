@@ -1,6 +1,7 @@
 package ai.chat2db.plugin.mongodb;
 
 import ai.chat2db.spi.CommandExecutor;
+import ai.chat2db.spi.CommandResultStreamer;
 import ai.chat2db.spi.ValueHandler;
 import ai.chat2db.spi.enums.DataTypeEnum;
 import ai.chat2db.spi.enums.SqlTypeEnum;
@@ -12,6 +13,7 @@ import cn.hutool.core.date.TimeInterval;
 import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.result.DeleteResult;
 import com.mongodb.client.result.InsertManyResult;
@@ -27,13 +29,15 @@ import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @Slf4j
-public class MongodbCommandExecutor implements CommandExecutor {
+public class MongodbCommandExecutor implements CommandExecutor, CommandResultStreamer {
 
     private static final int DEFAULT_PAGE_SIZE = 200;
 
@@ -59,6 +63,23 @@ public class MongodbCommandExecutor implements CommandExecutor {
             }
         }
         return results;
+    }
+
+    @Override
+    public Iterable<ExecuteResult> stream(Command command, int batchSize) {
+        if (batchSize < 1) {
+            throw new IllegalArgumentException("MongoDB export batch size must be greater than zero");
+        }
+        List<MongodbCommandParser.StatementPosition> statements =
+                MongodbCommandParser.splitStatements(command.getScript());
+        if (statements.size() != 1) {
+            throw new IllegalArgumentException("The export query must contain exactly one statement");
+        }
+        MongodbCommandParser.StatementPosition statement = statements.get(0);
+        if (!supportsStreaming(statement.statement())) {
+            return execute(command);
+        }
+        return () -> new StreamingResultIterator(command, statement, batchSize);
     }
 
     @Override
@@ -97,6 +118,81 @@ public class MongodbCommandExecutor implements CommandExecutor {
             result.setDuration(timer.interval());
         }
         return result;
+    }
+
+    private boolean supportsStreaming(String statement) {
+        try {
+            ParsedCollectionCommand command = parseCollectionCommand(statement);
+            if (command.calls().isEmpty()) {
+                return false;
+            }
+            String method = command.calls().get(0).name();
+            return "find".equals(method) || "aggregate".equals(method);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    private ParsedCollectionCommand parseCollectionCommand(String statement) {
+        if (!statement.startsWith("db.")) {
+            throw new IllegalArgumentException("MQL must start with db.");
+        }
+        String expression = statement.substring(3).trim();
+        if (expression.startsWith("getCollection(")) {
+            List<MongodbCommandParser.MethodCall> calls =
+                    new ArrayList<>(MongodbCommandParser.parseMethodCalls(expression));
+            MongodbCommandParser.MethodCall selector = calls.remove(0);
+            return new ParsedCollectionCommand(requiredString(selector.arguments(), 0, "collection"), calls);
+        }
+        int dot = expression.indexOf('.');
+        if (dot <= 0) {
+            throw new IllegalArgumentException("MQL must include a collection and method");
+        }
+        return new ParsedCollectionCommand(expression.substring(0, dot).trim(),
+                MongodbCommandParser.parseMethodCalls(expression.substring(dot + 1)));
+    }
+
+    private MongoCursor<Document> openStreamingCursor(MongoDatabase database, String statement, int batchSize) {
+        ParsedCollectionCommand command = parseCollectionCommand(statement);
+        MongoCollection<Document> collection = database.getCollection(command.collectionName());
+        MongodbCommandParser.MethodCall method = command.calls().get(0);
+        List<MongodbCommandParser.MethodCall> chain = command.calls().subList(1, command.calls().size());
+        if ("find".equals(method.name())) {
+            return openFindCursor(collection, method.arguments(), chain, batchSize);
+        }
+        if ("aggregate".equals(method.name())) {
+            if (!chain.isEmpty()) {
+                throw new IllegalArgumentException("Aggregate modifiers are not supported; use $sort/$skip/$limit stages");
+            }
+            return collection.aggregate(documentList(method.arguments(), 0))
+                    .batchSize(batchSize)
+                    .iterator();
+        }
+        throw new IllegalArgumentException("MongoDB export streaming only supports find and aggregate");
+    }
+
+    private MongoCursor<Document> openFindCursor(MongoCollection<Document> collection, List<String> arguments,
+                                                 List<MongodbCommandParser.MethodCall> chain, int batchSize) {
+        FindIterable<Document> iterable = collection.find(optionalDocument(arguments, 0));
+        if (arguments.size() > 1) {
+            iterable.projection(document(arguments, 1));
+        }
+        for (MongodbCommandParser.MethodCall call : chain) {
+            switch (call.name()) {
+                case "sort" -> iterable.sort(document(call.arguments(), 0));
+                case "projection" -> iterable.projection(document(call.arguments(), 0));
+                case "skip" -> iterable.skip(requiredInt(call.arguments(), 0, "skip"));
+                case "limit" -> {
+                    int limit = requiredInt(call.arguments(), 0, "limit");
+                    if (limit < 1) {
+                        throw new IllegalArgumentException("MongoDB limit must be greater than zero");
+                    }
+                    iterable.limit(limit);
+                }
+                default -> throw new IllegalArgumentException("Unsupported find modifier: " + call.name());
+            }
+        }
+        return iterable.batchSize(batchSize).iterator();
     }
 
     private void executeExpression(MongoDatabase database, String statement, Integer pageNo, Integer pageSize,
@@ -428,6 +524,100 @@ public class MongodbCommandExecutor implements CommandExecutor {
 
     private int absoluteLine(Integer scriptStartLine, int statementLine) {
         return statementLine + Math.max((scriptStartLine == null ? 1 : scriptStartLine) - 1, 0);
+    }
+
+    private final class StreamingResultIterator implements Iterator<ExecuteResult> {
+
+        private final Command command;
+        private final MongodbCommandParser.StatementPosition statement;
+        private final int batchSize;
+        private final MongodbConnectionProvider.MongodbConnectionContext context;
+        private final MongoCursor<Document> cursor;
+        private int pageNo = 1;
+        private boolean closed;
+
+        private StreamingResultIterator(Command command, MongodbCommandParser.StatementPosition statement,
+                                        int batchSize) {
+            this.command = command;
+            this.statement = statement;
+            this.batchSize = batchSize;
+            MongodbConnectionProvider.MongodbConnectionContext openedContext =
+                    MongodbConnectionProvider.open(Chat2DBContext.getConnectInfo());
+            try {
+                String databaseName = StringUtils.defaultIfBlank(command.getDatabaseName(),
+                        MongodbConnectionProvider.databaseName(Chat2DBContext.getConnectInfo(),
+                                MongodbConnectionProvider.parse(Chat2DBContext.getConnectInfo())));
+                this.cursor = openStreamingCursor(openedContext.client().getDatabase(databaseName),
+                        statement.statement(), batchSize);
+                this.context = openedContext;
+            } catch (RuntimeException e) {
+                openedContext.close();
+                throw e;
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (closed) {
+                return false;
+            }
+            try {
+                boolean hasNext = cursor.hasNext();
+                if (!hasNext) {
+                    close();
+                }
+                return hasNext;
+            } catch (RuntimeException e) {
+                close();
+                throw e;
+            }
+        }
+
+        @Override
+        public ExecuteResult next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            TimeInterval timer = new TimeInterval();
+            try {
+                List<Document> documents = new ArrayList<>(batchSize);
+                while (documents.size() < batchSize && cursor.hasNext()) {
+                    documents.add(cursor.next());
+                }
+                boolean hasNext = cursor.hasNext();
+                ExecuteResult result = ExecuteResult.builder()
+                        .sql(statement.statement())
+                        .success(Boolean.TRUE)
+                        .description("Success")
+                        .sqlType(SqlTypeEnum.SELECT.getCode())
+                        .build();
+                documentsResult(result, documents, pageNo++, batchSize, hasNext);
+                result.setStatementIndex(1);
+                result.setStatementStartLine(absoluteLine(command.getScriptStartLine(), statement.startLine()));
+                result.setStatementEndLine(absoluteLine(command.getScriptStartLine(), statement.endLine()));
+                result.setOriginalSql(statement.statement());
+                result.setDuration(timer.interval());
+                if (!hasNext) {
+                    close();
+                }
+                return result;
+            } catch (RuntimeException e) {
+                close();
+                throw e;
+            }
+        }
+
+        private void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            cursor.close();
+            context.close();
+        }
+    }
+
+    private record ParsedCollectionCommand(String collectionName, List<MongodbCommandParser.MethodCall> calls) {
     }
 
     private record Page(int pageNo, int skip, int limit) {
