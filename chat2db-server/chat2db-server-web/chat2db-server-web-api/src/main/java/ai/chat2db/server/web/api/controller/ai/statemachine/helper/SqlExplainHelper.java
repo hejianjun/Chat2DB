@@ -22,15 +22,24 @@ import lombok.extern.slf4j.Slf4j;
 public class SqlExplainHelper {
 
     public ExplainResult executeExplain(String sql) {
+        return executeExplain(sql, false);
+    }
+
+    public ExplainResult executeExplain(String query, boolean mongodb) {
         try {
-            SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
-            String explainSql = sqlBuilder.buildExplainSql(sql);
+            String explainSql;
+            if (mongodb) {
+                explainSql = MqlExplainCommandBuilder.build(query);
+            } else {
+                SqlBuilder sqlBuilder = Chat2DBContext.getSqlBuilder();
+                explainSql = sqlBuilder.buildExplainSql(query);
+            }
             
             if (explainSql == null) {
                 return ExplainResult.builder()
                     .success(false)
                     .errorMessage("EXPLAIN not supported for this database type")
-                    .explainSql(sql)
+                    .explainSql(query)
                     .build();
             }
 
@@ -52,7 +61,7 @@ public class SqlExplainHelper {
             return ExplainResult.builder()
                 .success(false)
                 .errorMessage(e.getMessage())
-                .explainSql(sql)
+                .explainSql(query)
                 .build();
         }
     }

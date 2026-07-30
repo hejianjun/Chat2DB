@@ -15,6 +15,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.alibaba.fastjson2.JSONObject;
 
+import ai.chat2db.server.tools.base.enums.DataSourceTypeEnum;
 import ai.chat2db.server.web.api.controller.ai.enums.PromptType;
 import ai.chat2db.server.web.api.controller.ai.request.ChatQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatContext;
@@ -22,13 +23,14 @@ import ai.chat2db.server.web.api.controller.ai.statemachine.ChatEvent;
 import ai.chat2db.server.web.api.controller.ai.statemachine.ChatState;
 import ai.chat2db.server.web.api.controller.ai.statemachine.helper.ExplainResult;
 import ai.chat2db.server.web.api.controller.ai.statemachine.helper.ExplainTableNameExtractor;
+import ai.chat2db.server.web.api.controller.ai.statemachine.helper.MqlExplainCommandBuilder;
 import ai.chat2db.server.web.api.controller.ai.statemachine.helper.SqlExplainHelper;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 /**
- * 执行EXPLAIN动作
- * 在 SQL_OPTIMIZER 和 SQL_EXPLAIN 类型时执行，失败时静默降级
+ * 执行查询计划分析动作。
+ * 在 SQL_OPTIMIZER 和 SQL_EXPLAIN 类型时执行，支持 SQL 和 MongoDB MQL，失败时静默降级。
  */
 @Component
 @Slf4j
@@ -39,6 +41,10 @@ public class ExplainAction extends BaseChatAction {
 
     private static final Pattern SQL_CODE_BLOCK_PATTERN = Pattern.compile("```sql\\s*([\\s\\S]+?)\\s*```", Pattern.CASE_INSENSITIVE);
     private static final Pattern SQL_KEYWORD_PATTERN = Pattern.compile("(?i)\\b(SELECT|UPDATE|DELETE|INSERT|MERGE)\\b");
+    private static final Pattern MQL_CODE_BLOCK_PATTERN = Pattern.compile(
+            "```(?:mql|mongodb|javascript|js)\\s*([\\s\\S]+?)\\s*```", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MQL_KEYWORD_PATTERN = Pattern.compile(
+            "(?i)\\bdb\\s*\\.\\s*(?:getCollection\\s*\\(|[$A-Z_][$\\w]*\\s*\\.)");
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -65,6 +71,7 @@ public class ExplainAction extends BaseChatAction {
 
         boolean schemaMissing = StringUtils.isBlank(ctx.getSchemaDdl());
         boolean tablesMissing = CollectionUtils.isEmpty(request.getTableNames());
+        boolean mongodb = isMongoDataSource(ctx);
         buildContext(ctx);
         try {
             if (StringUtils.isNotBlank(ctx.getExplainResult())) {
@@ -73,16 +80,16 @@ public class ExplainAction extends BaseChatAction {
                 return;
             }
 
-            String sql = extractSql(request.getMessage());
-            if (sql == null) {
-                log.warn("[ExplainAction] No SQL found in message");
+            String query = mongodb ? extractMql(request.getMessage()) : extractSql(request.getMessage());
+            if (query == null) {
+                log.warn("[ExplainAction] No {} found in message", mongodb ? "MQL" : "SQL");
                 triggerAfterExplainFailure(context, schemaMissing, tablesMissing);
                 return;
             }
 
-            log.info("[ExplainAction] Executing EXPLAIN for SQL: {}", sql);
+            log.info("[ExplainAction] Executing EXPLAIN for {}: {}", mongodb ? "MQL" : "SQL", query);
             
-            ExplainResult result = sqlExplainHelper.executeExplain(sql);
+            ExplainResult result = sqlExplainHelper.executeExplain(query, mongodb);
             
             if (result.isSuccess()) {
                 ctx.setExplainSql(result.getExplainSql());
@@ -92,7 +99,9 @@ public class ExplainAction extends BaseChatAction {
                 log.info("[ExplainAction] EXPLAIN executed successfully");
 
                 if (schemaMissing && tablesMissing) {
-                    List<String> tableNames = ExplainTableNameExtractor.extractTableNames(sql, result);
+                    List<String> tableNames = mongodb
+                            ? extractMongoCollection(query)
+                            : ExplainTableNameExtractor.extractTableNames(query, result);
                     if (CollectionUtils.isNotEmpty(tableNames)) {
                         ctx.getRequest().setTableNames(tableNames);
                         ctx.setSelectedTables(tableNames);
@@ -158,6 +167,39 @@ public class ExplainAction extends BaseChatAction {
         }
 
         return null;
+    }
+
+    private String extractMql(String message) {
+        if (StringUtils.isBlank(message)) {
+            return null;
+        }
+
+        Matcher matcher = MQL_CODE_BLOCK_PATTERN.matcher(message);
+        if (matcher.find()) {
+            String mql = matcher.group(1).trim();
+            if (StringUtils.isNotBlank(mql)) {
+                return mql;
+            }
+        }
+
+        if (MQL_KEYWORD_PATTERN.matcher(message).find()) {
+            return message.trim();
+        }
+        return null;
+    }
+
+    private List<String> extractMongoCollection(String mql) {
+        try {
+            return List.of(MqlExplainCommandBuilder.extractCollectionName(mql));
+        } catch (IllegalArgumentException e) {
+            log.warn("[ExplainAction] Failed to extract MongoDB collection: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private boolean isMongoDataSource(ChatContext ctx) {
+        return ctx.getConnectInfo() != null
+                && DataSourceTypeEnum.MONGODB.getCode().equalsIgnoreCase(ctx.getConnectInfo().getDbType());
     }
 
     private void sendExplainToClient(SseEmitter emitter, ExplainResult result) {
