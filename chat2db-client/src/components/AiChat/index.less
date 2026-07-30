@@ -314,6 +314,36 @@
             background-color: transparent;
             border: 0;
             background: none;
+
+            :global {
+              .hljs-keyword,
+              .hljs-literal,
+              .hljs-selector-tag {
+                color: var(--color-primary);
+              }
+
+              .hljs-string,
+              .hljs-attr {
+                color: var(--color-success);
+              }
+
+              .hljs-number,
+              .hljs-symbol {
+                color: var(--color-warning);
+              }
+
+              .hljs-title,
+              .hljs-built_in,
+              .hljs-property {
+                color: var(--color-info);
+              }
+
+              .hljs-comment,
+              .hljs-meta {
+                color: var(--color-text-tertiary);
+                font-style: italic;
+              }
+            }
           }
         }
 

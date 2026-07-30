@@ -212,6 +212,7 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
   const renderResult = (queryResultData) => {
     function renderSuccessResult() {
       const needTable = queryResultData?.headerList?.length > 0;
+      const showUpdateCount = queryResultData?.sqlType !== 'SELECT' && queryResultData?.updateCount != null;
       return (
         <div className={styles.successResult}>
           <div className={styles.successResultContent}>
@@ -230,9 +231,16 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
               />
             ) : (
               <div className={styles.updateCountBox}>
-                <div className={styles.updateCount}>
-                  {i18n('common.text.affectedRows', queryResultData.updateCount)}
-                </div>
+                {showUpdateCount ? (
+                  <div className={styles.updateCount}>
+                    {i18n('common.text.affectedRows', queryResultData.updateCount)}
+                  </div>
+                ) : (
+                  <div className={styles.emptyResult}>
+                    <img src={EmptyImg} />
+                    <p>{i18n('common.text.noData')}</p>
+                  </div>
+                )}
                 <StatusBar
                   dataLength={queryResultData?.dataList?.length}
                   duration={queryResultData.duration}

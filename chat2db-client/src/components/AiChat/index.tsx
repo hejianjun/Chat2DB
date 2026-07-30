@@ -11,7 +11,10 @@ import {
   PaperClipOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import ReactMarkdown from 'react-markdown';
+import hljs from 'highlight.js/lib/core';
+import javascript from 'highlight.js/lib/languages/javascript';
+import sqlLanguage from 'highlight.js/lib/languages/sql';
+import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
 import { formatParams } from '@/utils/url';
@@ -40,6 +43,10 @@ import { getConsoleEditor } from '@/pages/main/workspace/components/SQLExecute/c
 import { getSearchResult } from '@/pages/main/workspace/components/SQLExecute/searchResultRegistry';
 import ConversationSidebar from './ConversationSidebar';
 import styles from './index.less';
+
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('sql', sqlLanguage);
+hljs.registerAliases(['js', 'mql', 'mongo', 'mongodb'], { languageName: 'javascript' });
 
 const STATE_LABELS: Record<ChatStateType, { text: string; color: string }> = {
   IDLE: { text: '等待中', color: 'default' },
@@ -189,24 +196,119 @@ function extractDataExpressionFromContent(content: string): IDataExpressionResul
   return null;
 }
 
-function extractSqlFromContent(content: string): string | null {
+type DatabaseStatementType = 'SQL' | 'MQL';
+
+interface IDatabaseStatement {
+  statement: string;
+  type: DatabaseStatementType;
+}
+
+const MQL_LANGUAGE_NAMES = ['mql', 'mongo', 'mongodb', 'javascript', 'js'];
+const SQL_LANGUAGE_NAMES = ['sql'];
+
+const isMqlStatement = (statement: string): boolean => {
+  return /\bdb(?:\.[A-Za-z_$][\w$]*|\[['"][^'"]+['"]\])+\s*\(/.test(statement);
+};
+
+const isSqlStatement = (statement: string): boolean => {
+  return /\b(select|insert|update|delete|create|alter|drop|with|merge)\b/i.test(statement);
+};
+
+const extractStandaloneDatabaseStatement = (content: string): IDatabaseStatement | null => {
+  const statement = content.trim();
+  if (/^db(?:\.[A-Za-z_$][\w$]*|\[['"][^'"]+['"]\])+\s*\(/.test(statement)) {
+    return { statement, type: 'MQL' };
+  }
+  if (/^(select|insert|update|delete|create|alter|drop|with|merge)\b/i.test(statement)) {
+    return { statement, type: 'SQL' };
+  }
+  return null;
+};
+
+function extractDatabaseStatement(content: string): IDatabaseStatement | null {
   try {
-    const sqlMatch = content.match(/```sql\s*([\s\S]*?)```/i);
-    if (sqlMatch && sqlMatch[1]) {
-      return sqlMatch[1].trim();
-    }
-    const genericCodeMatch = content.match(/```\s*([\s\S]*?)```/);
-    if (genericCodeMatch && genericCodeMatch[1]) {
-      const code = genericCodeMatch[1].trim();
-      if (code.match(/select|insert|update|delete|create|alter|drop/i)) {
-        return code;
+    const fencedCodePattern = /```([^\r\n`]*)\r?\n?([\s\S]*?)```/g;
+    let fencedCodeMatch = fencedCodePattern.exec(content);
+
+    while (fencedCodeMatch) {
+      const language = fencedCodeMatch[1]
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)[0];
+      const statement = fencedCodeMatch[2].trim();
+
+      if (statement && (MQL_LANGUAGE_NAMES.includes(language) || isMqlStatement(statement))) {
+        return { statement, type: 'MQL' };
       }
+      if (statement && (SQL_LANGUAGE_NAMES.includes(language) || isSqlStatement(statement))) {
+        return { statement, type: 'SQL' };
+      }
+
+      fencedCodeMatch = fencedCodePattern.exec(content);
     }
+
+    return extractStandaloneDatabaseStatement(content);
   } catch (e) {
-    console.error('[extractSqlFromContent] Parse error:', e);
+    console.error('[extractDatabaseStatement] Parse error:', e);
   }
   return null;
 }
+
+const normalizeDatabaseMarkdown = (content: string): string => {
+  if (content.includes('```')) {
+    return content;
+  }
+  const databaseStatement = extractStandaloneDatabaseStatement(content);
+  if (!databaseStatement) {
+    return content;
+  }
+  return `\`\`\`${databaseStatement.type.toLowerCase()}\n${databaseStatement.statement}\n\`\`\``;
+};
+
+const MarkdownCode: NonNullable<Components['code']> = ({ inline, className, children, node: _node, ...props }) => {
+  void _node;
+  const code = String(children).replace(/\n$/, '');
+  if (inline) {
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const language = className?.match(/language-([\w-]+)/)?.[1]?.toLowerCase();
+  const highlightLanguage =
+    language && MQL_LANGUAGE_NAMES.includes(language)
+      ? 'javascript'
+      : language && SQL_LANGUAGE_NAMES.includes(language)
+      ? 'sql'
+      : isMqlStatement(code)
+      ? 'javascript'
+      : isSqlStatement(code)
+      ? 'sql'
+      : null;
+
+  if (!highlightLanguage) {
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  }
+
+  const highlightedCode = hljs.highlight(code, { language: highlightLanguage }).value;
+  return (
+    <code
+      className={[className, 'hljs'].filter(Boolean).join(' ')}
+      dangerouslySetInnerHTML={{ __html: highlightedCode }}
+      {...props}
+    />
+  );
+};
+
+const MARKDOWN_COMPONENTS: Components = {
+  code: MarkdownCode,
+};
 
 const MAX_DIRECT_SSE_URL_LENGTH = 1800;
 const MAX_IMAGE_COUNT = 4;
@@ -215,24 +317,25 @@ const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/we
 
 const normalizeNullableText = (value?: string | null): string => value || '';
 
-const SqlActionButtons = memo<{
-  sql: string;
-  onExecute?: (sql: string) => void;
-  onSendToEditor?: (sql: string) => void;
-}>(({ sql, onExecute, onSendToEditor }) => {
+const DatabaseStatementActionButtons = memo<{
+  statement: string;
+  type: DatabaseStatementType;
+  onExecute?: (statement: string, type: DatabaseStatementType) => void;
+  onSendToEditor?: (statement: string, type: DatabaseStatementType) => void;
+}>(({ statement, type, onExecute, onSendToEditor }) => {
   return (
     <div className={styles.sqlActionButtons}>
       <Button
         type="primary"
         icon={<PlayCircleOutlined />}
-        onClick={() => onExecute?.(sql)}
+        onClick={() => onExecute?.(statement, type)}
         size="small"
       >
-        执行SQL
+        执行{type}
       </Button>
       <Button
         icon={<SendOutlined />}
-        onClick={() => onSendToEditor?.(sql)}
+        onClick={() => onSendToEditor?.(statement, type)}
         size="small"
       >
         发送到编辑器
@@ -891,7 +994,7 @@ export default memo<IProps>(() => {
 
             if (promptType === 'SQL_FIX' && sqlFixCallbackRef.current) {
               try {
-                const sql = extractSqlFromContent(session.currentContent);
+                const sql = extractDatabaseStatement(session.currentContent)?.statement;
                 if (sql) {
                   console.log('[AiChat] Extracted SQL:', sql);
                   extractedSqlRef.current = sql;
@@ -987,26 +1090,26 @@ export default memo<IProps>(() => {
     };
   }, []);
 
-  const handleExecuteSql = useCallback((sql: string) => {
+  const handleExecuteStatement = useCallback((statement: string, type: DatabaseStatementType) => {
     const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
     if (activeConsoleInfo) {
       const searchResultRef = getSearchResult(activeConsoleInfo.id);
       if (searchResultRef?.current) {
-        searchResultRef.current.handleExecuteSQL(sql);
-        message.success('SQL已执行');
+        searchResultRef.current.handleExecuteSQL(statement);
+        message.success(`${type}已执行`);
       } else {
         message.warning('未找到执行结果组件');
       }
     }
   }, [consoleList, activeConsoleId]);
 
-  const handleSendToEditor = useCallback((sql: string) => {
+  const handleSendToEditor = useCallback((statement: string, type: DatabaseStatementType) => {
     const activeConsoleInfo = consoleList?.find((c) => c.id === activeConsoleId);
     if (activeConsoleInfo) {
       const consoleRef = getConsoleEditor(activeConsoleInfo.id);
       if (consoleRef?.current?.editorRef) {
-        consoleRef.current.editorRef.setValue(sql, 'cover');
-        message.success('SQL已发送到编辑器');
+        consoleRef.current.editorRef.setValue(statement, 'cover');
+        message.success(`${type}已发送到编辑器`);
       } else {
         message.warning('未找到编辑器组件');
       }
@@ -1173,7 +1276,8 @@ export default memo<IProps>(() => {
 
       <div className={styles.contentArea}>
         {currentSession?.messages.map((msg) => {
-          const extractedSql = msg.role === 'assistant' ? extractSqlFromContent(msg.content) : null;
+          const databaseStatement = msg.role === 'assistant' ? extractDatabaseStatement(msg.content) : null;
+          const markdownContent = msg.role === 'assistant' ? normalizeDatabaseMarkdown(msg.content) : msg.content;
           return (
             <div key={msg.id} className={msg.role === 'user' ? styles.userBlock : styles.aiBlock}>
               {!!msg.images?.length && (
@@ -1183,11 +1287,14 @@ export default memo<IProps>(() => {
                   ))}
                 </div>
               )}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-              {extractedSql && msg.role === 'assistant' && (
-                <SqlActionButtons
-                  sql={extractedSql}
-                  onExecute={handleExecuteSql}
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                {markdownContent}
+              </ReactMarkdown>
+              {databaseStatement && msg.role === 'assistant' && (
+                <DatabaseStatementActionButtons
+                  statement={databaseStatement.statement}
+                  type={databaseStatement.type}
+                  onExecute={handleExecuteStatement}
                   onSendToEditor={handleSendToEditor}
                 />
               )}
@@ -1201,7 +1308,9 @@ export default memo<IProps>(() => {
           <div className={styles.aiBlock}>
             <Spin size="small">
               {currentSession.currentContent && (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentSession.currentContent}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                  {normalizeDatabaseMarkdown(currentSession.currentContent)}
+                </ReactMarkdown>
               )}
             </Spin>
           </div>
