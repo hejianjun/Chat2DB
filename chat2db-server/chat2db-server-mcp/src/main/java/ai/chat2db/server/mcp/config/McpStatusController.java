@@ -1,6 +1,7 @@
 package ai.chat2db.server.mcp.config;
 
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,8 +22,8 @@ public class McpStatusController {
 
     @GetMapping("/status")
     public DataResult<McpStatus> status() {
-        int connectionCount = connectionTracker.activeConnectionCount();
-        return DataResult.of(new McpStatus(connectionCount > 0, connectionCount));
+        List<McpConnectionTracker.McpClientConnection> clients = connectionTracker.activeConnections();
+        return DataResult.of(new McpStatus(!clients.isEmpty(), clients.size(), clients));
     }
 
     @Data
@@ -30,5 +31,6 @@ public class McpStatusController {
     public static class McpStatus {
         private boolean connected;
         private int connectionCount;
+        private List<McpConnectionTracker.McpClientConnection> clients;
     }
 }

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import i18n from '@/i18n';
 import configServer from '@/service/config';
-import mcpServer, { IMcpStatus } from '@/service/mcp';
-import { Button, Input, Select, Space, Switch, Tag, message } from 'antd';
+import mcpServer, { IMcpClientConnection, IMcpStatus } from '@/service/mcp';
+import { Button, Input, Modal, Select, Space, Switch, Table, Tag, message } from 'antd';
 import classnames from 'classnames';
 import styles from '../index.less';
 
@@ -30,6 +30,7 @@ export default function McpSetting() {
   const [allowDdl, setAllowDdl] = useState(false);
   const [mcpStatus, setMcpStatus] = useState<IMcpStatus>();
   const [statusLoading, setStatusLoading] = useState(false);
+  const [clientModalOpen, setClientModalOpen] = useState(false);
   const mcpAddress = useMemo(() => {
     return window._BaseURL ? `${window._BaseURL.replace(/\/+$/, '')}${MCP_ENDPOINT}` : '';
   }, []);
@@ -98,9 +99,11 @@ export default function McpSetting() {
       <div className={styles.content}>
         <Space>
           {mcpStatus?.connected ? (
-            <Tag color="success">
-              {i18n('setting.text.mcpConnected')} ({mcpStatus.connectionCount})
-            </Tag>
+            <Button type="link" size="small" onClick={() => setClientModalOpen(true)}>
+              <Tag color="success">
+                {i18n('setting.text.mcpConnected')} ({mcpStatus.connectionCount})
+              </Tag>
+            </Button>
           ) : (
             <Tag>{i18n('setting.text.mcpDisconnected')}</Tag>
           )}
@@ -141,6 +144,49 @@ export default function McpSetting() {
           {i18n('setting.button.apply')}
         </Button>
       </div>
+      <Modal
+        title={i18n('setting.title.mcpClients')}
+        open={clientModalOpen}
+        footer={null}
+        width={760}
+        onCancel={() => setClientModalOpen(false)}
+      >
+        <Table<IMcpClientConnection>
+          rowKey={(record) =>
+            `${record.clientInfo?.name || ''}-${record.clientInfo?.version || ''}-${record.connectedAt}`
+          }
+          dataSource={mcpStatus?.clients || []}
+          pagination={false}
+          size="small"
+          columns={[
+            {
+              title: i18n('setting.label.mcpClientName'),
+              dataIndex: ['clientInfo', 'name'],
+              render: (value) => value || '-',
+            },
+            {
+              title: i18n('setting.label.mcpClientVersion'),
+              dataIndex: ['clientInfo', 'version'],
+              render: (value) => value || '-',
+            },
+            {
+              title: i18n('setting.label.mcpProtocolVersion'),
+              dataIndex: ['clientInfo', 'protocolVersion'],
+              render: (value) => value || '-',
+            },
+            {
+              title: i18n('setting.label.mcpConnectedAt'),
+              dataIndex: 'connectedAt',
+              render: (value) => new Date(value).toLocaleString(),
+            },
+            {
+              title: i18n('setting.label.mcpLastActiveAt'),
+              dataIndex: 'lastActiveAt',
+              render: (value) => new Date(value).toLocaleString(),
+            },
+          ]}
+        />
+      </Modal>
     </>
   );
 }
