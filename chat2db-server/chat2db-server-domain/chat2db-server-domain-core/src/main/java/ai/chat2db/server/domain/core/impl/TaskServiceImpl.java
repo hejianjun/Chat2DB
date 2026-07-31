@@ -9,6 +9,7 @@ import ai.chat2db.server.domain.api.param.TaskUpdateParam;
 import ai.chat2db.server.domain.api.service.TaskEventPublisher;
 import ai.chat2db.server.domain.api.service.TaskService;
 import ai.chat2db.server.domain.core.converter.TaskConverter;
+import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.domain.repository.MapperUtils;
 import ai.chat2db.server.domain.repository.entity.TaskDO;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
@@ -21,6 +22,7 @@ import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @Slf4j
@@ -144,14 +147,30 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public int failUnfinishedTasks() {
-        List<String> unfinishedStatuses = Lists.newArrayList(
-                TaskStatusEnum.INIT.name(), TaskStatusEnum.PROCESSING.name());
-        LambdaUpdateWrapper<TaskDO> updateWrapper = new LambdaUpdateWrapper<TaskDO>()
-                .and(wrapper -> wrapper.eq(TaskDO::getDeleted, DeletedTypeEnum.N.name())
-                        .or().isNull(TaskDO::getDeleted))
-                .in(TaskDO::getTaskStatus, unfinishedStatuses)
-                .set(TaskDO::getTaskStatus, TaskStatusEnum.ERROR.name());
-        return MapperUtils.getTaskMapper().update(null, updateWrapper);
+        AtomicInteger failedCount = new AtomicInteger();
+        Dbutils.runWithSession(() -> {
+            List<String> unfinishedStatuses = Lists.newArrayList(
+                    TaskStatusEnum.INIT.name(), TaskStatusEnum.PROCESSING.name());
+            LambdaUpdateWrapper<TaskDO> updateWrapper = new LambdaUpdateWrapper<TaskDO>()
+                    .and(wrapper -> wrapper.eq(TaskDO::getDeleted, DeletedTypeEnum.N.name())
+                            .or().isNull(TaskDO::getDeleted))
+                    .in(TaskDO::getTaskStatus, unfinishedStatuses)
+                    .set(TaskDO::getTaskStatus, TaskStatusEnum.ERROR.name());
+            failedCount.set(MapperUtils.getTaskMapper().update(null, updateWrapper));
+        });
+        return failedCount.get();
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void failUnfinishedTasksOnStartup() {
+        try {
+            int failedCount = failUnfinishedTasks();
+            if (failedCount > 0) {
+                log.info("Marked {} stale unfinished tasks as failed during application startup", failedCount);
+            }
+        } catch (Exception e) {
+            log.error("Failed to mark stale unfinished tasks during application startup", e);
+        }
     }
 
     @EventListener(ContextClosedEvent.class)
