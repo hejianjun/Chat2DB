@@ -17,10 +17,12 @@ import io.lettuce.core.codec.StringCodec;
 import io.lettuce.core.output.CommandOutput;
 import io.lettuce.core.protocol.CommandArgs;
 import io.lettuce.core.protocol.CommandType;
+import io.lettuce.core.protocol.ProtocolKeyword;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayDeque;
@@ -97,6 +99,7 @@ public class RedisCommandExecutor implements CommandExecutor {
                 case "TYPE" -> oneValue(result, "type", commands.type(required(args, 1, "key")));
                 case "EXISTS" -> oneValue(result, "exists", commands.exists(tail(args, 1)));
                 case "TTL" -> oneValue(result, "ttl", commands.ttl(required(args, 1, "key")));
+                case "MEMORY" -> memoryUsage(commands, args, result);
                 case "EXPIRE" -> oneValue(result, "result",
                         commands.expire(required(args, 1, "key"), parseLong(args, 2, "seconds")));
                 case "DEL" -> oneValue(result, "deleted", commands.del(tail(args, 1)));
@@ -122,7 +125,7 @@ public class RedisCommandExecutor implements CommandExecutor {
                         parseLong(args, 2, "start"), parseLong(args, 3, "stop")));
                 case "ZADD" -> oneValue(result, "added", commands.zadd(required(args, 1, "key"),
                         parseDouble(args, 2, "score"), required(args, 3, "member")));
-                default -> throw new IllegalArgumentException("Unsupported Redis command: " + command);
+                default -> dispatchCommand(commands, command, args, result);
             }
         } catch (Exception e) {
             result.setSuccess(Boolean.FALSE);
@@ -143,6 +146,31 @@ public class RedisCommandExecutor implements CommandExecutor {
             return;
         }
         throw new IllegalArgumentException("Only CONFIG GET is supported");
+    }
+
+    private void memoryUsage(RedisCommands<String, String> commands, List<String> args, ExecuteResult result) {
+        if (args.size() < 3 || !"USAGE".equalsIgnoreCase(args.get(1))) {
+            throw new IllegalArgumentException("Only MEMORY USAGE key [SAMPLES count] is supported");
+        }
+        String key = required(args, 2, "key");
+        if (args.size() == 3) {
+            oneValue(result, "bytes", commands.memoryUsage(key));
+            return;
+        }
+        if (args.size() != 5 || !"SAMPLES".equalsIgnoreCase(args.get(3))) {
+            throw new IllegalArgumentException("Redis MEMORY USAGE syntax: MEMORY USAGE key [SAMPLES count]");
+        }
+        long samples = parseLong(args, 4, "count");
+        if (samples < 0) {
+            throw new IllegalArgumentException("Redis MEMORY USAGE SAMPLES count must be non-negative");
+        }
+        CommandArgs<String, String> commandArgs = new CommandArgs<>(StringCodec.UTF8)
+                .add("USAGE")
+                .add(key)
+                .add("SAMPLES")
+                .add(samples);
+        Object value = commands.dispatch(CommandType.MEMORY, new FlexibleRedisOutput(StringCodec.UTF8), commandArgs);
+        oneValue(result, "bytes", value);
     }
 
     private void scan(RedisCommands<String, String> commands, List<String> args, ExecuteResult result) {
@@ -192,6 +220,17 @@ public class RedisCommandExecutor implements CommandExecutor {
             commandArgs.add(args.get(i));
         }
         Object value = commands.dispatch(commandType, new FlexibleRedisOutput(StringCodec.UTF8), commandArgs);
+        scriptResult(result, value);
+    }
+
+    private void dispatchCommand(RedisCommands<String, String> commands, String command, List<String> args,
+                                 ExecuteResult result) {
+        CommandArgs<String, String> commandArgs = new CommandArgs<>(StringCodec.UTF8);
+        for (int i = 1; i < args.size(); i++) {
+            commandArgs.add(args.get(i));
+        }
+        Object value = commands.dispatch(new RawRedisCommand(command),
+                new FlexibleRedisOutput(StringCodec.UTF8), commandArgs);
         scriptResult(result, value);
     }
 
@@ -317,6 +356,27 @@ public class RedisCommandExecutor implements CommandExecutor {
 
     private double parseDouble(List<String> args, int index, String name) {
         return Double.parseDouble(required(args, index, name));
+    }
+
+    private static class RawRedisCommand implements ProtocolKeyword {
+
+        private final String name;
+        private final byte[] bytes;
+
+        RawRedisCommand(String name) {
+            this.name = name;
+            this.bytes = name.getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public byte[] getBytes() {
+            return bytes;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
     }
 
     private static class FlexibleRedisOutput extends CommandOutput<String, String, Object> {
