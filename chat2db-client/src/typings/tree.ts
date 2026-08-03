@@ -13,6 +13,23 @@ export interface IExtraParams {
   triggerName?: string;
 }
 
+export interface IIndexColumn {
+  columnName?: string;
+  ordinalPosition?: number;
+  ascOrDesc?: string;
+  collation?: string;
+  filterCondition?: string;
+}
+
+export interface IIndex {
+  name: string;
+  type?: string;
+  unique?: boolean;
+  comment?: string;
+  columns?: string;
+  columnList?: IIndexColumn[];
+}
+
 export interface ITreeNode {
   uuid: string;
   key: string | number;
@@ -40,6 +57,7 @@ export interface ITreeNode {
   pageSize?: number;
   total?: number;
   count?: number;
+  indexData?: IIndex;
 }
 
 // 视图  函数  触发器  过程 通用的返回结果

@@ -2,6 +2,7 @@ import { DatabaseTypeCode } from '@/constants';
 import {
   IDatabaseSupportField,
   IEditTableInfo,
+  IIndex,
   IManageResultData,
   IPageParams,
   IPageResponse,
@@ -246,7 +247,7 @@ const getColumnList = createRequest<ITableParams, IColumn[]>('/api/rdb/table/col
   method: 'get',
   delayTime: 200,
 });
-const getIndexList = createRequest<ITableParams, IColumn[]>('/api/rdb/table/index_list', {
+const getIndexList = createRequest<ITableParams, IIndex[]>('/api/rdb/table/index_list', {
   method: 'get',
   delayTime: 200,
 });

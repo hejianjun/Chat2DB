@@ -15,6 +15,7 @@ export default {
   'workspace.savedConsole.filter.clear': 'Clear filters',
   'workspace.title.aiChat': 'AI Chat',
   'workspace.menu.ViewDDL': 'View DDL',
+  'workspace.menu.viewIndexDefinition': 'View index definition',
   'workspace.menu.deleteTable': 'Delete Table',
   'workspace.menu.openTable': 'Open Table',
   'workspace.menu.editTable': 'Edit Table',

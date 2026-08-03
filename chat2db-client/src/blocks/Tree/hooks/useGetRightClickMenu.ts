@@ -26,6 +26,7 @@ import { openFunction, openProcedure, openTrigger, openView } from '../functions
 import { handelPinTable } from '../functions/pinTable';
 import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecatedTable';
 import { viewDDL } from '../functions/viewDDL';
+import { viewIndexDefinition } from '../functions/viewIndexDefinition';
 
 // ----- utils -----
 import { buildMongodbFindQuery, compatibleDataBaseName } from '@/utils/database';
@@ -437,6 +438,15 @@ export const useGetRightClickMenu = (props: IProps) => {
         icon: '\ue665',
         handle: () => {
           viewDDL(treeNodeData);
+        },
+      },
+
+      [OperationColumn.ViewIndexDefinition]: {
+        text: i18n('workspace.menu.viewIndexDefinition'),
+        icon: '\ue665',
+        doubleClickTrigger: true,
+        handle: () => {
+          viewIndexDefinition(treeNodeData);
         },
       },
 
@@ -1020,6 +1030,15 @@ export const getRightClickMenu = (props: IProps) => {
       icon: '\ue665',
       handle: () => {
         viewDDL(treeNodeData);
+      },
+    },
+
+    [OperationColumn.ViewIndexDefinition]: {
+      text: i18n('workspace.menu.viewIndexDefinition'),
+      icon: '\ue665',
+      doubleClickTrigger: true,
+      handle: () => {
+        viewIndexDefinition(treeNodeData);
       },
     },
 

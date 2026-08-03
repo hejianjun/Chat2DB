@@ -15,6 +15,7 @@ export default {
   'workspace.savedConsole.filter.clear': '清除筛选',
   'workspace.title.aiChat': 'AI 对话',
   'workspace.menu.ViewDDL': '查看DDL',
+  'workspace.menu.viewIndexDefinition': '查看索引定义',
   'workspace.menu.deleteTable': '删除表',
   'workspace.menu.openTable': '打开表',
   'workspace.menu.editTable': '修改表',

@@ -151,8 +151,8 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
                                 .databaseName(databaseName)
                                 .columnName(key.getKey())
                                 .ordinalPosition(position++)
-                                .ascOrDesc(Number.class.isInstance(key.getValue())
-                                        && ((Number) key.getValue()).intValue() < 0 ? "D" : "A")
+                                // MongoDB 除 1/-1 外还支持 text、hashed、2d、2dsphere 等索引键类型。
+                                .ascOrDesc(indexKeyType(key.getValue()))
                                 .nonUnique(!unique)
                                 .build());
                     }
@@ -168,6 +168,13 @@ public class MongodbMetaData extends DefaultMetaService implements MetaData {
             }
             return indexes;
         }
+    }
+
+    private String indexKeyType(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue() < 0 ? "D" : "A";
+        }
+        return String.valueOf(value);
     }
 
     @Override

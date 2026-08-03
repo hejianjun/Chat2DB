@@ -14,6 +14,7 @@ export default {
   'workspace.savedConsole.filter.schema': 'Schema',
   'workspace.savedConsole.filter.clear': 'フィルターをクリア',
   'workspace.menu.ViewDDL': 'DDLを見る',
+  'workspace.menu.viewIndexDefinition': 'インデックス定義を表示',
   'workspace.menu.deleteTable': 'テーブルを削除',
   'workspace.menu.openTable': 'テーブルを開く',
   'workspace.menu.editTable': 'テーブルを編集',

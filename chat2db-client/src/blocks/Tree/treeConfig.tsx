@@ -878,6 +878,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
                 key: item.name,
                 isLeaf: true,
                 extraParams: _extraParams,
+                indexData: item,
               };
             });
             r(tableList);
@@ -927,7 +928,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
   },
   [TreeNodeType.INDEX]: {
     icon: '\ue65b',
-    operationColumn: [OperationColumn.CreateConsole, OperationColumn.CopyName],
+    operationColumn: [OperationColumn.ViewIndexDefinition, OperationColumn.CopyName],
   },
   [TreeNodeType.V_KEY]: {
     icon: '\ue775',

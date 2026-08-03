@@ -131,6 +131,14 @@ const getRedisDatabaseMetaText = (treeNodeData: ITreeNode) => {
   return metadata.length ? metadata.join(' · ') : undefined;
 };
 
+const getIndexColumnsText = (treeNodeData: ITreeNode) => {
+  if (treeNodeData.treeNodeType !== TreeNodeType.INDEX) {
+    return undefined;
+  }
+  const columns = treeNodeData.indexData?.columnList?.map((column) => column.columnName).filter(Boolean);
+  return columns?.length ? columns.join(', ') : undefined;
+};
+
 const getTreeNodeTooltipTitle = (treeNodeData: ITreeNode) => {
   const redisKeyCount = formatRedisKeyCount(treeNodeData.count);
   if (isRedisDatabaseNode(treeNodeData) && (redisKeyCount || treeNodeData.comment)) {
@@ -140,6 +148,10 @@ const getTreeNodeTooltipTitle = (treeNodeData: ITreeNode) => {
         {treeNodeData.comment && <div>注释：{treeNodeData.comment}</div>}
       </>
     );
+  }
+  const indexColumns = getIndexColumnsText(treeNodeData);
+  if (indexColumns) {
+    return <div>字段：{indexColumns}</div>;
   }
   return treeNodeData.comment;
 };
@@ -652,6 +664,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
     const dropdownsItems: any = rightClickMenu.map(buildMenuItem);
     const tooltipTitle = getTreeNodeTooltipTitle(treeNodeData);
     const redisDatabaseMetaText = getRedisDatabaseMetaText(treeNodeData);
+    const indexColumnsText = getIndexColumnsText(treeNodeData);
     return (
       <Dropdown
         trigger={['contextMenu']}
@@ -698,6 +711,7 @@ const TreeNode = memo((props: TreeNodeIProps) => {
                 <div className={styles.contentText}>
                   <div className={styles.name} dangerouslySetInnerHTML={{ __html: treeNodeData.name }} />
                   {redisDatabaseMetaText && <div className={styles.type}>{redisDatabaseMetaText}</div>}
+                  {indexColumnsText && <div className={styles.type}>{indexColumnsText}</div>}
                   {!redisDatabaseMetaText && treeNodeData.treeNodeType === TreeNodeType.COLUMN && (
                     <div className={styles.type}>
                       {/* 转小写 */}
@@ -711,7 +725,15 @@ const TreeNode = memo((props: TreeNodeIProps) => {
         </Tooltip>
       </Dropdown>
     );
-  }, [isFocus, isLoading, rightClickMenu, treeNodeData.children, treeNodeData.comment, treeNodeData.count]);
+  }, [
+    isFocus,
+    isLoading,
+    rightClickMenu,
+    treeNodeData.children,
+    treeNodeData.comment,
+    treeNodeData.count,
+    treeNodeData.indexData,
+  ]);
 
   return treeNodeDom;
 });

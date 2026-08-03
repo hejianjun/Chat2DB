@@ -14,6 +14,7 @@ export default {
   'workspace.savedConsole.filter.schema': 'Schema',
   'workspace.savedConsole.filter.clear': 'Filtreleri temizle',
   'workspace.menu.ViewDDL': 'DDL Görüntüle',
+  'workspace.menu.viewIndexDefinition': 'Dizin tanımını görüntüle',
   'workspace.menu.deleteTable': 'Tabloyu Sil',
   'workspace.menu.openTable': 'Tabloyu Aç',
   'workspace.menu.editTable': 'Tabloyu Düzenle',

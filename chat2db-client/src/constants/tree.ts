@@ -40,6 +40,7 @@ export enum OperationColumn {
   DeleteTable = 'deleteTable', // 删除表
   OpenTable = 'openTable', // 删除表
   ViewDDL = 'viewDDL', // 查看ddl
+  ViewIndexDefinition = 'viewIndexDefinition', // 查看索引定义
   EditSource = 'editSource', // 编辑数据源
   Pin = 'pin', // 置顶
   EditTable = 'editTable', // 编辑表
