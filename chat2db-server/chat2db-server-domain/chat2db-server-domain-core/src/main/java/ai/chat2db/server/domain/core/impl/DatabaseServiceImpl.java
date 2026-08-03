@@ -427,7 +427,7 @@ public class DatabaseServiceImpl implements DatabaseService {
             List<Table> collections;
             TableSelector selector = TableSelector.builder()
                     .columnList(true)
-                    .indexList(false)
+                    .indexList(true)
                     .foreignKey(false)
                     .build();
             if (CollectionUtils.isEmpty(collectionNames)) {
@@ -487,7 +487,38 @@ public class DatabaseServiceImpl implements DatabaseService {
         result.put("collection", collection.getName());
         result.put("source", "sampledDocuments");
         result.put("schema", schema);
+        result.put("indexes", mongoIndexes(collection.getIndexList()));
         return result;
+    }
+
+    private static List<Map<String, Object>> mongoIndexes(List<TableIndex> indexes) {
+        if (CollectionUtils.isEmpty(indexes)) {
+            return Collections.emptyList();
+        }
+        return indexes.stream().map(index -> {
+            Map<String, Object> keys = new LinkedHashMap<>();
+            if (!CollectionUtils.isEmpty(index.getColumnList())) {
+                index.getColumnList().stream()
+                        .filter(column -> StringUtils.isNotBlank(column.getColumnName()))
+                        .forEach(column -> keys.put(column.getColumnName(), mongoIndexKey(column.getAscOrDesc())));
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("name", index.getName());
+            result.put("keys", keys);
+            result.put("unique", Boolean.TRUE.equals(index.getUnique()));
+            return result;
+        }).collect(Collectors.toList());
+    }
+
+    private static Object mongoIndexKey(String keyType) {
+        if ("A".equalsIgnoreCase(keyType)) {
+            return 1;
+        }
+        if ("D".equalsIgnoreCase(keyType)) {
+            return -1;
+        }
+        return keyType;
     }
 
     private static Map<String, Object> mongoFieldSchema(TableColumn column) {
