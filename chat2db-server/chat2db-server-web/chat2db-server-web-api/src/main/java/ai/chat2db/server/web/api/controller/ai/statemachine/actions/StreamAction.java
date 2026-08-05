@@ -118,9 +118,16 @@ public class StreamAction extends BaseChatAction {
             throw new RuntimeException("Cancelled by user");
         }
 
-        JSONObject data = new JSONObject();
-        Generation generation = chatResponse.getResult();
+        if (chatResponse == null) {
+            return;
+        }
 
+        Generation generation = chatResponse.getResult();
+        if (generation == null || generation.getOutput() == null) {
+            return;
+        }
+
+        JSONObject data = new JSONObject();
         String content = generation.getOutput().getText();
         if (content != null && !content.isEmpty()) {
             data.put("content", content);
