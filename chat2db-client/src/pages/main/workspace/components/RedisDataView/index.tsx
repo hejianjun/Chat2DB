@@ -259,7 +259,7 @@ const RedisDataView = memo((props: IProps) => {
     }
   };
 
-  const loadPrefixSamples = (prefix: string) => {
+  const loadPrefixSamples = (prefix: string, refresh = false) => {
     if (!uniqueData?.dataSourceId || !prefix) {
       return;
     }
@@ -269,8 +269,18 @@ const RedisDataView = memo((props: IProps) => {
         dataSourceId: uniqueData.dataSourceId,
         databaseName: uniqueData.databaseName,
         prefix,
+        refresh,
       })
-      .then((items) => setPrefixSamples(items || []))
+      .then((items) => {
+        const samples = items || [];
+        setPrefixSamples(samples);
+        const sampleTypes = [...new Set(samples.map((item) => item.type).filter((type): type is string => !!type))]
+          .sort()
+          .join(',');
+        setPrefixSearchData((current) =>
+          current.map((item) => (item.name === prefix ? { ...item, sampleTypes: sampleTypes || undefined } : item)),
+        );
+      })
       .catch((error) => {
         setPrefixSamples([]);
         message.error(String(error || 'Redis key 前缀样例加载失败'));
@@ -1109,10 +1119,9 @@ const RedisDataView = memo((props: IProps) => {
         sorter: true,
         render: (type, record) => {
           if (record.prefixOnly) {
-            const types = record.sampleTypes;
-            return types?.length ? (
+            return record.sampleTypes?.length ? (
               <div className={styles.prefixTypeTags}>
-                {types.map((sampleType) => (
+                {record.sampleTypes.map((sampleType) => (
                   <Tag color={getTypeColor(sampleType)} key={sampleType}>
                     {sampleType}
                   </Tag>
@@ -1367,7 +1376,7 @@ const RedisDataView = memo((props: IProps) => {
                     loading={prefixSampleLoading}
                     size="small"
                     type="text"
-                    onClick={() => loadPrefixSamples(selectedPrefix)}
+                    onClick={() => loadPrefixSamples(selectedPrefix, true)}
                   >
                     刷新样例
                   </Button>

@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -65,9 +64,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /** 自定义 Redis key 前缀分隔符环境变量。 */
     private static final String PREFIX_DELIMITERS_ENV = "CHAT2DB_REDIS_KEY_PREFIX_DELIMITERS";
 
-
-    /** 前缀类型样例最多检查的 key 数量。 */
-    private static final int PREFIX_TYPE_SAMPLE_LIMIT = 3;
 
     @Autowired
     private LuceneIndexManagerFactory managerFactory;
@@ -224,7 +220,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
 
         // 候选前缀计数表：key 是 Redis 前缀候选，value 是该候选覆盖的 key 数量。
         Map<String, Long> prefixCountMap = new ConcurrentHashMap<>();
-        Map<String, Set<String>> prefixTypeMap = new ConcurrentHashMap<>();
 
         // 已扫描的 Redis key 总数，用 AtomicLong 便于在流式回调中安全累加。
         AtomicLong scannedCount = new AtomicLong();
@@ -257,10 +252,9 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
             }).join();
 
             Map<String, Long> selectedPrefixCountMap = selectLongestPrefixes(prefixCountMap);
-            collectPrefixSampleTypes(browser, databaseName, selectedPrefixCountMap.keySet(), prefixTypeMap);
 
             // 最后把剩余前缀一次性写入索引，并清理本轮刷新前的旧版本数据。
-            flushPrefixes(luceneMgr, dataSourceId, databaseName, selectedPrefixCountMap, prefixTypeMap);
+            flushPrefixes(luceneMgr, dataSourceId, databaseName, selectedPrefixCountMap);
             // 扫描和索引写入全部完成后，标记任务成功。
             status.setStatus(STATUS_DONE);
             // 当前扫描接口未暴露游标恢复能力，完成后统一重置为初始游标。
@@ -310,22 +304,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         collectPrefixes(key, prefixCountMap, resolvePrefixDelimiters());
     }
 
-    private void collectPrefixSampleTypes(RedisKeyBrowser browser, String databaseName, Set<String> prefixes,
-                                          Map<String, Set<String>> prefixTypeMap) {
-        for (String prefix : prefixes) {
-            try {
-                browser.sampleKeys(databaseName, prefix, PREFIX_TYPE_SAMPLE_LIMIT).join().forEach(sample -> {
-                    if (StringUtils.isNotBlank(sample.getType())) {
-                        prefixTypeMap.computeIfAbsent(prefix, ignored -> ConcurrentHashMap.newKeySet())
-                                .add(sample.getType());
-                    }
-                });
-            } catch (Exception e) {
-                log.warn("Sample Redis key types failed, databaseName={}, prefix={}", databaseName, prefix, e);
-            }
-        }
-    }
-
     static Map<String, Long> buildPrefixCountMap(Collection<String> keys, String delimiters) {
         Map<String, Long> candidatePrefixCountMap = new ConcurrentHashMap<>();
         keys.forEach(key -> collectPrefixes(key, candidatePrefixCountMap, delimiters));
@@ -348,22 +326,25 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                 .toList();
     }
 
-    private static Map<String, Long> selectLongestPrefixes(Map<String, Long> candidatePrefixCountMap) {
-        Map<String, Long> selected = new LinkedHashMap<>();
-        candidatePrefixCountMap.entrySet().stream()
+    static Map<String, Long> selectLongestPrefixes(Map<String, Long> candidatePrefixCountMap) {
+        List<Map.Entry<String, Long>> candidates = candidatePrefixCountMap.entrySet().stream()
                 .filter(entry -> entry.getValue() > 1)
+                .sorted(Map.Entry.comparingByKey())
+                .toList();
+        Map<String, Long> longestPrefixes = new LinkedHashMap<>();
+        for (int index = 0; index < candidates.size(); index++) {
+            Map.Entry<String, Long> current = candidates.get(index);
+            String nextPrefix = index + 1 < candidates.size() ? candidates.get(index + 1).getKey() : null;
+            if (nextPrefix == null || !nextPrefix.startsWith(current.getKey())) {
+                longestPrefixes.put(current.getKey(), current.getValue());
+            }
+        }
+        return longestPrefixes.entrySet().stream()
                 .sorted(Comparator.<Map.Entry<String, Long>>comparingInt(entry -> entry.getKey().length())
                         .reversed()
                         .thenComparing(Map.Entry::getKey))
-                .forEach(entry -> {
-                    boolean hasContainingPrefix = selected.keySet().stream()
-                            .anyMatch(selectedPrefix -> selectedPrefix.startsWith(entry.getKey())
-                                    || entry.getKey().startsWith(selectedPrefix));
-                    if (!hasContainingPrefix) {
-                        selected.put(entry.getKey(), entry.getValue());
-                    }
-                });
-        return selected;
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                        (left, right) -> left, LinkedHashMap::new));
     }
 
     private static String resolvePrefixDelimiters() {
@@ -380,7 +361,7 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      * <p>这里使用 updateDocuments 而不是简单追加，保证同名数据源/库/前缀的文档会被更新。
      */
     private void flushPrefixes(LuceneIndexManager<RedisKeyPrefix> luceneMgr, Long dataSourceId, String databaseName,
-                                Map<String, Long> prefixCountMap, Map<String, Set<String>> prefixTypeMap) {
+                               Map<String, Long> prefixCountMap) {
         if (prefixCountMap.isEmpty()) {
             log.info("Skip flushing redis key prefixes because prefixCountMap is empty, dataSourceId={}, "
                             + "databaseName={}",
@@ -400,7 +381,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
                         .databaseName(databaseName)
                         .name(entry.getKey())
                         .keyCount(entry.getValue())
-                        .sampleTypes(joinSampleTypes(prefixTypeMap.get(entry.getKey())))
                         .build())
                 .toList();
         luceneMgr.updateDocuments(prefixes, null, true);
@@ -418,13 +398,6 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
      */
     private String buildStatusKey(Long dataSourceId, String databaseName) {
         return dataSourceId + ":" + StringUtils.defaultString(databaseName);
-    }
-
-    private String joinSampleTypes(Set<String> types) {
-        if (types == null || types.isEmpty()) {
-            return null;
-        }
-        return String.join(",", types.stream().sorted().toList());
     }
 
     private void updateRedisSnapshots(Long dataSourceId, String databaseName, Long keyCount, Long prefixCount,

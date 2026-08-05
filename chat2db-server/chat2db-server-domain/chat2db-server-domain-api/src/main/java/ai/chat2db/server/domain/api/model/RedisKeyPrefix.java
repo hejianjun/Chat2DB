@@ -75,10 +75,7 @@ public class RedisKeyPrefix implements IndexModel {
     @LuceneField(name = "keyCount", type = LuceneFieldType.LONG, sort = true, inherit = true)
     private Long keyCount;
 
-    /**
-     * 本次前缀缓存刷新中发现的 Redis 类型，使用逗号分隔以便存入 Lucene 索引。
-     */
-    @LuceneField(name = "sampleTypes", type = LuceneFieldType.STRING, inherit = true)
+    /** 从已持久化的懒加载样例缓存中汇总，逗号分隔；不写入前缀索引。 */
     private String sampleTypes;
 
     /**

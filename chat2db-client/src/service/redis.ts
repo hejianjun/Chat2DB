@@ -75,6 +75,7 @@ export interface IRedisKeyPrefixSampleParams {
   dataSourceId: number;
   databaseName?: string;
   prefix: string;
+  refresh?: boolean;
 }
 
 export interface IRedisKeyQueryParams {

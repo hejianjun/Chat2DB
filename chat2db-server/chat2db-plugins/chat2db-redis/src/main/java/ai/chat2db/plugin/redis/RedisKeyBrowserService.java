@@ -145,11 +145,21 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     @Override
     public CompletableFuture<RedisKeyScanResult> streamPrefixKeys(String databaseName,
                                                                     Consumer<List<RedisKeyInfo>> batchConsumer) {
-        return withConnection(databaseName, commands -> scanAsync(commands,
-                new ScanRequest(null, "0", Long.MAX_VALUE),
-                keys -> CompletableFuture.completedFuture(keys.stream()
-                        .map(key -> RedisKeyInfo.builder().name(key).build()).toList()),
-                batchConsumer, progress -> false));
+        return withConnection(databaseName, commands -> commands.dbsize().toCompletableFuture()
+                .thenCompose(initialDbSize -> {
+                    log.info("Start Redis prefix key scan, databaseName={}, initialDbSize={}",
+                            databaseName, initialDbSize);
+                    return scanAsync(commands, new ScanRequest(null, "0", Long.MAX_VALUE),
+                            keys -> CompletableFuture.completedFuture(keys.stream()
+                                    .map(key -> RedisKeyInfo.builder().name(key).build()).toList()),
+                            batchConsumer, progress -> false)
+                            .thenCompose(result -> commands.dbsize().toCompletableFuture().thenApply(finalDbSize -> {
+                                log.info("Finished Redis prefix key scan, databaseName={}, initialDbSize={}, "
+                                                + "finalDbSize={}, returnedTotal={}",
+                                        databaseName, initialDbSize, finalDbSize, result.getTotal());
+                                return result;
+                            }));
+                }));
     }
 
     @Override
@@ -187,6 +197,16 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                     long nextEmitted = emitted + keys.size();
                     ScanCursor nextCursor = ScanCursor.of(result.getCursor());
                     nextCursor.setFinished(result.isFinished());
+                    if (isFullPrefixScan(request)) {
+                        log.debug("Redis prefix SCAN cursor, currentCursor={}, nextCursor={}, countHint={}, returned={}, "
+                                        + "returnedTotal={}, finished={}",
+                                cursor.getCursor(), nextCursor.getCursor(), scanCount, keys.size(), nextEmitted,
+                                nextCursor.isFinished());
+                        if (!nextCursor.isFinished() && StringUtils.equals(cursor.getCursor(), nextCursor.getCursor())) {
+                            log.warn("Redis prefix SCAN cursor did not advance, cursor={}, returnedTotal={}",
+                                    nextCursor.getCursor(), nextEmitted);
+                        }
+                    }
                     return resolver.apply(keys).thenCompose(batch -> {
                         if (!batch.isEmpty()) {
                             batchConsumer.accept(batch);
@@ -199,6 +219,10 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
                                 nextScanCount(scanCount, keys.isEmpty()), resolver, batchConsumer, stopCondition);
                     });
                 });
+    }
+
+    private boolean isFullPrefixScan(ScanRequest request) {
+        return request.pattern() == null && request.limit() == Long.MAX_VALUE;
     }
 
     private CompletableFuture<List<RedisKeyInfo>> buildTypeInfoBatch(RedisAsyncCommands<String, String> commands,

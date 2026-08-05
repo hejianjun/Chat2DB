@@ -42,6 +42,22 @@ class RedisKeyPrefixServiceImplTest {
     }
 
     @Test
+    void selectLongestPrefixesShouldKeepAllMaximalSiblingPrefixes() {
+        Map<String, Long> prefixes = RedisKeyPrefixServiceImpl.selectLongestPrefixes(Map.of(
+                "user:", 10L,
+                "user:profile:", 4L,
+                "user:profile:detail:", 2L,
+                "user:session:", 3L,
+                "order:", 1L
+        ));
+
+        Assertions.assertEquals(Map.of(
+                "user:profile:detail:", 2L,
+                "user:session:", 3L
+        ), prefixes);
+    }
+
+    @Test
     void prefixSearchShouldNormalizeWildcardAndMatchOnlyLeadingPrefix() {
         String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("vehicle:basicinfo:*");
 

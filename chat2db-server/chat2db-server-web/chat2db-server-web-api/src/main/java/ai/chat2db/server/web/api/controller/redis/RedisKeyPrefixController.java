@@ -1,11 +1,14 @@
 package ai.chat2db.server.web.api.controller.redis;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import ai.chat2db.server.domain.api.model.RedisKeyPrefix;
 import ai.chat2db.server.domain.api.model.RedisKeyPrefixBuildStatus;
 import ai.chat2db.server.domain.api.param.RedisKeyPrefixQueryParam;
 import ai.chat2db.server.domain.api.service.RedisKeyPrefixService;
+import ai.chat2db.server.domain.core.cache.RedisKeyPrefixSampleCache;
 import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
@@ -40,6 +43,9 @@ public class RedisKeyPrefixController {
     @Autowired
     private RedisKeyPrefixService redisKeyPrefixService;
 
+    @Autowired
+    private RedisKeyPrefixSampleCache sampleCache;
+
     @GetMapping("/search")
     public ListResult<RedisKeyPrefix> search(@Valid KeyPrefixQueryRequest request) {
         if (request.isRefresh()) {
@@ -56,6 +62,9 @@ public class RedisKeyPrefixController {
                 .sortOrder(request.getSortOrder())
                 .build();
         List<RedisKeyPrefix> list = redisKeyPrefixService.search(param);
+        Map<String, String> sampleTypes = sampleCache.findSampleTypes(request.getDataSourceId(),
+                request.getDatabaseName(), list.stream().map(RedisKeyPrefix::getName).collect(Collectors.toSet()));
+        list.forEach(prefix -> prefix.setSampleTypes(sampleTypes.get(prefix.getName())));
         return ListResult.of(list);
     }
 
@@ -65,13 +74,16 @@ public class RedisKeyPrefixController {
         if (!(metaData instanceof RedisKeyBrowser browser)) {
             throw new BusinessException("当前数据源不是 Redis");
         }
-        List<KeyVO> samples = browser.sampleKeys(request.getDatabaseName(), request.getPrefix(), PREFIX_SAMPLE_LIMIT)
-                .join().stream().map(this::toKeyVO).toList();
+        List<KeyVO> samples = sampleCache.get(request.getDataSourceId(), request.getDatabaseName(),
+                request.getPrefix(), request.isRefresh(),
+                () -> browser.sampleKeys(request.getDatabaseName(), request.getPrefix(), PREFIX_SAMPLE_LIMIT)
+                        .join()).stream().map(this::toKeyVO).toList();
         return ListResult.of(samples);
     }
 
     @PostMapping("/refresh")
     public DataResult<String> refresh(@Valid @RequestBody DataSourceBaseRequest request) {
+        sampleCache.invalidateDatabase(request.getDataSourceId(), request.getDatabaseName());
         String statusKey = redisKeyPrefixService.refresh(request.getDataSourceId(), request.getDatabaseName(),
                 Chat2DBContext.getConnectInfo());
         return DataResult.of(statusKey);
