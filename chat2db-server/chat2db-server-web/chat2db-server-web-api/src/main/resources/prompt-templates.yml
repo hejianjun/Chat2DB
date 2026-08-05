@@ -36,13 +36,13 @@ prompts:
     name: "sql_explain"
     description: "解释SQL"
     template: |
-      ### 请根据以下 table properties 和 SQL input{description}. {ext}
+      ### 请根据以下 {database_object} properties 和 {query_language} input，{description}. {ext}
       #
-      ### {db_type} SQL tables, with their properties:
+      ### {db_type} {database_objects}, with their properties:
       #
       # {schema}
       #
-      ### SQL Execution Plan (EXPLAIN):
+      ### {query_language} Execution Plan (EXPLAIN):
       # {explain_plan}
       #
 
@@ -51,13 +51,13 @@ prompts:
     name: "sql_optimizer"
     description: "提供优化建议"
     template: |
-      ### 请根据以下 table properties 和 SQL input{description}. {ext}
+      ### 请根据以下 {database_object} properties 和 {query_language} input，{description}. {ext}
       #
-      ### {db_type} SQL tables, with their properties:
+      ### {db_type} {database_objects}, with their properties:
       #
       # {schema}
       #
-      ### SQL Execution Plan (EXPLAIN):
+      ### {query_language} Execution Plan (EXPLAIN):
       # {explain_plan}
       #
 

@@ -145,14 +145,16 @@ public class PromptBuilderImpl implements PromptBuilder {
 
     private String fillTemplate(PromptTemplate template, PromptContext context) {
         String templateStr = template.getTemplate();
-        String description = context.getPromptType() != null
-                ? context.getPromptType().getDescription()
-                : "将自然语言转换成 SQL 查询";
+        boolean mongoDataSource = isMongoDataSource(context);
+        String description = resolveDescription(context, mongoDataSource);
 
         String filledTemplate = templateStr
                 .replace("{description}", description)
                 .replace("{ext}", Objects.toString(context.getExt(), ""))
                 .replace("{db_type}", Objects.toString(context.getDataSourceType(), "MYSQL"))
+                .replace("{query_language}", mongoDataSource ? "MQL" : "SQL")
+                .replace("{database_object}", mongoDataSource ? "collection" : "table")
+                .replace("{database_objects}", mongoDataSource ? "collections" : "tables")
                 .replace("{schema}", Objects.toString(context.getSchemaDdl(), ""))
                 .replace("{redis_key_prefixes}", Objects.toString(context.getRedisKeyPrefixContext(), "暂无"))
                 .replace("{explain_plan}", Objects.toString(context.getExplainPlan(), ""))
@@ -184,6 +186,17 @@ public class PromptBuilderImpl implements PromptBuilder {
         }
 
         return filledTemplate;
+    }
+
+    private String resolveDescription(PromptContext context, boolean mongoDataSource) {
+        PromptType promptType = context.getPromptType();
+        if (mongoDataSource && PromptType.SQL_EXPLAIN == promptType) {
+            return "解释MQL";
+        }
+        if (mongoDataSource && PromptType.SQL_OPTIMIZER == promptType) {
+            return "提供MQL优化建议";
+        }
+        return promptType == null ? "将自然语言转换成 SQL 查询" : promptType.getDescription();
     }
 
     private boolean isRedisDataSource(PromptContext context) {

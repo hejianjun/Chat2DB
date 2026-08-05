@@ -83,6 +83,38 @@ class PromptBuilderImplTest {
     }
 
     @Test
+    void mongoExplainUsesMqlTerminology() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SQL_EXPLAIN)
+                .message("db.location_backfill_checkpoint.find({})")
+                .schemaDdl("[{\"collection\":\"location_backfill_checkpoint\"}]")
+                .explainPlan("{\"winningPlan\":{\"stage\":\"COLLSCAN\"}}")
+                .dataSourceType("MONGODB")
+                .build()).build();
+
+        assertTrue(prompt.contains("collection properties 和 MQL input，解释MQL"));
+        assertTrue(prompt.contains("### MONGODB collections, with their properties:"));
+        assertTrue(prompt.contains("### MQL Execution Plan (EXPLAIN):"));
+        assertFalse(prompt.contains("SQL input"));
+        assertFalse(prompt.contains("SQL tables"));
+    }
+
+    @Test
+    void relationalExplainKeepsSqlTerminology() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SQL_EXPLAIN)
+                .message("select * from orders")
+                .schemaDdl("CREATE TABLE orders(id bigint)")
+                .explainPlan("Table scan on orders")
+                .dataSourceType("MYSQL")
+                .build()).build();
+
+        assertTrue(prompt.contains("table properties 和 SQL input，解释SQL"));
+        assertTrue(prompt.contains("### MYSQL tables, with their properties:"));
+        assertTrue(prompt.contains("### SQL Execution Plan (EXPLAIN):"));
+    }
+
+    @Test
     void buildDataExpressionPromptIncludesEnumMockGuidance() {
         String prompt = promptBuilder.context(PromptContext.builder()
                 .promptType(PromptType.NL_2_DATA_EXPRESSION)
