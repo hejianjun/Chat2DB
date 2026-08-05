@@ -11,17 +11,18 @@
     }
   },
   "mcp": {
-    "browsermcp": {
-      "type": "local",
-      "command": ["npx","@browsermcp/mcp@latest"],
-      "enabled": true
-    },
-    "chat2db": {
-      "type": "remote",
-      "url": "http://localhost:10821/api/mcp",
-      "enabled": true,
-      "headers": {
-        "Authorization": "Bearer 3723402"
+    "servers": {
+      "browsermcp": {
+        "type": "local",
+        "command": ["npx", "@browsermcp/mcp@latest"]
+      },
+      "chat2db": {
+        "type": "remote",
+        "url": "http://localhost:10821/api/mcp",
+        "headers": {
+          "Authorization": "Bearer 3723402"
+        },
+        "oauth": false
       }
     }
   }

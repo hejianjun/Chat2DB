@@ -30,6 +30,7 @@ prompts:
       **输出要求**:
       1. 只输出一条完整 MQL，不要输出 Markdown、代码块、解释或其他文本。
       2. 只能使用 schema 中存在的集合和字段；schema 来源为 sampledDocuments 时，它是采样推断结果而非强制 validator。
+      3. 使用 db.getCollection("collectionName") 形式引用集合，不要输出 SQL。
 
   # SQL 解释
   sql_explain:
