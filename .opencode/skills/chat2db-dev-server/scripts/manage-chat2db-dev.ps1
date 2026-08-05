@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 $logDir = Join-Path $Workspace "logs"
 $frontendLog = Join-Path $logDir "frontend.log"
 $backendLog = Join-Path $logDir "backend.log"
-$frontendPort = 8200
+$frontendPort = 8000
 $backendPort = 10821
 
 function Ensure-LogDir {
