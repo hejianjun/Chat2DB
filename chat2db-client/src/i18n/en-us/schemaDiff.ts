@@ -26,6 +26,9 @@ export default {
   'schemaDiff.foreignKeys': 'Foreign Keys',
   'schemaDiff.noChanges': 'No differences found',
   'schemaDiff.table': 'Table',
+  'schemaDiff.all': 'All',
+  'schemaDiff.selectedCount': '{1} selected',
+  'schemaDiff.selectOnlyGroup': 'Only this group',
   'schemaDiff.diffType': 'Change Type',
   'schemaDiff.added': 'Added',
   'schemaDiff.removed': 'Removed',
@@ -37,7 +40,8 @@ export default {
   'schemaDiff.migrate': 'Execute Migration',
   'schemaDiff.migrating': 'Executing...',
   'schemaDiff.migrateConfirm': 'Execute {count} DDL statements?',
-  'schemaDiff.migrateConfirmMessage': '{count} statements will be executed against the target database. This action cannot be undone.',
+  'schemaDiff.migrateConfirmMessage':
+    '{count} statements will be executed against the target database. This action cannot be undone.',
   'schemaDiff.migrateResult': 'Migration Result',
   'schemaDiff.migrateSuccess': 'Migration Successful',
   'schemaDiff.migrateFail': 'Migration Failed',
@@ -71,4 +75,4 @@ export default {
   'schemaDiff.referencedColumn': 'Referenced Column',
   'schemaDiff.loadDatabaseFail': 'Failed to load databases',
   'schemaDiff.loadSchemaFail': 'Failed to load schemas',
-}
+};

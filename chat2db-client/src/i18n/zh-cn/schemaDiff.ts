@@ -26,6 +26,9 @@ export default {
   'schemaDiff.foreignKeys': '外键',
   'schemaDiff.noChanges': '未发现差异',
   'schemaDiff.table': '表',
+  'schemaDiff.all': '全部',
+  'schemaDiff.selectedCount': '已选 {1}',
+  'schemaDiff.selectOnlyGroup': '仅选本组',
   'schemaDiff.diffType': '变更类型',
   'schemaDiff.added': '新增',
   'schemaDiff.removed': '删除',
@@ -71,4 +74,4 @@ export default {
   'schemaDiff.referencedColumn': '引用列',
   'schemaDiff.loadDatabaseFail': '加载数据库失败',
   'schemaDiff.loadSchemaFail': '加载模式失败',
-}
+};
