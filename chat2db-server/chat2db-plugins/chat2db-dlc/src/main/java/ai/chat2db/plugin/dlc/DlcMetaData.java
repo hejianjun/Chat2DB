@@ -2,6 +2,7 @@ package ai.chat2db.plugin.dlc;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -110,20 +111,40 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
 
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 List<Table> tables = new ArrayList<>();
+                ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+                int tableNameIndex = findColumnIndex(resultSetMetaData,
+                        "tableName", "tbl_name", "table_name", "tab_name");
+                int namespaceIndex = findColumnIndex(resultSetMetaData,
+                        "namespace", "database_name", "db_name");
+                int commentIndex = findColumnIndex(resultSetMetaData, "comment", "table_comment");
+                if (tableNameIndex < 1) {
+                    tableNameIndex = 1;
+                }
                 while (resultSet.next()) {
-                    String namespace = resultSet.getString("namespace");
-                    String name = resultSet.getString("tableName");
+                    String namespace = namespaceIndex > 0 ? resultSet.getString(namespaceIndex) : null;
+                    String name = resultSet.getString(tableNameIndex);
+                    if (StringUtils.isBlank(name)) {
+                        continue;
+                    }
                     Table table = Table.builder()
                             .name(name)
                             .databaseName(StringUtils.isNotBlank(namespace) ? namespace : databaseName)
                             .schemaName(schemaName)
                             .type("TABLE")
                             .build();
+                    if (commentIndex > 0) {
+                        String comment = resultSet.getString(commentIndex);
+                        if (StringUtils.isNotBlank(comment) && !"NULL".equalsIgnoreCase(comment)) {
+                            table.setComment(comment);
+                        }
+                    }
                     tables.add(table);
                 }
                 return tables;
             });
         } catch (Exception e) {
+            log.warn("DLC query tables failed, databaseName:{}, schemaName:{}, tableName:{}",
+                    databaseName, schemaName, tableName, e);
             return Collections.emptyList();
         }
     }
@@ -158,12 +179,12 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
             return Collections.emptyList();
         }
         try {
-            String sql = "DESCRIBE TABLE " + tableName;
+            String sql = "DESCRIBE " + tableName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 List<TableColumn> columns = new ArrayList<>();
                 int ordinalPosition = 1;
-                while (resultSet.next()) {
-                    String colName = resultSet.getString("col_name");
+                for (DlcDescribeRow row : readDescribeRows(resultSet)) {
+                    String colName = row.colName();
                     if (isDescribeMetadataSection(colName)) {
                         break;
                     }
@@ -171,11 +192,11 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
                             || "---".equals(colName) || "data_type".equals(colName)) {
                         continue;
                     }
-                    String dataType = resultSet.getString("data_type");
+                    String dataType = row.dataType();
                     if (StringUtils.isBlank(dataType)) {
                         continue;
                     }
-                    String comment = resultSet.getString("comment");
+                    String comment = row.comment();
 
                     TableColumn column = new TableColumn();
                     column.setName(colName);
@@ -194,6 +215,8 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
                 return columns;
             });
         } catch (Exception e) {
+            log.warn("DLC query columns failed, databaseName:{}, schemaName:{}, tableName:{}",
+                    databaseName, schemaName, tableName, e);
             return Collections.emptyList();
         }
     }
@@ -219,14 +242,103 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
                 && !"# col_name".equals(colName);
     }
 
+    private List<DlcDescribeRow> readDescribeRows(ResultSet resultSet) throws SQLException {
+        ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+        int colNameIndex = findColumnIndex(resultSetMetaData, "col_name", "column_name");
+        int dataTypeIndex = findColumnIndex(resultSetMetaData, "data_type", "column_type", "type");
+        int commentIndex = findColumnIndex(resultSetMetaData, "comment", "column_comment");
+        List<DlcDescribeRow> rows = new ArrayList<>();
+
+        if (colNameIndex > 0 && dataTypeIndex > 0) {
+            while (resultSet.next()) {
+                rows.add(new DlcDescribeRow(
+                        StringUtils.trimToNull(resultSet.getString(colNameIndex)),
+                        StringUtils.trimToNull(resultSet.getString(dataTypeIndex)),
+                        commentIndex > 0 ? StringUtils.trimToNull(resultSet.getString(commentIndex)) : null
+                ));
+            }
+            return rows;
+        }
+
+        int resultIndex = findColumnIndex(resultSetMetaData, "result");
+        if (resultIndex < 1) {
+            throw new SQLException("Unsupported DLC DESCRIBE result columns: "
+                    + getResultColumnNames(resultSetMetaData));
+        }
+        while (resultSet.next()) {
+            addDescribeTextRows(rows, resultSet.getString(resultIndex));
+        }
+        return rows;
+    }
+
+    private void addDescribeTextRows(List<DlcDescribeRow> rows, String describeText) {
+        if (StringUtils.isBlank(describeText)) {
+            return;
+        }
+        String normalizedText = describeText.replace("\r\n", "\n").replace('\r', '\n');
+        for (String line : normalizedText.split("\n")) {
+            String trimmedLine = StringUtils.trimToEmpty(line);
+            if (StringUtils.isBlank(trimmedLine)) {
+                continue;
+            }
+
+            String[] values = line.split("\\t", -1);
+            if (values.length < 2) {
+                values = trimmedLine.split("\\s{2,}", 3);
+            }
+            if (values.length < 2) {
+                if (StringUtils.startsWith(trimmedLine, "#")) {
+                    rows.add(new DlcDescribeRow(trimmedLine, null, null));
+                }
+                continue;
+            }
+
+            String colName = StringUtils.trimToNull(values[0]);
+            if (StringUtils.isBlank(colName) || colName.matches("-+")) {
+                continue;
+            }
+            String dataType = StringUtils.trimToNull(values[1]);
+            String comment = values.length > 2 ? StringUtils.trimToNull(values[2]) : null;
+            rows.add(new DlcDescribeRow(colName, dataType, comment));
+        }
+    }
+
+    private int findColumnIndex(ResultSetMetaData resultSetMetaData, String... candidateNames) throws SQLException {
+        if (resultSetMetaData == null) {
+            return -1;
+        }
+        for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
+            String columnLabel = resultSetMetaData.getColumnLabel(i);
+            String columnName = resultSetMetaData.getColumnName(i);
+            for (String candidateName : candidateNames) {
+                if (StringUtils.equalsIgnoreCase(candidateName, columnLabel)
+                        || StringUtils.equalsIgnoreCase(candidateName, columnName)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private String getResultColumnNames(ResultSetMetaData resultSetMetaData) throws SQLException {
+        if (resultSetMetaData == null) {
+            return "[]";
+        }
+        List<String> columnNames = new ArrayList<>();
+        for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
+            columnNames.add(resultSetMetaData.getColumnLabel(i));
+        }
+        return columnNames.toString();
+    }
+
     private String queryPartition(Connection connection, String tableName) {
         try {
-            String sql = "DESCRIBE TABLE " + tableName;
+            String sql = "DESCRIBE " + tableName;
             return SQLExecutor.getInstance().execute(connection, sql, resultSet -> {
                 List<String> partitions = new ArrayList<>();
                 boolean partitionSection = false;
-                while (resultSet.next()) {
-                    String colName = resultSet.getString("col_name");
+                for (DlcDescribeRow row : readDescribeRows(resultSet)) {
+                    String colName = row.colName();
                     if (isDescribeMetadataSection(colName)) {
                         partitionSection = "# Partitioning".equalsIgnoreCase(colName);
                         continue;
@@ -234,7 +346,7 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
                     if (!partitionSection) {
                         continue;
                     }
-                    String dataType = resultSet.getString("data_type");
+                    String dataType = row.dataType();
                     if (StringUtils.isNotBlank(dataType)) {
                         partitions.add(dataType);
                     }
@@ -245,6 +357,9 @@ public class DlcMetaData extends DefaultMetaService implements MetaData {
             log.warn("DLC query partition failed, tableName:{}", tableName, e);
             return null;
         }
+    }
+
+    private record DlcDescribeRow(String colName, String dataType, String comment) {
     }
 
     @Override
