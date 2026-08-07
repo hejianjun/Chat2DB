@@ -139,6 +139,7 @@ export default {
   'workspace.tableRelation.rowConsistencySummary': '正确 {1} / 总行 {2}',
   'workspace.tableRelation.rowConsistencyDetail': '异常 {1} 行，占比 {2}%',
   'workspace.tableRelation.consistencyResult': '虚拟外键一致性',
+  'workspace.tableRelation.consistencyProgress': '正在校验关系 {1} / {2}',
   'workspace.tableRelation.consistencySummary': '关系正确 {1} / 关系总数 {2}，占比 {3}%',
   'workspace.tableRelation.consistencyRowSummary': '数据行正确 {1} / 参与校验总行 {2}，异常 {3} 行，占比 {4}%',
   'workspace.tips.affirmDeleteTable': '输入的表名与要删除的表名不一致，请再次确认',

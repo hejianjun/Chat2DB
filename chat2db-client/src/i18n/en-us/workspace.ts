@@ -143,6 +143,7 @@ export default {
   'workspace.tableRelation.rowConsistencySummary': 'Valid {1} / Total rows {2}',
   'workspace.tableRelation.rowConsistencyDetail': '{1} orphan row(s), {2}%',
   'workspace.tableRelation.consistencyResult': 'Virtual FK Consistency',
+  'workspace.tableRelation.consistencyProgress': 'Validating relations {1} / {2}',
   'workspace.tableRelation.consistencySummary': 'Valid relations {1} / Total relations {2}, {3}%',
   'workspace.tableRelation.consistencyRowSummary': 'Valid rows {1} / Checked rows {2}, {3} orphan row(s), {4}%',
   'workspace.tips.affirmDeleteTable':

@@ -10,8 +10,10 @@ import {
   ITable,
   IUniversalTableParams,
 } from '@/typings';
-import { ISchemaCompareParams, ISchemaDiffResult, ISchemaMigrateParams, IMigrateResult } from '@/typings/schemaDiff';
 import { ExportSizeEnum, ExportTypeEnum } from '@/typings/resultTable';
+import { ISchemaCompareParams, ISchemaDiffResult, ISchemaMigrateParams, IMigrateResult } from '@/typings/schemaDiff';
+import { createSSEConnection } from '@/utils/sse';
+import { formatParams } from '@/utils/url';
 import createRequest from './base';
 
 export interface ITreeSearchParams extends IPageParams {
@@ -569,6 +571,20 @@ export interface IVirtualFKConsistencyResult {
   items: IVirtualFKConsistencyItem[];
 }
 
+export interface IVirtualFKConsistencyStreamProgress {
+  processed: number;
+  validCount: number;
+  total: number;
+  item: IVirtualFKConsistencyItem;
+}
+
+export interface IVirtualFKConsistencyStreamOptions {
+  onStart: (total: number) => void;
+  onItem: (progress: IVirtualFKConsistencyStreamProgress) => void;
+  onDone: (result: IVirtualFKConsistencyResult) => void;
+  onError: (message: string) => void;
+}
+
 /** 外键同步结果 */
 export interface ISyncResult {
   added: number;
@@ -680,6 +696,124 @@ const validateVirtualForeignKeys = createRequest<IVirtualFKValidateParams, IVirt
   '/api/rdb/fk/virtual/validate',
   { method: 'post' },
 );
+
+const validateVirtualForeignKeysStream = (
+  params: IVirtualFKValidateParams,
+  options: IVirtualFKConsistencyStreamOptions,
+): (() => void) => {
+  const streamId = `virtual-fk-validation-${Date.now()}`;
+  const startedAt = Date.now();
+  const logPrefix = `[VirtualFKValidation][${streamId}]`;
+  const elapsed = () => Date.now() - startedAt;
+  console.info(`${logPrefix} create stream`, {
+    dataSourceId: params.dataSourceId,
+    databaseName: params.databaseName,
+    schemaName: params.schemaName,
+    tableName: params.tableName,
+    relation: params.relation,
+    requestedIdCount: params.ids?.length || 0,
+  });
+  const url = `/api/rdb/fk/virtual/validate/stream?${formatParams(params)}`;
+  const eventSource = createSSEConnection({
+    url,
+    uid: streamId,
+  });
+  let stopped = false;
+
+  const stop = () => {
+    console.info(`${logPrefix} close stream`, { elapsedMs: elapsed(), stopped });
+    stopped = true;
+    eventSource.close();
+  };
+
+  const parseEventData = <T>(event: any): T | undefined => {
+    try {
+      return event.data ? (JSON.parse(event.data) as T) : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const reportError = (message: string) => {
+    console.error(`${logPrefix} validation error`, { message, elapsedMs: elapsed() });
+    options.onError(message);
+  };
+
+  eventSource.addEventListener('open', () => {
+    console.info(`${logPrefix} EventSource opened`, { elapsedMs: elapsed() });
+  });
+
+  eventSource.addEventListener('start', (event: any) => {
+    const data = parseEventData<{ total?: number }>(event);
+    if (!data) {
+      console.warn(`${logPrefix} invalid start event`, { rawData: event.data, elapsedMs: elapsed() });
+      reportError('虚拟外键校验进度解析失败');
+      stop();
+      return;
+    }
+    console.info(`${logPrefix} received start event`, { total: data.total || 0, elapsedMs: elapsed() });
+    options.onStart(data.total || 0);
+  });
+
+  eventSource.addEventListener('item', (event: any) => {
+    const data = parseEventData<IVirtualFKConsistencyStreamProgress>(event);
+    if (!data || !data.item) {
+      console.warn(`${logPrefix} invalid item event`, { rawData: event.data, elapsedMs: elapsed() });
+      reportError('虚拟外键校验结果解析失败');
+      stop();
+      return;
+    }
+    console.info(`${logPrefix} received item event`, {
+      processed: data.processed,
+      total: data.total,
+      validCount: data.validCount,
+      id: data.item.id,
+      valid: data.item.valid,
+      elapsedMs: elapsed(),
+    });
+    options.onItem(data);
+  });
+
+  eventSource.addEventListener('done', (event: any) => {
+    const data = parseEventData<IVirtualFKConsistencyResult>(event);
+    if (!data) {
+      console.warn(`${logPrefix} invalid done event`, { rawData: event.data, elapsedMs: elapsed() });
+      reportError('虚拟外键校验汇总解析失败');
+      stop();
+      return;
+    }
+    console.info(`${logPrefix} received done event`, {
+      total: data.total,
+      validCount: data.validCount,
+      itemCount: data.items?.length || 0,
+      elapsedMs: elapsed(),
+    });
+    stopped = true;
+    options.onDone(data);
+    eventSource.close();
+  });
+
+  eventSource.addEventListener('validation_error', (event: any) => {
+    const data = parseEventData<{ message?: string }>(event);
+    console.error(`${logPrefix} received validation_error event`, {
+      message: data?.message,
+      elapsedMs: elapsed(),
+    });
+    reportError(data?.message || '虚拟外键校验失败');
+    stop();
+  });
+
+  eventSource.addEventListener('error', (event: any) => {
+    if (stopped) {
+      return;
+    }
+    console.error(`${logPrefix} EventSource error`, { event, elapsedMs: elapsed() });
+    reportError('虚拟外键校验连接已断开');
+    stop();
+  });
+
+  return stop;
+};
 const getForeignKeyList = createRequest<IForeignKeyListParams, IForeignKeyVO[]>('/api/rdb/fk/list', { method: 'get' });
 const createVirtualForeignKey = createRequest<ICreateVirtualFKParams, IForeignKey>('/api/rdb/fk/virtual/create', {
   method: 'post',
@@ -789,6 +923,7 @@ export default {
   updateVirtualForeignKey,
   syncForeignKeys,
   validateVirtualForeignKeys,
+  validateVirtualForeignKeysStream,
   batchOptimizeTables,
   batchAnalyzeTables,
   compareSchema,

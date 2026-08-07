@@ -44,12 +44,23 @@ public interface ForeignKeySyncService {
                                                                   String schemaName, String tableName,
                                                                   ForeignKeyRelation relation, List<Long> ids);
 
+    VirtualForeignKeyConsistencyResult validateVirtualForeignKeys(Long dataSourceId, String databaseName,
+                                                                  String schemaName, String tableName,
+                                                                  ForeignKeyRelation relation, List<Long> ids,
+                                                                  VirtualForeignKeyConsistencyListener listener);
+
     int cleanInvalidVirtualForeignKeys(Long dataSourceId, String databaseName, String schemaName, List<String> existingTableNames);
 
     enum ForeignKeyRelation {
         SOURCE,
         REFERENCED,
         ANY
+    }
+
+    interface VirtualForeignKeyConsistencyListener {
+        void onStart(int total);
+
+        void onItem(int processed, int validCount, VirtualForeignKeyConsistencyItem item);
     }
 
     class SyncResult {

@@ -11,7 +11,7 @@ import sqlService, {
 import { ITreeNode } from '@/typings';
 import { DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
 import { Button, Form, Input, message, Modal, Progress, Select, Space, Table, Tag, Upload } from 'antd';
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './index.less';
 
 interface IProps {
@@ -37,6 +37,26 @@ interface IVirtualFkImportItem {
 
 const buildVirtualFkKey = (item: IVirtualFkImportItem) =>
   [item.tableName, item.columnName].map((value) => `${value || ''}`.trim().toLowerCase()).join('\u0001');
+
+const buildPartialConsistencyResult = (
+  total: number,
+  validCount: number,
+  items: IVirtualFKConsistencyResult['items'],
+): IVirtualFKConsistencyResult => {
+  const rowTotalCount = items.reduce((sum, item) => sum + item.totalCount, 0);
+  const rowValidCount = items.reduce((sum, item) => sum + item.validCount, 0);
+  const rowOrphanCount = items.reduce((sum, item) => sum + item.orphanCount, 0);
+  return {
+    total,
+    validCount,
+    percentage: total === 0 ? 0 : (validCount * 100) / total,
+    rowTotalCount,
+    rowValidCount,
+    rowOrphanCount,
+    rowPercentage: rowTotalCount === 0 ? 0 : (rowValidCount * 100) / rowTotalCount,
+    items,
+  };
+};
 
 const getImportErrorText = (item: IImportVirtualFKInvalidItem, errorType: ImportVirtualFKErrorType) => {
   switch (errorType) {
@@ -74,12 +94,21 @@ const TableRelationModal = memo((props: IProps) => {
   const [deletingAllVirtual, setDeletingAllVirtual] = useState(false);
   const [validating, setValidating] = useState(false);
   const [consistencyResult, setConsistencyResult] = useState<IVirtualFKConsistencyResult | null>(null);
+  const [validationProgress, setValidationProgress] = useState<{ processed: number; total: number } | null>(null);
+  const validationStreamRef = useRef<(() => void) | null>(null);
+  const validationRunRef = useRef(0);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState<IForeignKeyVO | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [foreignKeys, setForeignKeys] = useState<IForeignKeyVO[]>([]);
   const [tables, setTables] = useState<Array<{ name: string; comment?: string }>>([]);
   const [fieldMap, setFieldMap] = useState<Record<string, Array<{ name: string }>>>({});
+
+  const stopValidationStream = useCallback(() => {
+    validationRunRef.current += 1;
+    validationStreamRef.current?.();
+    validationStreamRef.current = null;
+  }, []);
 
   const sortedForeignKeys = useMemo(() => {
     if (!foreignKeys.length) return [];
@@ -152,6 +181,9 @@ const TableRelationModal = memo((props: IProps) => {
 
   const fetchForeignKeys = useCallback(async () => {
     if (!dataSourceId || !databaseName) return;
+    stopValidationStream();
+    setValidating(false);
+    setValidationProgress(null);
     setLoading(true);
     try {
       const list = await sqlService.getForeignKeyList({
@@ -169,7 +201,7 @@ const TableRelationModal = memo((props: IProps) => {
     } finally {
       setLoading(false);
     }
-  }, [dataSourceId, databaseName, schemaName, tableName, keyName]);
+  }, [dataSourceId, databaseName, schemaName, tableName, keyName, stopValidationStream]);
 
   const fetchTables = useCallback(async () => {
     if (!dataSourceId || !databaseName) return;
@@ -189,6 +221,8 @@ const TableRelationModal = memo((props: IProps) => {
     fetchForeignKeys();
     fetchTables();
   }, [fetchForeignKeys, fetchTables]);
+
+  useEffect(() => stopValidationStream, [stopValidationStream]);
 
   const handleSync = async () => {
     if (!dataSourceId || !databaseName) return;
@@ -273,28 +307,86 @@ const TableRelationModal = memo((props: IProps) => {
     });
   };
 
-  const handleValidateVirtualForeignKeys = async () => {
+  const handleValidateVirtualForeignKeys = () => {
     const ids = filteredVirtualForeignKeys.map((item) => item.id).filter(Boolean) as number[];
     if (!ids.length) {
       message.warning(i18n('workspace.tableRelation.noVirtualFk'));
       return;
     }
+    stopValidationStream();
+    const runId = validationRunRef.current;
+    const logPrefix = `[VirtualFKValidationUI][${runId}]`;
+    console.info(`${logPrefix} start validation`, {
+      dataSourceId,
+      databaseName,
+      schemaName,
+      tableName,
+      relation: tableName ? 'ANY' : 'SOURCE',
+      requestedIdCount: ids.length,
+    });
     setValidating(true);
-    try {
-      const result = await sqlService.validateVirtualForeignKeys({
-        dataSourceId: dataSourceId!,
-        databaseName,
-        schemaName,
-        tableName,
-        relation: tableName ? 'ANY' : 'SOURCE',
-        ids,
-      });
-      setConsistencyResult(result);
-      message.success(i18n('workspace.tableRelation.validateSuccess'));
-    } catch {
-      message.error(i18n('workspace.tableRelation.validateError'));
-    } finally {
+    setConsistencyResult(null);
+    setValidationProgress(null);
+    const handleValidationError = (errorMessage?: string) => {
+      if (validationRunRef.current !== runId) return;
+      console.error(`${logPrefix} validation failed`, { errorMessage });
+      validationStreamRef.current = null;
+      setValidationProgress(null);
       setValidating(false);
+      message.error(i18n('workspace.tableRelation.validateError'));
+    };
+    try {
+      validationStreamRef.current = sqlService.validateVirtualForeignKeysStream(
+        {
+          dataSourceId: dataSourceId!,
+          databaseName,
+          schemaName,
+          tableName,
+          relation: tableName ? 'ANY' : 'SOURCE',
+          ids,
+        },
+        {
+          onStart: (total) => {
+            if (validationRunRef.current !== runId) return;
+            console.info(`${logPrefix} onStart`, { total });
+            setValidationProgress({ processed: 0, total });
+            setConsistencyResult(buildPartialConsistencyResult(total, 0, []));
+          },
+          onItem: ({ processed, validCount, total, item }) => {
+            if (validationRunRef.current !== runId) return;
+            console.info(`${logPrefix} onItem`, {
+              processed,
+              validCount,
+              total,
+              id: item.id,
+              valid: item.valid,
+            });
+            setValidationProgress({ processed, total });
+            setConsistencyResult((previous) => {
+              const previousItems = previous?.items || [];
+              const items = [...previousItems.filter((previousItem) => previousItem.id !== item.id), item];
+              return buildPartialConsistencyResult(total, validCount, items);
+            });
+          },
+          onDone: (result) => {
+            if (validationRunRef.current !== runId) return;
+            console.info(`${logPrefix} onDone`, {
+              total: result.total,
+              validCount: result.validCount,
+              itemCount: result.items?.length || 0,
+            });
+            validationStreamRef.current = null;
+            setConsistencyResult(result);
+            setValidationProgress(null);
+            setValidating(false);
+            message.success(i18n('workspace.tableRelation.validateSuccess'));
+          },
+          onError: handleValidationError,
+        },
+      );
+    } catch (error) {
+      console.error(`${logPrefix} stream creation failed`, error);
+      handleValidationError();
     }
   };
 
@@ -687,12 +779,18 @@ const TableRelationModal = memo((props: IProps) => {
           <div>
             <div className={styles.consistencyTitle}>{i18n('workspace.tableRelation.consistencyResult')}</div>
             <div className={styles.consistencyMeta}>
-              {i18n(
-                'workspace.tableRelation.consistencySummary',
-                consistencyResult.validCount,
-                consistencyResult.total,
-                consistencyResult.percentage.toFixed(2),
-              )}
+              {validating && validationProgress
+                ? i18n(
+                    'workspace.tableRelation.consistencyProgress',
+                    validationProgress.processed,
+                    validationProgress.total,
+                  )
+                : i18n(
+                    'workspace.tableRelation.consistencySummary',
+                    consistencyResult.validCount,
+                    consistencyResult.total,
+                    consistencyResult.percentage.toFixed(2),
+                  )}
             </div>
             <div className={styles.consistencyMeta}>
               {i18n(
@@ -706,9 +804,21 @@ const TableRelationModal = memo((props: IProps) => {
           </div>
           <Progress
             className={styles.consistencyProgress}
-            percent={Number(consistencyResult.percentage.toFixed(2))}
+            percent={
+              validating && validationProgress
+                ? validationProgress.total === 0
+                  ? 0
+                  : Number(((validationProgress.processed * 100) / validationProgress.total).toFixed(2))
+                : Number(consistencyResult.percentage.toFixed(2))
+            }
             size="small"
-            status={consistencyResult.validCount === consistencyResult.total ? 'success' : 'exception'}
+            status={
+              validating
+                ? 'active'
+                : consistencyResult.validCount === consistencyResult.total
+                  ? 'success'
+                  : 'exception'
+            }
           />
         </div>
       ) : null}

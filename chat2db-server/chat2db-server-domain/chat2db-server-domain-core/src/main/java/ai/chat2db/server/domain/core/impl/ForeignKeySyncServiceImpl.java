@@ -574,32 +574,79 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                                                                          String schemaName, String tableName,
                                                                          ForeignKeyRelation relation,
                                                                          List<Long> ids) {
+        return validateVirtualForeignKeys(dataSourceId, databaseName, schemaName, tableName, relation, ids, null);
+    }
+
+    @Override
+    public VirtualForeignKeyConsistencyResult validateVirtualForeignKeys(Long dataSourceId, String databaseName,
+                                                                         String schemaName, String tableName,
+                                                                         ForeignKeyRelation relation,
+                                                                         List<Long> ids,
+                                                                         VirtualForeignKeyConsistencyListener listener) {
+        long validationStartedAt = System.nanoTime();
+        log.info("[VirtualFKConsistency] validation started, dataSourceId={}, databaseName={}, schemaName={}, tableName={}, relation={}, requestedIdCount={}",
+                dataSourceId, databaseName, schemaName, tableName, relation, ids == null ? 0 : ids.size());
+        long metadataQueryStartedAt = System.nanoTime();
+        log.info("[VirtualFKConsistency] virtual foreign key metadata query begin, dataSourceId={}, schemaName={}, tableName={}, relation={}",
+                dataSourceId, schemaName, tableName, relation);
         List<VirtualForeignKeyDO> virtualFKs = queryVirtualFKsFromH2(
                 dataSourceId,
                 databaseName,
                 schemaName,
                 tableName,
                 relation == null ? ForeignKeyRelation.SOURCE : relation);
+        log.info("[VirtualFKConsistency] virtual foreign key metadata query end, candidateCount={}, elapsedMs={}",
+                virtualFKs.size(), elapsedMillis(metadataQueryStartedAt));
         if (!CollectionUtils.isEmpty(ids)) {
             Set<Long> idSet = new HashSet<>(ids);
             virtualFKs = virtualFKs.stream()
                     .filter(item -> idSet.contains(item.getId()))
                     .collect(Collectors.toList());
+            log.info("[VirtualFKConsistency] id filter end, requestedIdCount={}, selectedCount={}", ids.size(), virtualFKs.size());
+        }
+        if (listener != null) {
+            long progressStartStartedAt = System.nanoTime();
+            log.info("[VirtualFKConsistency] progress start callback begin, total={}", virtualFKs.size());
+            listener.onStart(virtualFKs.size());
+            log.info("[VirtualFKConsistency] progress start callback end, total={}, elapsedMs={}",
+                    virtualFKs.size(), elapsedMillis(progressStartStartedAt));
         }
         if (CollectionUtils.isEmpty(virtualFKs)) {
+            log.info("[VirtualFKConsistency] validation completed with no items, elapsedMs={}", elapsedMillis(validationStartedAt));
             return new VirtualForeignKeyConsistencyResult(0, 0, Collections.emptyList());
         }
 
+        log.info("[VirtualFKConsistency] target database connection acquisition begin, total={}", virtualFKs.size());
         Connection connection = Chat2DBContext.getConnection();
+        log.info("[VirtualFKConsistency] target database connection acquisition end, total={}", virtualFKs.size());
         List<VirtualForeignKeyConsistencyItem> items = new ArrayList<>();
         int validCount = 0;
+        int total = virtualFKs.size();
         for (VirtualForeignKeyDO virtualFK : virtualFKs) {
+            int current = items.size() + 1;
+            long itemStartedAt = System.nanoTime();
+            log.info("[VirtualFKConsistency] item validation begin, item={}/{}, id={}, source={}.{}, target={}.{}",
+                    current, total, virtualFK.getId(), schemaName, virtualFK.getTableName(),
+                    schemaName, virtualFK.getReferencedTable());
             VirtualForeignKeyConsistencyItem item = validateVirtualForeignKey(connection, schemaName, virtualFK);
             if (item.isValid()) {
                 validCount++;
             }
             items.add(item);
+            log.info("[VirtualFKConsistency] item validation end, item={}/{}, id={}, valid={}, totalRows={}, validRows={}, orphanRows={}, elapsedMs={}",
+                    current, total, virtualFK.getId(), item.isValid(), item.getTotalCount(), item.getValidCount(),
+                    item.getOrphanCount(), elapsedMillis(itemStartedAt));
+            if (listener != null) {
+                long progressItemStartedAt = System.nanoTime();
+                log.info("[VirtualFKConsistency] progress item callback begin, item={}/{}, id={}, validCount={}",
+                        current, total, virtualFK.getId(), validCount);
+                listener.onItem(items.size(), validCount, item);
+                log.info("[VirtualFKConsistency] progress item callback end, item={}/{}, id={}, elapsedMs={}",
+                        current, total, virtualFK.getId(), elapsedMillis(progressItemStartedAt));
+            }
         }
+        log.info("[VirtualFKConsistency] validation completed, total={}, validCount={}, elapsedMs={}",
+                total, validCount, elapsedMillis(validationStartedAt));
         return new VirtualForeignKeyConsistencyResult(virtualFKs.size(), validCount, items);
     }
 
@@ -771,6 +818,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
             VirtualForeignKeyConsistencyStats stats = countVirtualForeignKeyConsistencyStats(
                     connection,
                     schemaName,
+                    virtualFK.getId(),
                     virtualFK.getTableName(),
                     virtualFK.getColumnName(),
                     virtualFK.getReferencedTable(),
@@ -784,6 +832,7 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
 
     private VirtualForeignKeyConsistencyStats countVirtualForeignKeyConsistencyStats(Connection connection,
                                                                                      String schemaName,
+                                                                                     Long virtualForeignKeyId,
                                                                                      String tableName,
                                                                                      String columnName,
                                                                                      String referencedTable,
@@ -797,14 +846,29 @@ public class ForeignKeySyncServiceImpl implements ForeignKeySyncService {
                 + "SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM " + targetTable + " p WHERE p." + targetColumn
                 + " = c." + sourceColumn + ") THEN 1 ELSE 0 END) "
                 + "FROM " + sourceTable + " c WHERE c." + sourceColumn + " IS NOT NULL";
+        long queryStartedAt = System.nanoTime();
+        log.info("[VirtualFKConsistency] row consistency query begin, id={}, source={}.{}, target={}.{}, sql={}",
+                virtualForeignKeyId, schemaName, tableName, schemaName, referencedTable, sql);
         try (Statement statement = connection.createStatement(); ResultSet resultSet = statement.executeQuery(sql)) {
             if (resultSet.next()) {
                 long totalCount = resultSet.getLong(1);
                 long orphanCount = resultSet.getLong(2);
+                log.info("[VirtualFKConsistency] row consistency query end, id={}, totalRows={}, orphanRows={}, elapsedMs={}",
+                        virtualForeignKeyId, totalCount, orphanCount, elapsedMillis(queryStartedAt));
                 return new VirtualForeignKeyConsistencyStats(totalCount, totalCount - orphanCount, orphanCount);
             }
+            log.warn("[VirtualFKConsistency] row consistency query returned no row, id={}, elapsedMs={}",
+                    virtualForeignKeyId, elapsedMillis(queryStartedAt));
             return VirtualForeignKeyConsistencyStats.empty();
+        } catch (Exception e) {
+            log.error("[VirtualFKConsistency] row consistency query failed, id={}, elapsedMs={}, sql={}",
+                    virtualForeignKeyId, elapsedMillis(queryStartedAt), sql, e);
+            throw e;
         }
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
     private String qualifyTableName(String schemaName, String tableName) {
