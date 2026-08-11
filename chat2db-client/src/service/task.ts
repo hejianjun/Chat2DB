@@ -31,6 +31,7 @@ interface ISubscribeTaskParams {
 export interface IExportResultDataParams {
   sql: string;
   originalSql: string;
+  exportFileName?: string;
   exportType: string;
   exportSize: string;
   dataSourceId?: number;

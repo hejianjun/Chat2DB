@@ -285,6 +285,7 @@ export interface IExportParams extends IExecuteSqlParams {
   sql: string;
   originalSql: string;
   operationLogId?: number;
+  exportFileName?: string;
   exportType: ExportTypeEnum;
   exportSize: ExportSizeEnum;
 }

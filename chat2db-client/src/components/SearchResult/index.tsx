@@ -29,6 +29,7 @@ interface IProps {
   className?: string;
   sql?: string;
   executeSqlParams: any;
+  exportFileName?: string;
   concealTabHeader?: boolean;
   viewTable?: boolean;
   isActive?: boolean;
@@ -226,6 +227,7 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
                   ...props.executeSqlParams,
                   pageSize: selectedPageSize,
                 }}
+                exportFileName={props.exportFileName}
                 onPageSizeChange={handlePageSizeChange}
                 concealTabHeader={concealTabHeader}
               />

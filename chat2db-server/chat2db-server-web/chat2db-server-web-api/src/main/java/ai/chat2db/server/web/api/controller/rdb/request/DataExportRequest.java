@@ -34,6 +34,11 @@ public class DataExportRequest extends DataSourceBaseRequest {
     private String tableName;
 
     /**
+     * Preferred export file name without extension.
+     */
+    private String exportFileName;
+
+    /**
      * export type
      *
      * @see ExportTypeEnum

@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.File;
 import java.net.MalformedURLException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.util.regex.Pattern;
 
 import jakarta.validation.Valid;
 
@@ -34,6 +37,8 @@ import jakarta.validation.Valid;
 @RestController
 @Slf4j
 public class TaskController {
+
+    private static final Pattern TEMP_FILE_UNIQUE_SUFFIX = Pattern.compile("_chat2db_tmp_-?\\d+(\\.[^.]+)$");
 
     @Autowired
     private TaskService taskService;
@@ -109,13 +114,23 @@ public class TaskController {
             throw new RuntimeException(e);
         }
 
-        String filename = file.getName();
+        String filename = resolveDownloadFileName(file.getName());
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, buildContentDisposition(filename))
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }
 
+    static String resolveDownloadFileName(String tempFileName) {
+        return TEMP_FILE_UNIQUE_SUFFIX.matcher(tempFileName).replaceFirst("$1");
+    }
+
+    static String buildContentDisposition(String filename) {
+        return ContentDisposition.attachment()
+                .filename(filename, StandardCharsets.UTF_8)
+                .build()
+                .toString();
+    }
 
 
 }

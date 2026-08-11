@@ -25,7 +25,6 @@ import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
 import ai.chat2db.spi.util.JdbcUtils;
 import ai.chat2db.spi.util.SqlUtils;
-import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.Assert;
 import com.alibaba.druid.DbType;
@@ -39,9 +38,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -73,7 +69,8 @@ public class TaskBizService {
         Assert.notBlank(sql, "dataSource.sqlEmpty");
         DbType dbType = JdbcUtils.parse2DruidDbType(Chat2DBContext.getConnectInfo().getDbType());
         String tableName = getTableName(request, sql, dbType);
-        File file = createTempFile(tableName, request.getExportType());
+        String exportFileName = ExportFileNameUtils.resolveBaseName(request.getExportFileName(), tableName);
+        File file = createTempFile(exportFileName, request.getExportType());
 
         DataResult<Long> dataResult = createTask(tableName, request.getDatabaseName(), request.getSchemaName(), request.getDataSourceId(), tableName);
 
@@ -240,10 +237,7 @@ public class TaskBizService {
     }
 
     private File createTempFile(String tableName, String exportType) {
-        String fileName = URLEncoder.encode(
-                        tableName + "_" + LocalDateTime.now().format(DatePattern.PURE_DATETIME_FORMATTER),
-                        StandardCharsets.UTF_8)
-                .replaceAll("\\+", "%20");
+        String fileName = ExportFileNameUtils.buildTempFilePrefix(tableName);
 
         if (ExportTypeEnum.CSV.getCode().equals(exportType)) {
             return FileUtil.createTempFile(fileName, ".csv", true);

@@ -12,6 +12,7 @@ import { registerSearchResult, unregisterSearchResult } from './searchResultRegi
 interface IProps {
   boundInfo: IBoundInfo;
   initDDL: string;
+  consoleTitle?: string;
   // 异步加载 sql
   loadSQL: () => Promise<string>;
   initialResult?: IManageResultData;
@@ -78,6 +79,7 @@ const SQLExecute = memo<IProps>((props) => {
             isActive={activeConsoleId === boundInfo.consoleId}
             ref={searchResultRef}
             executeSqlParams={boundInfo}
+            exportFileName={props.consoleTitle}
             initialResult={props.initialResult}
             onLocateStatement={(result) => {
               consoleRef.current?.editorRef?.locateStatement(

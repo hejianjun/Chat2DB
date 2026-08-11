@@ -421,6 +421,7 @@ const WorkspaceTabs = memo(() => {
     
     return (
       <SQLExecute
+        consoleTitle={item.title}
         boundInfo={{
           dataSourceId: uniqueData.dataSourceId,
           dataSourceName: uniqueData.dataSourceName,

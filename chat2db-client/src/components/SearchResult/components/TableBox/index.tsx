@@ -51,6 +51,7 @@ interface ITableProps {
   className?: string;
   outerQueryResultData: IManageResultData;
   executeSqlParams: any;
+  exportFileName?: string;
   tableBoxId: string;
   isActive?: boolean;
   concealTabHeader?: boolean; // concealTabHeader 是否隐藏tab头部, 目前来说隐藏头部都是单表查询。需要显示筛选
@@ -170,6 +171,7 @@ export default function TableBox(props: ITableProps) {
       sql: queryResultData.sql,
       originalSql: queryResultData.originalSql,
       operationLogId: queryResultData.operationLogId,
+      exportFileName: props.exportFileName,
       exportType,
       exportSize,
     };
