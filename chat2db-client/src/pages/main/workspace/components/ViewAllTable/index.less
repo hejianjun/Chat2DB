@@ -68,10 +68,19 @@
 }
 
 .tableCell {
+  width: 100%;
+  min-width: 0;
   padding: 2px 6px;
   height: 24px;
   box-sizing: border-box;
   cursor: pointer;
+}
+
+.nameCell,
+.commentCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .activeTableCell {

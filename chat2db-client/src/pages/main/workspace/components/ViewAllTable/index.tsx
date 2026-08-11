@@ -2,7 +2,7 @@ import React, { memo, useEffect, useState, useCallback, useRef } from 'react';
 import i18n from '@/i18n';
 import styles from './index.less';
 import classnames from 'classnames';
-import { Table, Dropdown, Input, Pagination, Button, Form, Modal, message, Spin, Tag } from 'antd';
+import { Table, Dropdown, Input, Pagination, Button, Form, Modal, message, Spin, Tag, Tooltip } from 'antd';
 import { DatabaseTypeCode, TreeNodeType, OperationColumn, WorkspaceTabType } from '@/constants';
 import sqlServer, { IBatchModifyTableSqlParams } from '@/service/sql';
 import type { ColumnsType } from 'antd/es/table';
@@ -33,6 +33,8 @@ interface IProps {
     schemaName?: string;
   };
 }
+
+const TABLE_OPTIONAL_COLUMNS_MIN_WIDTH = 860;
 
 export default memo<IProps>((props) => {
   const { className, uniqueData, } = props;
@@ -272,9 +274,15 @@ export default memo<IProps>((props) => {
   const renderCell = (text, record, dataIndex) => {
     if (dataIndex === 'name') {
       return (
-        <div className={classnames(styles.tableCell, { [styles.activeTableCell]: activeId === record.key })}>
-          {text}
-        </div>
+        <Tooltip title={text || undefined}>
+          <div
+            className={classnames(styles.tableCell, styles.nameCell, {
+              [styles.activeTableCell]: activeId === record.key,
+            })}
+          >
+            {text}
+          </div>
+        </Tooltip>
       );
     }
 
@@ -299,6 +307,24 @@ export default memo<IProps>((props) => {
     );
   };
 
+  const renderCommentCell = (text, record) => {
+    if (isEditing) {
+      return renderCell(text, record, 'comment');
+    }
+
+    return (
+      <Tooltip title={text || undefined}>
+        <div
+          className={classnames(styles.tableCell, styles.commentCell, {
+            [styles.activeTableCell]: activeId === record.key,
+          })}
+        >
+          {text}
+        </div>
+      </Tooltip>
+    );
+  };
+
   const formatRowCount = (count?: number) => {
     if (count == null || count < 0) return '-';
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
@@ -306,6 +332,7 @@ export default memo<IProps>((props) => {
     return count.toString();
   };
 
+  const showOptionalColumns = allTableWidth >= TABLE_OPTIONAL_COLUMNS_MIN_WIDTH;
   const columns: ColumnsType<any> = [
     {
       title: 'Table name',
@@ -314,26 +341,32 @@ export default memo<IProps>((props) => {
       sorter: true,
       render: (text, record) => renderCell(text, record, 'name'),
     },
-    {
-      title: i18n('workspace.table.tag.title'),
-      dataIndex: 'tag',
-      key: 'tag',
-      width: 180,
-      render: (text, record) => renderTagCell(text, record),
-    },
-    {
-      title: 'Row Count',
-      dataIndex: 'rowCount',
-      key: 'rowCount',
-      width: 120,
-      sorter: true,
-      render: (text, record) => renderCell(text, record, 'rowCount'),
-    },
+    ...(showOptionalColumns
+      ? [
+          {
+            title: i18n('workspace.table.tag.title'),
+            dataIndex: 'tag',
+            key: 'tag',
+            width: 180,
+            render: (text, record) => renderTagCell(text, record),
+          },
+          {
+            title: 'Row Count',
+            dataIndex: 'rowCount',
+            key: 'rowCount',
+            width: 120,
+            sorter: true,
+            render: (text, record) => renderCell(text, record, 'rowCount'),
+          },
+        ]
+      : []),
     {
       title: 'Comment',
       dataIndex: 'comment',
       key: 'comment',
-      render: (text, record) => renderCell(text, record, 'comment'),
+      width: 280,
+      ellipsis: true,
+      render: (text, record) => renderCommentCell(text, record),
     },
   ];
 
@@ -797,6 +830,7 @@ export default memo<IProps>((props) => {
                 }}
                 virtual
                 scroll={{ x: allTableWidth - 10, y: allTableHeight - 25 }}
+                tableLayout="fixed"
                 columns={columns}
                 pagination={false}
                 dataSource={tableData || []}
