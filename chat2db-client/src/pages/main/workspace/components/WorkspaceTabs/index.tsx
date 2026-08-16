@@ -46,6 +46,14 @@ import { getConsoleEditor } from '../SQLExecute/consoleEditorRegistry';
 
 const MAX_DIRECT_SSE_URL_LENGTH = 1800;
 
+const getExportFileName = (title: string) => {
+  const normalizedTitle = title.trim();
+  if (/^untitled(?:$|[\s_-])/i.test(normalizedTitle)) {
+    return undefined;
+  }
+  return title;
+};
+
 const updateConsoleTitle = (consoleId: number | string, title: string) => {
   useWorkspaceStore.setState((state) => ({
     consoleList: state.consoleList
@@ -421,7 +429,7 @@ const WorkspaceTabs = memo(() => {
     
     return (
       <SQLExecute
-        consoleTitle={item.title}
+        consoleTitle={getExportFileName(item.title)}
         boundInfo={{
           dataSourceId: uniqueData.dataSourceId,
           dataSourceName: uniqueData.dataSourceName,
