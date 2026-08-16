@@ -317,6 +317,10 @@ const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/we
 
 const normalizeNullableText = (value?: string | null): string => value || '';
 
+const isSameDataSource = (left?: number | null, right?: number | null): boolean => {
+  return String(left ?? '') === String(right ?? '');
+};
+
 const DatabaseStatementActionButtons = memo<{
   statement: string;
   type: DatabaseStatementType;
@@ -450,10 +454,10 @@ export default memo<IProps>(() => {
     consoleList?.find((console) => String(console.id) === String(activeConsoleId));
 
   const [boundInfo, setBoundInfo] = useState(() => ({
-    dataSourceId: activeConsole?.dataSourceId || currentConnectionDetails?.id,
-    databaseName: activeConsole?.databaseName || '',
-    schemaName: activeConsole?.schemaName || '',
-    tableNames: pendingAiChat?.tableNames || null,
+    dataSourceId: currentSession?.dataSourceId ?? activeConsole?.dataSourceId ?? currentConnectionDetails?.id,
+    databaseName: currentSession?.databaseName ?? activeConsole?.databaseName ?? '',
+    schemaName: currentSession?.schemaName ?? activeConsole?.schemaName ?? '',
+    tableNames: currentSession?.selectedTables || pendingAiChat?.tableNames || null,
   }));
 
   useEffect(() => {
@@ -469,6 +473,23 @@ export default memo<IProps>(() => {
       }));
     }
   }, [activeConsoleId, consoleList, workspaceTabList]);
+
+  useEffect(() => {
+    if (!currentSession) {
+      return;
+    }
+    setBoundInfo({
+      dataSourceId: currentSession.dataSourceId ?? undefined,
+      databaseName: currentSession.databaseName ?? '',
+      schemaName: currentSession.schemaName ?? '',
+      tableNames: currentSession.selectedTables || null,
+    });
+  }, [
+    currentSessionId,
+    currentSession?.dataSourceId,
+    currentSession?.databaseName,
+    currentSession?.schemaName,
+  ]);
 
   useEffect(() => {
     setDatabaseTables([]);
@@ -725,11 +746,11 @@ export default memo<IProps>(() => {
       const isConversationalTask = isConversationalSqlPromptType(promptType);
       const isSameConnection =
         existingSession
-          ? existingSession.dataSourceId === info.dataSourceId &&
+          ? isSameDataSource(existingSession.dataSourceId, info.dataSourceId) &&
             normalizeNullableText(existingSession.databaseName) === normalizeNullableText(info.databaseName) &&
             normalizeNullableText(existingSession.schemaName) === normalizeNullableText(info.schemaName)
           : !previousRequest ||
-            (previousRequest.dataSourceId === info.dataSourceId &&
+            (isSameDataSource(previousRequest.dataSourceId, info.dataSourceId) &&
               normalizeNullableText(previousRequest.databaseName) === normalizeNullableText(info.databaseName) &&
               normalizeNullableText(previousRequest.schemaName) === normalizeNullableText(info.schemaName));
       const canReuseConversation =
