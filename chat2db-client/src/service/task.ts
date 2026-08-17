@@ -123,7 +123,7 @@ const previewFileHeaders = (params: IPreviewHeadersParams): Promise<IPreviewHead
     }
   });
 
-  return fetch('/api/import/preview_headers', {
+  return fetch(`${window._BaseURL}/api/import/preview_headers`, {
     method: 'POST',
     credentials: 'include',
     body: formData,
@@ -148,7 +148,7 @@ const importData = (params: IImportDataParams): Promise<number> => {
     }
   });
 
-  return fetch('/api/import/import_data', {
+  return fetch(`${window._BaseURL}/api/import/import_data`, {
     method: 'POST',
     credentials: 'include',
     body: formData,
@@ -173,7 +173,7 @@ const executeSqlFile = (params: IExecuteSqlFileParams): Promise<number> => {
     }
   });
 
-  return fetch('/api/sql/execute_file', {
+  return fetch(`${window._BaseURL}/api/sql/execute_file`, {
     method: 'POST',
     credentials: 'include',
     body: formData,
