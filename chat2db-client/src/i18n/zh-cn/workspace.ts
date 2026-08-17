@@ -206,6 +206,7 @@ export default {
   'workspace.table.export.sourceTable': '源表',
   'workspace.table.export.fileType': '导出格式',
   'workspace.table.export.sql': '导出 SQL',
+  'workspace.table.export.mql': '导出 MQL',
   'workspace.table.export.start': '开始导出',
   'workspace.table.export.cancel': '取消',
   'workspace.table.export.success': '导出成功',

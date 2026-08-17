@@ -1,14 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Modal, Select, message, Button, Progress, Radio, Input } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Button, Input, message, Modal, Progress, Radio } from 'antd';
+
+import { DatabaseTypeCode } from '@/constants';
 import i18n from '@/i18n';
-import taskService, { ITask } from '@/service/task';
 import { setOpenExportDataModal } from '@/pages/main/workspace/store/modal';
+import taskService, { ITask } from '@/service/task';
 
 export interface IExportDataModalParams {
   tableName: string;
   dataSourceId: number;
+  databaseType: DatabaseTypeCode;
   databaseName?: string;
   schemaName?: string;
+  query: string;
 }
 
 const ExportDataModal = () => {
@@ -52,15 +56,16 @@ const ExportDataModal = () => {
     addLog('start------');
 
     try {
-      const sql = `SELECT * FROM ${params.tableName}`;
+      const { query } = params;
       const taskId = await taskService.exportResultData({
-        sql,
-        originalSql: sql,
+        sql: query,
+        originalSql: query,
         exportType,
         exportSize: 'ALL',
         dataSourceId: params.dataSourceId,
         databaseName: params.databaseName,
         schemaName: params.schemaName,
+        tableName: params.tableName,
       });
 
       addLog(`Task created: ${taskId}`);
@@ -180,10 +185,14 @@ const ExportDataModal = () => {
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 8, color: 'var(--color-text)' }}>
-              {i18n('workspace.table.export.sql')}:
+              {i18n(
+                params.databaseType === DatabaseTypeCode.MONGODB
+                  ? 'workspace.table.export.mql'
+                  : 'workspace.table.export.sql',
+              )}:
             </label>
             <Input.TextArea
-              value={`SELECT * FROM ${params?.tableName}`}
+              value={params.query}
               readOnly
               autoSize={{ minRows: 2, maxRows: 4 }}
               style={{ background: 'var(--color-bg-layout)', color: 'var(--color-text)' }}

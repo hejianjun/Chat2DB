@@ -49,6 +49,7 @@ export default {
   'workspace.table.export.cur.insert': '現在のページの結果セットをinsert sqlでエクスポート',
   'workspace.table.export.progress.title': 'エクスポート中...',
   'workspace.table.export.progress.rows': 'エクスポート済み行数',
+  'workspace.table.export.mql': 'MQLをエクスポート',
   'workspace.tree.view': 'ビュー',
   'workspace.tree.trigger': 'トリガー',
   'workspace.tree.function': '関数',

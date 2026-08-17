@@ -211,6 +211,7 @@ export default {
   'workspace.table.export.sourceTable': 'Source Table',
   'workspace.table.export.fileType': 'Export Format',
   'workspace.table.export.sql': 'Export SQL',
+  'workspace.table.export.mql': 'Export MQL',
   'workspace.table.export.start': 'Start Export',
   'workspace.table.export.cancel': 'Cancel',
   'workspace.table.export.success': 'Export successful',

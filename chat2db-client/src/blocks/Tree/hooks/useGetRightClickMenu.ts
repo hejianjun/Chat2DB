@@ -661,8 +661,14 @@ export const useGetRightClickMenu = (props: IProps) => {
           openExportDataModal?.({
             tableName: treeNodeData.name,
             dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+            databaseType: treeNodeData.extraParams!.databaseType,
             databaseName: treeNodeData.extraParams?.databaseName,
             schemaName: treeNodeData.extraParams?.schemaName,
+            query: getTableQuery(
+              treeNodeData.name,
+              treeNodeData.extraParams!.databaseType,
+              treeNodeData.extraParams?.schemaName,
+            ),
           });
         },
       },
@@ -1225,8 +1231,14 @@ export const getRightClickMenu = (props: IProps) => {
         openExportDataModal?.({
           tableName: treeNodeData.name,
           dataSourceId: treeNodeData.extraParams!.dataSourceId!,
+          databaseType: treeNodeData.extraParams!.databaseType,
           databaseName: treeNodeData.extraParams?.databaseName,
           schemaName: treeNodeData.extraParams?.schemaName,
+          query: getTableQuery(
+            treeNodeData.name,
+            treeNodeData.extraParams!.databaseType,
+            treeNodeData.extraParams?.schemaName,
+          ),
         });
       },
     },

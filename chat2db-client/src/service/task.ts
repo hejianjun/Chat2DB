@@ -37,6 +37,7 @@ export interface IExportResultDataParams {
   dataSourceId?: number;
   databaseName?: string;
   schemaName?: string;
+  tableName?: string;
 }
 
 export interface IImportDataParams {

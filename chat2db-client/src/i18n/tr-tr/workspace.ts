@@ -62,6 +62,7 @@ export default {
   'workspace.table.export.cur.insert': 'Geçerli sayfa sonucunu INSERT SQL olarak dışa aktar',
   'workspace.table.export.progress.title': 'Dışa aktarılıyor...',
   'workspace.table.export.progress.rows': 'Dışa aktarılan satır',
+  'workspace.table.export.mql': 'MQL dışa aktar',
   'workspace.tree.view': 'Görüntüle',
   'workspace.tree.trigger': 'Tetikleyici',
   'workspace.tree.function': 'Fonksiyon',
