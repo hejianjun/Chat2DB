@@ -213,7 +213,8 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
             List<MongodbCommandParser.MethodCall> calls = MongodbCommandParser.parseMethodCalls(expression);
             MongodbCommandParser.MethodCall selector = calls.remove(0);
             collectionName = requiredString(selector.arguments(), 0, "collection");
-            executeCollectionMethods(database.getCollection(collectionName), calls, pageNo, pageSize, result);
+            executeCollectionMethods(database, database.getCollection(collectionName), calls, pageNo, pageSize,
+                    result);
             return;
         }
         int dot = expression.indexOf('.');
@@ -222,7 +223,7 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
         }
         collectionName = expression.substring(0, dot).trim();
         methodExpression = expression.substring(dot + 1);
-        executeCollectionMethods(database.getCollection(collectionName),
+        executeCollectionMethods(database, database.getCollection(collectionName),
                 MongodbCommandParser.parseMethodCalls(methodExpression), pageNo, pageSize, result);
     }
 
@@ -243,9 +244,9 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
         }
     }
 
-    private void executeCollectionMethods(MongoCollection<Document> collection,
-                                          List<MongodbCommandParser.MethodCall> calls, Integer requestedPageNo,
-                                          Integer requestedPageSize, ExecuteResult result) {
+    private void executeCollectionMethods(MongoDatabase database, MongoCollection<Document> collection,
+                                           List<MongodbCommandParser.MethodCall> calls, Integer requestedPageNo,
+                                           Integer requestedPageSize, ExecuteResult result) {
         if (calls.isEmpty()) {
             throw new IllegalArgumentException("Missing MongoDB collection method");
         }
@@ -259,6 +260,13 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
             case "aggregate" -> executeAggregate(collection, call.arguments(), chain, requestedPageNo,
                     requestedPageSize, result);
             case "countDocuments" -> executeCountDocuments(collection, call.arguments(), result);
+            case "stats" -> {
+                if (!chain.isEmpty()) {
+                    throw new IllegalArgumentException("MongoDB stats does not support chained methods");
+                }
+                commandResult(result, database.runCommand(
+                        collectionStatsCommand(collection.getNamespace().getCollectionName(), call.arguments())));
+            }
             case "insertOne" -> insertedResult(result, collection.insertOne(document(call.arguments(), 0)));
             case "insertMany" -> insertedManyResult(result, collection.insertMany(documentList(call.arguments(), 0)));
             case "updateOne" -> updateResult(result, collection.updateOne(document(call.arguments(), 0),
@@ -280,6 +288,27 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
             }
             default -> throw new IllegalArgumentException("Unsupported MongoDB collection method: " + call.name());
         }
+    }
+
+    static Document collectionStatsCommand(String collectionName, List<String> arguments) {
+        if (arguments.size() > 1) {
+            throw new IllegalArgumentException("MongoDB stats accepts at most one options argument");
+        }
+        Document command = new Document("collStats", collectionName);
+        if (arguments.isEmpty()) {
+            return command;
+        }
+        Object options = MongodbCommandParser.parseValue(arguments.get(0));
+        if (options instanceof Document document) {
+            command.putAll(document);
+            command.put("collStats", collectionName);
+            return command;
+        }
+        if (options instanceof Number number) {
+            command.put("scale", number);
+            return command;
+        }
+        throw new IllegalArgumentException("MongoDB stats options must be a document or numeric scale");
     }
 
     private void executeCountDocuments(MongoCollection<Document> collection, List<String> arguments,

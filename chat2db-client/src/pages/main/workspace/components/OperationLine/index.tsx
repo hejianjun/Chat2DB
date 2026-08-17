@@ -21,7 +21,7 @@ interface IProps {
 }
 
 // 不支持创建数据库的数据库类型
-const notSupportCreateDatabaseType = [DatabaseTypeCode.H2];
+const notSupportCreateDatabaseType = [DatabaseTypeCode.H2, DatabaseTypeCode.MONGODB];
 
 // 不支持创建schema的数据库类型
 const notSupportCreateSchemaType = [DatabaseTypeCode.ORACLE];

@@ -605,6 +605,7 @@ export const treeConfig: { [key in TreeNodeType]: ITreeConfigItem } = {
     },
     operationColumn: [
       OperationColumn.OpenTable,
+      OperationColumn.ViewCollectionInfo,
       OperationColumn.CreateConsole,
       OperationColumn.EditTable,
       OperationColumn.Pin,

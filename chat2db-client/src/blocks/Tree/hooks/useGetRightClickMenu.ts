@@ -26,6 +26,7 @@ import { openFunction, openProcedure, openTrigger, openView } from '../functions
 import { handelPinTable } from '../functions/pinTable';
 import { deprecatedTable, restoreDeprecatedTable } from '../functions/deprecatedTable';
 import { viewDDL } from '../functions/viewDDL';
+import { viewCollectionInfo } from '../functions/viewCollectionInfo';
 import { viewIndexDefinition } from '../functions/viewIndexDefinition';
 
 // ----- utils -----
@@ -448,6 +449,15 @@ export const useGetRightClickMenu = (props: IProps) => {
         handle: () => {
           viewIndexDefinition(treeNodeData);
         },
+      },
+
+      [OperationColumn.ViewCollectionInfo]: {
+        text: i18n('workspace.menu.viewCollectionInfo'),
+        icon: '\ue665',
+        handle: () => {
+          viewCollectionInfo(treeNodeData);
+        },
+        discard: treeNodeData.extraParams?.databaseType !== DatabaseTypeCode.MONGODB,
       },
 
       // 置顶
@@ -1046,6 +1056,15 @@ export const getRightClickMenu = (props: IProps) => {
       handle: () => {
         viewIndexDefinition(treeNodeData);
       },
+    },
+
+    [OperationColumn.ViewCollectionInfo]: {
+      text: i18n('workspace.menu.viewCollectionInfo'),
+      icon: '\ue665',
+      handle: () => {
+        viewCollectionInfo(treeNodeData);
+      },
+      discard: treeNodeData.extraParams?.databaseType !== DatabaseTypeCode.MONGODB,
     },
 
     // 置顶
