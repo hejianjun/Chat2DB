@@ -111,8 +111,8 @@ class RedisKeyPrefixServiceImplTest {
     }
 
     @Test
-    void normalPrefixSearchShouldPrioritizeLeadingPrefixBeforeCommentMatches() {
-        String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("vehicle:basicinfo");
+    void normalPrefixSearchShouldMatchAnywhereInPrefixName() {
+        String searchKey = RedisKeyPrefixServiceImpl.normalizePrefixSearchKey("basicinfo");
 
         Assertions.assertTrue(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
                 RedisKeyPrefix.builder()
@@ -120,7 +120,7 @@ class RedisKeyPrefixServiceImplTest {
                         .build(),
                 searchKey,
                 false));
-        Assertions.assertFalse(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
+        Assertions.assertTrue(RedisKeyPrefixServiceImpl.isPrefixSearchMatch(
                 RedisKeyPrefix.builder()
                         .name("basicinfo:item:")
                         .build(),

@@ -1208,7 +1208,7 @@ const RedisDataView = memo((props: IProps) => {
           className={styles.searchInput}
           allowClear
           prefix={<SearchOutlined />}
-          placeholder={searchMode === SEARCH_MODE_PREFIX ? '前缀或注释' : '键包含'}
+          placeholder={searchMode === SEARCH_MODE_PREFIX ? '名称或注释包含，* 结尾按开头匹配' : '键包含'}
           value={searchKey}
           onChange={(event) => setSearchKey(event.target.value)}
           onSearch={(value) => {

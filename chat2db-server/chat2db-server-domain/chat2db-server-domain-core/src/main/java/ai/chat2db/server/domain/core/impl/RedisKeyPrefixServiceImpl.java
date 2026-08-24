@@ -81,8 +81,8 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
     /**
      * 从 Lucene 索引中分页搜索 Redis key 前缀。
      *
-     * <p>带通配符的搜索关键字按 Redis 前缀做开头匹配，避免 Lucene 全文分词把中间包含相同片段的
-     * 其它前缀混入结果；普通关键字仍支持按前缀名称和注释搜索，并优先展示前缀名称命中的结果。
+     * <p>以通配符结尾的搜索关键字按 Redis 前缀做开头匹配；普通关键字在前缀名称、人工注释和
+     * AI 注释中做不区分大小写的包含匹配，并优先展示前缀名称开头命中的结果。
      * 返回结果会附带当前数据源/库是否正在构建，前端可据此展示刷新中的提示。</p>
      */
     @Override
@@ -476,11 +476,12 @@ public class RedisKeyPrefixServiceImpl implements RedisKeyPrefixService {
         if (prefix == null || StringUtils.isBlank(prefixSearchKey)) {
             return false;
         }
-        if (isPrefixNameMatch(prefix, prefixSearchKey)) {
-            return true;
+        if (wildcardPrefixSearch) {
+            return isPrefixNameMatch(prefix, prefixSearchKey);
         }
-        return !wildcardPrefixSearch && (containsIgnoreCase(prefix.getComment(), prefixSearchKey)
-                || containsIgnoreCase(prefix.getAiComment(), prefixSearchKey));
+        return containsIgnoreCase(prefix.getName(), prefixSearchKey)
+                || containsIgnoreCase(prefix.getComment(), prefixSearchKey)
+                || containsIgnoreCase(prefix.getAiComment(), prefixSearchKey);
     }
 
     private static boolean isPrefixNameMatch(RedisKeyPrefix prefix, String prefixSearchKey) {
