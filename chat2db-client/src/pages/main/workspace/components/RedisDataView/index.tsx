@@ -1016,6 +1016,14 @@ const RedisDataView = memo((props: IProps) => {
     [saveGeneratedPrefixComments, selectedPrefix, tableData, uniqueData?.dataSourceId, uniqueData?.databaseName],
   );
 
+  const handleHashFieldFilterChange = async (value: string) => {
+    setHashFieldFilter(value);
+    if (!value.trim() || !value.trim().length || normalizeType(detail?.type) !== 'hash' || !valuePage?.hasMore) {
+      return;
+    }
+    await loadMoreValue(true);
+  };
+
   const filteredHashFields = useMemo(() => {
     const keyword = hashFieldFilter.trim().toLowerCase();
     if (!keyword) {
@@ -1502,7 +1510,7 @@ const RedisDataView = memo((props: IProps) => {
               placeholder="过滤字段或值"
               size="small"
               value={hashFieldFilter}
-              onChange={(event) => setHashFieldFilter(event.target.value)}
+              onChange={(event) => handleHashFieldFilterChange(event.target.value)}
             />
             <span>
               {filteredHashFields.length}/{hashFields.length} 个字段
