@@ -125,6 +125,16 @@ public class ExecuteResultVO {
     private boolean canEdit;
 
     /**
+     * 返回结果是否支持删除当前结果中的文档/行
+     */
+    private boolean canDelete;
+
+    /**
+     * 当前结果行对应的精确删除过滤器，主要用于 MongoDB 文档的 _id 定位
+     */
+    private List<String> rowDeleteFilters;
+
+    /**
      * 表名
      */
     private String tableName;

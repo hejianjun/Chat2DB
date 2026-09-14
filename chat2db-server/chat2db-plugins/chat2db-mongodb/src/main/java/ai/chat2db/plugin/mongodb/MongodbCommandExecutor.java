@@ -346,6 +346,40 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
             documents.remove(documents.size() - 1);
         }
         documentsResult(result, documents, page.pageNo(), page.limit(), hasNext);
+        result.setTableName(collection.getNamespace().getCollectionName());
+        boolean canDelete = canDeleteFindResult(arguments, chain, documents);
+        result.setCanDelete(canDelete);
+        result.setRowDeleteFilters(canDelete
+                ? documents.stream().map(MongodbCommandExecutor::buildDeleteFilter).toList()
+                : List.of());
+    }
+
+    static boolean canDeleteFindResult(List<String> arguments, List<MongodbCommandParser.MethodCall> chain,
+                                       List<Document> documents) {
+        if (documents.isEmpty() || documents.stream().anyMatch(document -> !document.containsKey("_id"))) {
+            return false;
+        }
+        if (arguments.size() > 1 && excludesId(MongodbCommandParser.parseDocument(arguments.get(1)))) {
+            return false;
+        }
+        return chain.stream()
+                .filter(call -> "projection".equals(call.name()))
+                .noneMatch(call -> excludesId(MongodbCommandParser.parseDocument(call.arguments().get(0))));
+    }
+
+    static String buildDeleteFilter(Document document) {
+        if (document == null || !document.containsKey("_id")) {
+            throw new IllegalArgumentException("MongoDB delete filter requires _id");
+        }
+        return new Document("_id", document.get("_id")).toJson();
+    }
+
+    private static boolean excludesId(Document projection) {
+        Object idProjection = projection.get("_id");
+        if (Boolean.FALSE.equals(idProjection)) {
+            return true;
+        }
+        return idProjection instanceof Number number && number.doubleValue() == 0D;
     }
 
     private void executeAggregate(MongoCollection<Document> collection, List<String> arguments,

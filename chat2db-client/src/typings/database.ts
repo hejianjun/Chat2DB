@@ -42,6 +42,8 @@ export interface IManageResultData {
   sqlType: 'SELECT' | 'UNKNOWN';
   updateCount?: number; // 如果是修改的话。后端会返回修改的条数
   canEdit?: boolean; // 返回的数据是否可以编辑
+  canDelete?: boolean; // 返回的数据是否支持删除当前结果中的 MongoDB 文档
+  rowDeleteFilters?: string[]; // 当前结果行对应的精确删除过滤器
   tableName?: string; // 如果可以编辑的话。后端会返回表名称。修改需要给后端传递表名
   
   /** 虚拟外键建议列表 */

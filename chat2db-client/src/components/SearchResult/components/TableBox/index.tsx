@@ -16,6 +16,7 @@ import styles from './index.less';
 import { formatDateTimeValue } from '@/utils/dateTime';
 import { compareStrings } from '@/utils/sort';
 import { transformInputValue } from '../../utils';
+import { getMongodbCollectionReference } from '@/utils/database';
 
 // 类型定义
 import { CRUD, DatabaseTypeCode } from '@/constants';
@@ -645,6 +646,52 @@ export default function TableBox(props: ITableProps) {
     });
   };
 
+  const handleMongoDelete = () => {
+    const selectedRowIds = curOperationRowNo || (editingCell ? [editingCell[1]] : []);
+    const selectedRowIndexes = selectedRowIds
+      .map((rowId) => tableData.findIndex((item) => item[colNoCode] === rowId))
+      .filter((rowIndex) => rowIndex >= 0);
+    const rowDeleteFilters = selectedRowIndexes
+      .map((rowIndex) => queryResultData.rowDeleteFilters?.[rowIndex])
+      .filter((filter): filter is string => Boolean(filter));
+    const collectionName = queryResultData.tableName || props.executeSqlParams?.tableName;
+
+    if (!rowDeleteFilters.length || !collectionName) {
+      return;
+    }
+
+    Modal.confirm({
+      title: i18n('editTableData.tips.mongoDeleteConfirm', rowDeleteFilters.length),
+      okText: i18n('common.button.confirm'),
+      cancelText: i18n('common.button.cancel'),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setTableLoading(true);
+        const collectionReference = getMongodbCollectionReference(collectionName);
+        const deleteSql = `${collectionReference}.deleteMany({$or: [${rowDeleteFilters.join(',')}]})`;
+
+        try {
+          const resultList = await sqlService.executeSql({
+            ...(props.executeSqlParams || {}),
+            sql: deleteSql,
+            tableName: collectionName,
+          });
+          const failedResult = resultList.find((result) => !result.success);
+          if (failedResult) {
+            throw new Error(failedResult.message || i18n('common.button.executionError'));
+          }
+          const deletedCount = resultList.reduce((total, result) => total + Number(result.updateCount || 0), 0);
+          await getTableData();
+          message.success(i18n('editTableData.tips.mongoDeleteSuccess', deletedCount));
+        } catch (error) {
+          setTableLoading(false);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          message.error(i18n('editTableData.tips.mongoDeleteFailed', errorMessage));
+        }
+      },
+    });
+  };
+
   // sql执行成功后的回调
   const executeSuccessCallBack = () => {
     getTableData().then(() => {
@@ -956,7 +1003,7 @@ export default function TableBox(props: ITableProps) {
 
   const deleteRow = {
     key: AllSupportedMenusType.DeleteRow,
-    callback: handleDeleteData,
+    callback: queryResultData.canDelete ? handleMongoDelete : handleDeleteData,
   };
 
   const copyCell = {
@@ -996,11 +1043,12 @@ export default function TableBox(props: ITableProps) {
     let rightClickMenu: any = [];
     if (curOperationRowNo) {
       rightClickMenu = [copyRow, cloneRow, deleteRow];
-      // 如果当前数据不可编辑，则不显示cloneRow和deleteRow
+      // MongoDB 结果只支持删除，不显示关系型数据编辑菜单
       if (!queryResultData.canEdit) {
-        rightClickMenu = rightClickMenu.filter(
-          (i) => i.key !== AllSupportedMenusType.CloneRow && i.key !== AllSupportedMenusType.DeleteRow,
-        );
+        rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.CloneRow);
+      }
+      if (!queryResultData.canEdit && !queryResultData.canDelete) {
+        rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.DeleteRow);
       }
     }
 
@@ -1016,14 +1064,16 @@ export default function TableBox(props: ITableProps) {
       if (!hasDefaultValue) {
         rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.SetDefault);
       }
-      // 如果当前数据不可编辑，则不显示cloneRow和deleteRow
+      // MongoDB 结果只支持删除，不显示关系型数据编辑菜单
       if (!queryResultData.canEdit) {
         rightClickMenu = rightClickMenu.filter(
           (i) =>
             i.key !== AllSupportedMenusType.CloneRow &&
-            i.key !== AllSupportedMenusType.DeleteRow &&
             i.key !== AllSupportedMenusType.SetNull,
         );
+      }
+      if (!queryResultData.canEdit && !queryResultData.canDelete) {
+        rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.DeleteRow);
       }
     }
 
@@ -1135,6 +1185,21 @@ export default function TableBox(props: ITableProps) {
                     })}
                   >
                     <Iconfont code="&#xe687;" />
+                  </div>
+                </Popover>
+              </div>
+            )}
+            {queryResultData.canDelete && (
+              <div className={classnames(styles.toolBarItem, styles.editTableDataBar)}>
+                {/* MongoDB 删除文档 */}
+                <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.deleteRow')} trigger="hover">
+                  <div
+                    onClick={handleMongoDelete}
+                    className={classnames(styles.deleteDataBar, styles.editTableDataBarItem, {
+                      [styles.disableBar]: !curOperationRowNo && !editingCell,
+                    })}
+                  >
+                    <Iconfont code="&#xe644;" />
                   </div>
                 </Popover>
               </div>

@@ -4,4 +4,7 @@ export default {
   'editTableData.tips.revert': 'Geri Al',
   'editTableData.tips.previewPendingChanges': 'Bekleyen Değişiklikleri Önizle',
   'editTableData.tips.submit': 'Gönder',
+  'editTableData.tips.mongoDeleteConfirm': 'Seçili {1} MongoDB belgesi silinsin mi? Bu işlem geri alınamaz.',
+  'editTableData.tips.mongoDeleteSuccess': '{1} MongoDB belgesi başarıyla silindi',
+  'editTableData.tips.mongoDeleteFailed': 'MongoDB belgeleri silinemedi: {1}',
 };
