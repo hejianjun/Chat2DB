@@ -466,9 +466,9 @@ export default memo<IProps>(() => {
       consoleList?.find((console) => String(console.id) === String(activeConsoleId));
     if (activeConsoleInfo) {
       setBoundInfo((prev) => ({
-        dataSourceId: activeConsoleInfo.dataSourceId || prev.dataSourceId,
-        databaseName: activeConsoleInfo.databaseName || prev.databaseName,
-        schemaName: activeConsoleInfo.schemaName || prev.schemaName,
+        dataSourceId: activeConsoleInfo.dataSourceId ?? prev.dataSourceId,
+        databaseName: activeConsoleInfo.databaseName ?? '',
+        schemaName: activeConsoleInfo.schemaName ?? '',
         tableNames: prev.tableNames,
       }));
     }
@@ -1199,15 +1199,36 @@ export default memo<IProps>(() => {
     });
   };
 
-  const handleNewConversation = useCallback(() => {
-    setBoundInfo((prev) => ({
-      ...prev,
-      tableNames: null,
-    }));
-    setSelectedTableDraft([]);
-    setInputValue('');
-    setPendingImages([]);
-  }, []);
+  const handleNewConversation = useCallback(
+    (newConversationBoundInfo?: {
+      dataSourceId?: number | null;
+      databaseName?: string | null;
+      schemaName?: string | null;
+    }) => {
+      setBoundInfo((prev) => ({
+        dataSourceId: newConversationBoundInfo?.dataSourceId ?? prev.dataSourceId,
+        databaseName: newConversationBoundInfo?.databaseName ?? '',
+        schemaName: newConversationBoundInfo?.schemaName ?? '',
+        tableNames: null,
+      }));
+      setSelectedTableDraft([]);
+      setInputValue('');
+      setPendingImages([]);
+    },
+    [],
+  );
+
+  const newConversationBoundInfo = activeConsole
+    ? {
+        dataSourceId: activeConsole.dataSourceId,
+        databaseName: activeConsole.databaseName ?? '',
+        schemaName: activeConsole.schemaName ?? '',
+      }
+    : {
+        dataSourceId: boundInfo.dataSourceId ?? currentConnectionDetails?.id,
+        databaseName: boundInfo.databaseName,
+        schemaName: boundInfo.schemaName,
+      };
 
   const stateInfo = currentSession ? STATE_LABELS[currentSession.state] : null;
   const isProcessing = isActiveState(currentSession?.state);
@@ -1222,11 +1243,7 @@ export default memo<IProps>(() => {
     <div className={styles.aiChatContainer}>
       <div className={`${styles.sidebarLayout} ${sidebarCollapsed ? styles.sidebarLayoutCollapsed : ''}`}>
         <ConversationSidebar
-          boundInfo={{
-            dataSourceId: boundInfo.dataSourceId,
-            databaseName: boundInfo.databaseName,
-            schemaName: boundInfo.schemaName,
-          }}
+          newConversationBoundInfo={newConversationBoundInfo}
           collapsed={sidebarCollapsed}
           onCollapsedChange={setSidebarCollapsed}
           onNewConversation={handleNewConversation}

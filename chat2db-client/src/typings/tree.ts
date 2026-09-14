@@ -81,6 +81,10 @@ export interface ITable {
     */
    aiComment?: string | null;
    /**
+    * 表标签
+    */
+   tag?: string | null;
+   /**
     * 表名称
     */
    name: string | null;

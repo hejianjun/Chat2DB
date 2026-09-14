@@ -1,5 +1,5 @@
 import { useWorkspaceStore } from './index';
-import { IConsole, ICreateConsoleParams } from '@/typings';
+import { IBoundInfo, IConsole, ICreateConsoleParams } from '@/typings';
 import { IWorkspaceTab } from '@/typings/workspace';
 import historyService from '@/service/history';
 import { ConsoleStatus, WorkspaceTabType } from '@/constants';
@@ -58,6 +58,45 @@ export const setActiveConsoleId = (id: IConsoleStore['activeConsoleId']) => {
 
 export const setWorkspaceTabList = (items: IConsoleStore['workspaceTabList']) => {
   useWorkspaceStore.setState({ workspaceTabList: items });
+};
+
+export const updateConsoleBoundInfo = (
+  consoleId: string | number,
+  boundInfo: Pick<IBoundInfo, 'dataSourceId' | 'dataSourceName' | 'databaseType' | 'databaseName' | 'schemaName'>,
+) => {
+  useWorkspaceStore.setState((state) => ({
+    consoleList: state.consoleList
+      ? state.consoleList.map((item) =>
+          String(item.id) === String(consoleId)
+            ? {
+                ...item,
+                dataSourceId: boundInfo.dataSourceId,
+                dataSourceName: boundInfo.dataSourceName,
+                type: boundInfo.databaseType,
+                databaseName: boundInfo.databaseName,
+                schemaName: boundInfo.schemaName,
+              }
+            : item,
+        )
+      : state.consoleList,
+    workspaceTabList: state.workspaceTabList
+      ? state.workspaceTabList.map((item) =>
+          String(item.id) === String(consoleId)
+            ? {
+                ...item,
+                uniqueData: {
+                  ...item.uniqueData,
+                  dataSourceId: boundInfo.dataSourceId,
+                  dataSourceName: boundInfo.dataSourceName,
+                  databaseType: boundInfo.databaseType,
+                  databaseName: boundInfo.databaseName,
+                  schemaName: boundInfo.schemaName,
+                },
+              }
+            : item,
+        )
+      : state.workspaceTabList,
+  }));
 };
 
 export const createConsole = (params: ICreateConsoleParams) => {

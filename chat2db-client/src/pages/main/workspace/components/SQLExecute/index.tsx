@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import styles from './index.less';
 import classnames from 'classnames';
 import DraggableContainer from '@/components/DraggableContainer';
@@ -6,6 +6,7 @@ import ConsoleEditor, { IConsoleRef } from '@/components/ConsoleEditor';
 import SearchResult, { ISearchResultRef } from '@/components/SearchResult';
 import { useWorkspaceStore } from '@/pages/main/workspace/store';
 import { IBoundInfo, IManageResultData } from '@/typings';
+import { updateConsoleBoundInfo } from '@/pages/main/workspace/store/console';
 import { registerConsoleEditor, unregisterConsoleEditor } from './consoleEditorRegistry';
 import { registerSearchResult, unregisterSearchResult } from './searchResultRegistry';
 
@@ -23,8 +24,15 @@ const SQLExecute = memo<IProps>((props) => {
   const draggableRef = useRef<any>();
   const searchResultRef = useRef<ISearchResultRef>(null);
   const consoleRef = useRef<IConsoleRef>(null);
-  const [boundInfo, setBoundInfo] = useState<IBoundInfo>(_boundInfo);
+  const [boundInfo, setBoundInfoState] = useState<IBoundInfo>(_boundInfo);
   const activeConsoleId = useWorkspaceStore((state) => state.activeConsoleId);
+
+  const setBoundInfo = useCallback((nextBoundInfo: IBoundInfo) => {
+    setBoundInfoState(nextBoundInfo);
+    if (nextBoundInfo.consoleId !== undefined && nextBoundInfo.consoleId !== null) {
+      updateConsoleBoundInfo(nextBoundInfo.consoleId, nextBoundInfo);
+    }
+  }, []);
 
   // 注册 consoleRef 到全局 map 中
   useEffect(() => {

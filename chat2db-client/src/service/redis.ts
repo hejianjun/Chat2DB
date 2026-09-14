@@ -174,6 +174,10 @@ const getKeyValuePage = createRequest<IRedisKeyValuePageParams, IRedisKeyValuePa
   method: 'get',
 });
 
+const getHashField = createRequest<IRedisKeyValuePageParams & { field: string }, IRedisKeyValuePage>(
+  '/api/redis/key/hash-field', { method: 'get' },
+);
+
 const updateKeyPrefixComment = createRequest<IRedisKeyPrefixCommentUpdateParams, void>(
   '/api/redis/key-prefix/comment',
   {
@@ -298,6 +302,7 @@ const streamKeyList = (options: IRedisKeyStreamOptions) => {
 };
 
 export default {
+  getHashField,
   createKey,
   deleteKey,
   getKeyPrefixBuildStatus,

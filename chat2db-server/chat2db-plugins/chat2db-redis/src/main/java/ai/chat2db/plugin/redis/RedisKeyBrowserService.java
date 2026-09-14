@@ -473,6 +473,27 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
     }
 
     @Override
+    public RedisKeyValuePage queryHashFields(String databaseName, String keyName, String field, String cursor) {
+        try (RedisConnectionProvider.RedisConnectionContext context =
+                     RedisConnectionProvider.open(Chat2DBContext.getConnectInfo())) {
+            RedisAsyncCommands<String, String> commands = context.connection().async();
+            selectDatabase(commands, databaseName).join();
+            if (StringUtils.containsAny(field, '*', '?', '[', '\\')) {
+                var result = commands.hscan(keyName, buildScanCursor(cursor), new ScanArgs().match(field).limit(1000))
+                        .toCompletableFuture().join();
+                return RedisKeyValuePage.builder().name(keyName).type("hash")
+                        .items(result.getMap().entrySet().stream()
+                                .map(entry -> item("field", entry.getKey(), "value", entry.getValue())).toList())
+                        .nextCursor(result.getCursor()).hasMore(!result.isFinished()).fullyLoaded(false).build();
+            }
+            String value = commands.hget(keyName, field).toCompletableFuture().join();
+            return RedisKeyValuePage.builder().name(keyName).type("hash")
+                    .items(value == null ? List.of() : List.of(item("field", field, "value", value)))
+                    .nextCursor("0").hasMore(false).fullyLoaded(false).build();
+        }
+    }
+
+    @Override
     public RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
                                           int maxStringBytes) {
         try (RedisConnectionProvider.RedisConnectionContext context =

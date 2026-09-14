@@ -11,6 +11,9 @@ public interface RedisKeyBrowser {
 
     RedisKeyInfo queryKey(String databaseName, String keyName);
 
+    /** Uses HGET for literal fields and one HSCAN MATCH batch for glob patterns. */
+    RedisKeyValuePage queryHashFields(String databaseName, String keyName, String field, String cursor);
+
     RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
                                    int maxStringBytes);
 

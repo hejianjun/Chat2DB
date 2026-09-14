@@ -109,6 +109,11 @@ public class RedisMetaData extends DefaultMetaService implements MetaData, Redis
     }
 
     @Override
+    public RedisKeyValuePage queryHashFields(String databaseName, String keyName, String field, String cursor) {
+        return keyBrowser.queryHashFields(databaseName, keyName, field, cursor);
+    }
+
+    @Override
     public RedisKeyValuePage queryKeyPage(String databaseName, String keyName, String cursor, int count,
                                           int maxStringBytes) {
         return keyBrowser.queryKeyPage(databaseName, keyName, cursor, count, maxStringBytes);

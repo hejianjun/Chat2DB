@@ -130,10 +130,18 @@ const ConversationItem = memo<IConversationItemProps>(({
 ConversationItem.displayName = 'ConversationItem';
 
 export default memo((props: {
-  boundInfo?: { dataSourceId?: number | null; databaseName?: string | null; schemaName?: string | null };
+  newConversationBoundInfo?: {
+    dataSourceId?: number | null;
+    databaseName?: string | null;
+    schemaName?: string | null;
+  };
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
-  onNewConversation?: () => void;
+  onNewConversation?: (boundInfo?: {
+    dataSourceId?: number | null;
+    databaseName?: string | null;
+    schemaName?: string | null;
+  }) => void;
 }) => {
   const {
     conversationList,
@@ -155,8 +163,8 @@ export default memo((props: {
   }, [loadConversationList]);
 
   const handleNew = () => {
-    startNewConversation(props.boundInfo);
-    props.onNewConversation?.();
+    startNewConversation(props.newConversationBoundInfo);
+    props.onNewConversation?.(props.newConversationBoundInfo);
   };
 
   const handleDelete = (conversationId: string) => {

@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -135,6 +136,13 @@ public class RedisKeyManageController {
     public DataResult<KeyVO> query(KeyQueryRequest request) {
         RedisKeyInfo keyInfo = getRedisKeyBrowser().queryKey(request.getDatabaseName(), request.getKeyName());
         return DataResult.of(toVO(keyInfo));
+    }
+
+    /** Exact hash field lookup, or a cursor batch for an explicit Redis glob pattern. */
+    @GetMapping("/hash-field")
+    public DataResult<RedisKeyValuePage> hashField(KeyQueryRequest request, @RequestParam String field) {
+        return DataResult.of(getRedisKeyBrowser().queryHashFields(request.getDatabaseName(), request.getKeyName(),
+                field, request.getCursor()));
     }
 
     /** Returns one bounded page without loading the complete Redis value. */

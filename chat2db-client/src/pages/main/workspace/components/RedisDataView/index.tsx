@@ -94,6 +94,12 @@ const RedisDataView = memo((props: IProps) => {
   const [hashFields, setHashFields] = useState<IHashFieldRow[]>([]);
   const [originalHashFields, setOriginalHashFields] = useState<Record<string, string>>({});
   const [hashFieldFilter, setHashFieldFilter] = useState('');
+  const [hashSearch, setHashSearch] = useState<{ query: string } | null>(null);
+  const [hashSearchFields, setHashSearchFields] = useState<Set<string> | null>(null);
+  const [hashSearchStatus, setHashSearchStatus] = useState('');
+  const hashSearchRequestRef = useRef(0);
+  const hashEditorRef = useRef({ hashFields, originalHashFields });
+  hashEditorRef.current = { hashFields, originalHashFields };
   const [collectionRows, setCollectionRows] = useState<ICollectionValueRow[]>([]);
   const [originalListValues, setOriginalListValues] = useState<Record<number, string>>({});
   const [originalSetValues, setOriginalSetValues] = useState<Set<string>>(new Set());
@@ -123,6 +129,9 @@ const RedisDataView = memo((props: IProps) => {
     setEditorType(type || 'string');
     setEditorTtl(ttl);
     setHashFieldFilter('');
+    setHashSearch(null);
+    setHashSearchFields(null);
+    setHashSearchStatus('');
     setIsJsonString(false);
     if (type === 'hash' && value && typeof value === 'object' && !Array.isArray(value)) {
       const originalMap = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, String(v ?? '')]));
@@ -509,6 +518,7 @@ const RedisDataView = memo((props: IProps) => {
     }
     const requestId = uuid();
     detailRequestRef.current = requestId;
+    hashSearchRequestRef.current++;
     setSelectedKey(keyName);
     setSelectedPrefix('');
     setCreating(false);
@@ -558,6 +568,8 @@ const RedisDataView = memo((props: IProps) => {
 
   const closeKeyEditor = () => {
     const close = () => {
+      detailRequestRef.current = '';
+      hashSearchRequestRef.current++;
       setDetail(null);
       setSelectedKey('');
       setSelectedPrefix('');
@@ -620,10 +632,15 @@ const RedisDataView = memo((props: IProps) => {
         field: String(item.field ?? ''),
         value: String(item.value ?? ''),
       }));
-      setHashFields((current) => (append ? current.concat(rows) : rows));
+      const unseenRows = rows.filter((row) =>
+        !Object.prototype.hasOwnProperty.call(hashEditorRef.current.originalHashFields, row.field),
+      );
+      setHashFields((current) => (append
+        ? current.concat(unseenRows.filter((row) => !current.some((existing) => existing.field === row.field)))
+        : rows));
       setOriginalHashFields((current) => ({
-        ...(append ? current : {}),
         ...Object.fromEntries(rows.map((row) => [row.field, row.value])),
+        ...(append ? current : {}),
       }));
       return;
     }
@@ -810,6 +827,10 @@ const RedisDataView = memo((props: IProps) => {
 
   const openCreateKey = () => {
     detailRequestRef.current = '';
+    hashSearchRequestRef.current++;
+    setHashSearch(null);
+    setHashSearchFields(null);
+    setHashSearchStatus('');
     setCreating(true);
     setSelectedKey('');
     setSelectedPrefix('');
@@ -1016,23 +1037,75 @@ const RedisDataView = memo((props: IProps) => {
     [saveGeneratedPrefixComments, selectedPrefix, tableData, uniqueData?.dataSourceId, uniqueData?.databaseName],
   );
 
-  const handleHashFieldFilterChange = async (value: string) => {
+  const handleHashFieldFilterChange = (value: string) => {
+    hashSearchRequestRef.current++;
     setHashFieldFilter(value);
-    if (!value.trim() || !value.trim().length || normalizeType(detail?.type) !== 'hash' || !valuePage?.hasMore) {
-      return;
-    }
-    await loadMoreValue(true);
+    setHashSearch(null);
+    setHashSearchFields(value ? new Set() : null);
+    setHashSearchStatus(value ? '按回车搜索字段' : '');
   };
 
+  useEffect(() => {
+    if (!hashSearch || !detail?.name || creating || normalizeType(detail.type) !== 'hash') return;
+    const requestId = ++hashSearchRequestRef.current;
+    const isCurrent = () => hashSearchRequestRef.current === requestId;
+    const matched = new Set<string>();
+    setHashSearchFields(new Set());
+    setHashSearchStatus('正在搜索…');
+    const search = async () => {
+      let cursor = '0';
+      let batches = 0;
+      try {
+        do {
+          const page = await redisService.getHashField({
+            dataSourceId: uniqueData.dataSourceId,
+            databaseName: uniqueData.databaseName,
+            keyName: detail.name,
+            field: hashSearch.query,
+            cursor,
+          });
+          if (!isCurrent()) return;
+          const { hashFields: currentRows, originalHashFields: originals } = hashEditorRef.current;
+          const knownFields = new Set(currentRows.map((row) => row.field));
+          const rows: IHashFieldRow[] = [];
+          page.items.forEach((item) => {
+            const field = String(item.field);
+            matched.add(field);
+            // Preserve pending edits, renames and deletions of fields already loaded in the editor.
+            if (!Object.prototype.hasOwnProperty.call(originals, field)
+              && !knownFields.has(field)) {
+              rows.push({ id: uuid(), field, value: String(item.value ?? '') });
+              knownFields.add(field);
+            }
+          });
+          const nextRows = currentRows.concat(rows);
+          const nextOriginals = { ...originals, ...Object.fromEntries(rows.map((row) => [row.field, row.value])) };
+          hashEditorRef.current = { hashFields: nextRows, originalHashFields: nextOriginals };
+          setHashFields(nextRows);
+          setOriginalHashFields(nextOriginals);
+          setHashSearchFields(new Set(matched));
+          batches++;
+          setHashSearchStatus(page.hasMore
+            ? `搜索中，已扫描 ${batches} 批，匹配 ${matched.size} 个字段`
+            : `搜索完成，匹配 ${matched.size} 个字段`);
+          if (!page.hasMore) return;
+          if (page.nextCursor === cursor) throw new Error('Redis 扫描游标未推进，请重试');
+          cursor = page.nextCursor;
+        } while (isCurrent());
+      } catch (error) {
+        if (isCurrent()) {
+          setHashSearchStatus('搜索失败，结果不完整，请重试');
+          message.error(String(error || 'Hash 字段搜索失败'));
+        }
+      }
+    };
+    void search();
+    return () => { hashSearchRequestRef.current++; };
+  }, [hashSearch, detail?.name, detail?.type, creating, uniqueData.dataSourceId, uniqueData.databaseName]);
+
   const filteredHashFields = useMemo(() => {
-    const keyword = hashFieldFilter.trim().toLowerCase();
-    if (!keyword) {
-      return hashFields;
-    }
-    return hashFields.filter(
-      (item) => item.field.toLowerCase().includes(keyword) || item.value.toLowerCase().includes(keyword),
-    );
-  }, [hashFieldFilter, hashFields]);
+    return hashSearchFields === null ? hashFields : hashFields.filter((item) => hashSearchFields.has(item.field));
+  }, [hashSearchFields, hashFields]);
 
   const hashColumns: ColumnsType<IHashFieldRow> = [
     {
@@ -1504,19 +1577,29 @@ const RedisDataView = memo((props: IProps) => {
       return (
         <>
           <div className={styles.hashFilterBar}>
-            <Input
+            <Input.Search
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="过滤字段或值"
+              placeholder="完整字段名精确查询；条件查询请输入 *，如 VIN* 或 *123*"
               size="small"
               value={hashFieldFilter}
               onChange={(event) => handleHashFieldFilterChange(event.target.value)}
+              onSearch={(value) => {
+                if (value && !creating) setHashSearch({ query: value });
+              }}
+              disabled={creating}
             />
             <span>
-              {filteredHashFields.length}/{hashFields.length} 个字段
+              {hashSearchStatus || `已加载 ${hashFields.length}/${valuePage?.total ?? hashFields.length} 个字段`}
             </span>
           </div>
-          <Table columns={hashColumns} dataSource={filteredHashFields} pagination={false} rowKey="id" size="small" />
+          <Table
+            columns={hashColumns}
+            dataSource={filteredHashFields}
+            pagination={{ pageSize: 50, showSizeChanger: false, hideOnSinglePage: true }}
+            rowKey="id"
+            size="small"
+          />
           <div className={styles.fieldToolbar}>
             <Button icon={<PlusOutlined />} size="small" onClick={addHashField}>
               字段
