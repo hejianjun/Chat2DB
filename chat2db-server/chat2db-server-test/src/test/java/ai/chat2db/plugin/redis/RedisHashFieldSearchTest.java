@@ -2,22 +2,54 @@ package ai.chat2db.plugin.redis;
 
 import ai.chat2db.spi.sql.Chat2DBContext;
 import ai.chat2db.spi.sql.ConnectInfo;
+import ai.chat2db.spi.redis.RedisKeyMutation;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import io.lettuce.core.MapScanCursor;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
+import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Mockito.*;
 
 class RedisHashFieldSearchTest {
+    @Test
+    void hashFieldPatchDoesNotWatchTheWholeHash() {
+        withCommands(commands -> {
+            doReturn(future(1L)).when(commands).eval(anyString(), eq(ScriptOutputType.INTEGER),
+                    any(String[].class), any(String[].class));
+            new RedisKeyBrowserService().partialUpdateKey(null, RedisKeyMutation.builder()
+                    .keyName("vehicles").updateKey("vehicles").keyType("hash")
+                    .hashUpserts(Map.of("VIN123", "new value")).hashDeletes(List.of("oldVin")).build());
+            verify(commands).eval(eq(RedisKeyBrowserService.PATCH_HASH_FIELDS_SCRIPT), eq(ScriptOutputType.INTEGER),
+                    aryEq(new String[]{"vehicles"}), aryEq(new String[]{"1", "VIN123", "new value", "oldVin"}));
+            verifyNoMoreInteractions(commands);
+        });
+    }
+
+    @Test
+    void hashPatchRejectsMissingOrChangedKey() {
+        withCommands(commands -> {
+            doReturn(future(-1L), future(-2L)).when(commands).eval(anyString(), eq(ScriptOutputType.INTEGER),
+                    any(String[].class), any(String[].class));
+            var mutation = RedisKeyMutation.builder().keyName("vehicles").keyType("hash")
+                    .hashUpserts(Map.of("VIN123", "value")).build();
+            assertThrows(BusinessException.class, () -> new RedisKeyBrowserService().partialUpdateKey(null, mutation));
+            assertThrows(BusinessException.class, () -> new RedisKeyBrowserService().partialUpdateKey(null, mutation));
+        });
+    }
+
     @Test
     void literalFieldUsesHgetAndPreservesEmptyValue() {
         withCommands(commands -> {
@@ -69,7 +101,7 @@ class RedisHashFieldSearchTest {
             chat.when(Chat2DBContext::getConnectInfo).thenReturn(info);
             provider.when(() -> RedisConnectionProvider.open(info)).thenReturn(context);
             test.accept(commands);
-            verify(context).close();
+            verify(context, atLeastOnce()).close();
         }
     }
 

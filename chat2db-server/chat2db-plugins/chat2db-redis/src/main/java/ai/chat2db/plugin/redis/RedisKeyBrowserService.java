@@ -6,9 +6,11 @@ import ai.chat2db.spi.redis.RedisKeyMutation;
 import ai.chat2db.spi.redis.RedisKeyScanResult;
 import ai.chat2db.spi.redis.RedisKeyValuePage;
 import ai.chat2db.spi.sql.Chat2DBContext;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import io.lettuce.core.ScanArgs;
 import io.lettuce.core.ScanCursor;
 import io.lettuce.core.ScoredValue;
+import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.TransactionResult;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +47,23 @@ import static ai.chat2db.plugin.redis.RedisConnectionHelper.*;
 class RedisKeyBrowserService implements RedisKeyBrowser {
 
     private static final Set<String> SAMPLE_KEY_TYPES = Set.of("string", "hash", "list", "set", "zset");
+
+    // Check and patch atomically: WATCH on a hot hash conflicts with writes to unrelated fields.
+    static final String PATCH_HASH_FIELDS_SCRIPT = """
+            local kind = redis.call('TYPE', KEYS[1]).ok
+            if kind == 'none' then return -1 end
+            if kind ~= 'hash' then return -2 end
+            local upserts = tonumber(ARGV[1])
+            local pos = 2
+            for i = 1, upserts do
+                redis.call('HSET', KEYS[1], ARGV[pos], ARGV[pos + 1])
+                pos = pos + 2
+            end
+            for i = pos, #ARGV do
+                redis.call('HDEL', KEYS[1], ARGV[i])
+            end
+            return 1
+            """;
 
 
     @Override
@@ -283,20 +302,25 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
             RedisAsyncCommands<String, String> commands = context.connection().async();
             selectDatabase(commands, databaseName).join();
             String targetKey = StringUtils.defaultIfBlank(mutation.getUpdateKey(), mutation.getKeyName());
+            String requestedType = StringUtils.lowerCase(StringUtils.trimToEmpty(mutation.getKeyType()));
+            validatePartialMutation(requestedType, mutation);
+            if ("hash".equals(requestedType) && StringUtils.equals(targetKey, mutation.getKeyName())
+                    && mutation.getTtl() == null) {
+                patchHashFields(commands, mutation);
+                return;
+            }
             if (StringUtils.equals(targetKey, mutation.getKeyName())) {
                 commands.watch(mutation.getKeyName()).toCompletableFuture().join();
             } else {
                 commands.watch(mutation.getKeyName(), targetKey).toCompletableFuture().join();
             }
             String actualType = getTypeAsync(commands, mutation.getKeyName()).join();
-            String requestedType = StringUtils.lowerCase(StringUtils.trimToEmpty(mutation.getKeyType()));
             if ("none".equals(actualType)) {
                 throw new IllegalArgumentException("Redis key 不存在: " + mutation.getKeyName());
             }
             if (!StringUtils.equals(actualType, requestedType)) {
                 throw new IllegalArgumentException("Redis key 类型已变化: " + actualType);
             }
-            validatePartialMutation(requestedType, mutation);
             if ("list".equals(requestedType)) {
                 validateListIndexes(commands.llen(mutation.getKeyName()).toCompletableFuture().join(), mutation);
             }
@@ -315,6 +339,27 @@ class RedisKeyBrowserService implements RedisKeyBrowser {
             if (result.wasDiscarded()) {
                 throw new IllegalStateException("Redis key changed during partial update. Retry the operation.");
             }
+        }
+    }
+
+    private void patchHashFields(RedisAsyncCommands<String, String> commands, RedisKeyMutation mutation) {
+        Map<String, String> upserts = mutation.getHashUpserts() == null ? Map.of() : mutation.getHashUpserts();
+        List<String> args = new ArrayList<>();
+        args.add(Integer.toString(upserts.size()));
+        upserts.forEach((field, value) -> {
+            args.add(Objects.requireNonNull(field));
+            args.add(Objects.requireNonNull(value));
+        });
+        if (mutation.getHashDeletes() != null) {
+            mutation.getHashDeletes().forEach(field -> args.add(Objects.requireNonNull(field)));
+        }
+        Long result = commands.<Long>eval(PATCH_HASH_FIELDS_SCRIPT, ScriptOutputType.INTEGER,
+                new String[]{mutation.getKeyName()}, args.toArray(String[]::new)).toCompletableFuture().join();
+        if (Long.valueOf(-1).equals(result)) {
+            throw new BusinessException("redis.hashKeyMissing");
+        }
+        if (Long.valueOf(-2).equals(result)) {
+            throw new BusinessException("redis.hashKeyTypeChanged");
         }
     }
 
