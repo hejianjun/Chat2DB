@@ -607,9 +607,14 @@ export const initSqlAutocomplete = (options: ISqlAutocompleteOptions): ISqlAutoc
 
     onSuggestFunctionName: async (inputValue?: string) => {
       const dialectCompletion = getDialectCompletion(boundInfo.databaseType);
+      const functionNames = new Set(dialectCompletion.functions.map((func) => func.toUpperCase()));
 
       const keywordItems = dialectCompletion.keywords
         .filter((kw) => matchesInputValue(kw, inputValue))
+        // Some MySQL functions are also reserved words (for example RIGHT,
+        // LEFT and INSERT). Keep the function completion so it inserts the
+        // callable form instead of showing a duplicate keyword item.
+        .filter((kw) => !functionNames.has(kw.toUpperCase()))
         .map((kw) => ({
           label: kw,
           insertText: kw,

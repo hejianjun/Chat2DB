@@ -22,6 +22,26 @@ const isDdlStatement = (statement: string) => {
 
 const ddlRootKeywords = ['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'];
 
+// Parser internals such as "word", "string", and "cursor" are useful for
+// completion, but they are not actionable user-facing diagnostics.
+const getVisibleParserSuggestions = (suggestions: IParseResult['error']['suggestions'] = []) => {
+  return _.uniq(
+    suggestions
+      .filter((suggestion) => suggestion.type === 'string' && typeof suggestion.value === 'string')
+      .map((suggestion) => suggestion.value.trim())
+      .filter(Boolean),
+  );
+};
+
+const getParserErrorMessage = (error: IParseResult['error']) => {
+  const suggestions = getVisibleParserSuggestions(error.suggestions);
+  const expectedText = suggestions.length > 0 ? `，此处可输入：${suggestions.join('、')}` : '';
+
+  return error.reason === 'incomplete'
+    ? `SQL 语句尚未输入完整${expectedText}`
+    : `SQL 语法检查提示${expectedText}`;
+};
+
 // Identify an unfinished root keyword such as CREAT or ALTE, but exclude the already completed keyword.
 const getDdlRootPrefix = (statement: string) => {
   const inputValue = statement.trim().toUpperCase();
@@ -374,18 +394,8 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
 
             // Only show error if there's actual SQL content (not just comments)
             if (textWithoutComments.length > 0) {
-              const newReason =
-                parseResult.error.reason === 'incomplete'
-                  ? `Incomplete, expect next input: \n${parseResult.error.suggestions
-                      .map((each: any) => {
-                        return each.value;
-                      })
-                      .join('\n')}`
-                  : `Wrong input, expect: \n${parseResult.error.suggestions
-                      .map((each: any) => {
-                        return each.value;
-                      })
-                      .join('\n')}`;
+              const newReason = getParserErrorMessage(parseResult.error);
+              const cursorPosition = model.getPositionAt(cursorOffset);
 
               const errorPosition = parseResult.error.token
                 ? {
@@ -395,19 +405,17 @@ export function monacoSqlAutocomplete(monaco: any, editor: any, opts?: Partial<D
                     endColumn: model.getPositionAt(parseResult.error.token.position[1]).column + 1,
                   }
                 : {
-                    startLineNumber: 0,
-                    startColumn: 0,
-                    endLineNumber: 0,
-                    endColumn: 0,
+                    startLineNumber: cursorPosition.lineNumber,
+                    startColumn: cursorPosition.column,
+                    endLineNumber: cursorPosition.lineNumber,
+                    endColumn: cursorPosition.column,
                   };
-
-              model.getPositionAt(parseResult.error.token);
 
               monaco.editor.setModelMarkers(model, opts.language, [
                 {
                   ...errorPosition,
                   message: newReason,
-                  severity: getSeverityByVersion(monaco, opts.monacoEditorVersion),
+                  severity: getSeverityByVersion(monaco, opts.monacoEditorVersion, parseResult.error.reason),
                 },
               ]);
             } else {
@@ -565,12 +573,18 @@ function returnCompletionItemsByVersion(value: ICompletionItem[], monacoVersion:
   }
 }
 
-function getSeverityByVersion(monaco: any, monacoVersion: IMonacoVersion) {
+function getSeverityByVersion(
+  monaco: any,
+  monacoVersion: IMonacoVersion,
+  reason: IParseResult['error']['reason'],
+) {
+  const severity = reason === 'incomplete' ? 'Hint' : 'Error';
+
   switch (monacoVersion) {
     case '0.13.2':
-      return monaco.Severity.Error;
+      return monaco.Severity[severity];
     case '0.15.6':
-      return monaco.MarkerSeverity.Error;
+      return monaco.MarkerSeverity[severity];
     default:
       throw Error('Not supported version');
   }

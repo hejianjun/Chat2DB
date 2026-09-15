@@ -1,5 +1,5 @@
 /* eslint-disable no-use-before-define */
-import { chain, many, optional, plus } from '../../..';
+import { chain, many, matchTokenType, optional, plus } from '../../..';
 import { createFourOperations } from '../base/four-operations';
 import {
   comparisonOperator,
@@ -394,6 +394,15 @@ const functionChain = () => {
   });
 };
 
+// These reserved words are also present in the MySQL function catalog. Keep
+// the exception list narrow so unrelated keywords such as FROM(...) still
+// produce a syntax diagnostic.
+const reservedFunctionNames = ['insert', 'isnull', 'left', 'right'];
+
+const functionName = () => {
+  return chain([wordSym, matchTokenType('word', { includes: reservedFunctionNames })])(ast => ast[0]);
+};
+
 const ifFunction = () => {
   return chain('if', '(', predicate, ',', field, ',', field, ')')(ast => {
     return {
@@ -436,7 +445,15 @@ const castFunction = () => {
 };
 
 const normalFunction = () => {
-  return chain(wordSym, '(', optional(functionFields), ')', optional('filter', '(', whereStatement, ')'))(ast => {
+  // wordSym intentionally excludes reserved words for column identifiers,
+  // while functionName permits the MySQL function/keyword overlap.
+  return chain(
+    functionName,
+    '(',
+    optional(functionFields),
+    ')',
+    optional('filter', '(', whereStatement, ')'),
+  )(ast => {
     return {
       type: 'function',
       name: ast[0],
