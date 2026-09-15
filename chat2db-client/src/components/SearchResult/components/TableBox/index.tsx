@@ -77,6 +77,44 @@ export enum USER_FILLED_VALUE {
   DEFAULT = 'CHAT2DB_UPDATE_TABLE_DATA_USER_FILLED_DEFAULT',
 }
 
+const mongoNumericValuePattern = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+const serializeMongoValue = (value: string | null | undefined, dataType?: TableDataType) => {
+  if (value === null || value === undefined || value === USER_FILLED_VALUE.DEFAULT) {
+    return 'null';
+  }
+
+  const normalizedValue = String(value);
+  if (!normalizedValue.length) {
+    return dataType === TableDataType.STRING ? '""' : 'null';
+  }
+
+  switch (dataType) {
+    case TableDataType.NUMERIC:
+      if (!mongoNumericValuePattern.test(normalizedValue.trim())) {
+        throw new Error(`MongoDB numeric value is invalid: ${normalizedValue}`);
+      }
+      return normalizedValue.trim();
+    case TableDataType.BOOLEAN:
+      if (!['true', 'false'].includes(normalizedValue.trim().toLowerCase())) {
+        throw new Error(`MongoDB boolean value is invalid: ${normalizedValue}`);
+      }
+      return normalizedValue.trim().toLowerCase();
+    case TableDataType.DATETIME:
+      return JSON.stringify({ $date: normalizedValue });
+    case TableDataType.DOCUMENT:
+    case TableDataType.ARRAY:
+    case TableDataType.OBJECT:
+      try {
+        return JSON.stringify(JSON.parse(normalizedValue));
+      } catch {
+        throw new Error('MongoDB document or array value must be valid JSON');
+      }
+    default:
+      return JSON.stringify(normalizedValue);
+  }
+};
+
 const SupportBaseTable: any = styled(BaseTable)`
   &.supportBaseTable {
     --bgcolor: var(--color-bg-base);
@@ -165,6 +203,16 @@ export default function TableBox(props: ITableProps) {
   const [exportProgress, setExportProgress] = useState<number>(0);
   const [exportModalVisible, setExportModalVisible] = useState<boolean>(false);
   const exportSubscriptionRef = React.useRef<(() => void) | null>(null);
+  const isMongoDatabase = String(props.executeSqlParams?.databaseType || '').toUpperCase() === DatabaseTypeCode.MONGODB;
+  const canEditMongo = isMongoDatabase && Boolean(queryResultData.canEdit);
+  const canEditRelational = Boolean(queryResultData.canEdit && !isMongoDatabase);
+
+  const isMongoIdColumn = (colId?: string) =>
+    canEditMongo &&
+    Boolean(colId) &&
+    queryResultData.headerList.some(
+      (header, index) => header.name === '_id' && `${preCode}${index}${header.name}` === colId,
+    );
 
   const handleExportSQLResult = async (exportType: ExportTypeEnum, exportSize: ExportSizeEnum) => {
     const params: IExportParams = {
@@ -360,8 +408,8 @@ export default function TableBox(props: ITableProps) {
     setCurOperationRowNo(null);
     // 当前聚焦或者编辑的单元格的数据
     setEditingData(value);
-    // 如果数据不支持修改，则该单元格不支持编辑
-    if (!queryResultData.canEdit) {
+    // 如果数据不支持修改，或 MongoDB 的 _id 列，则该单元格不支持编辑
+    if (!queryResultData.canEdit || isMongoIdColumn(colId)) {
       setEditingCell([colId, rowId, false]);
     } else {
       setEditingCell([colId, rowId, isEditing]);
@@ -646,6 +694,74 @@ export default function TableBox(props: ITableProps) {
     });
   };
 
+  const buildMongoUpdateStatements = () => {
+    const collectionName = queryResultData.tableName || props.executeSqlParams?.tableName;
+    if (!collectionName) {
+      return [];
+    }
+
+    const collectionReference = getMongodbCollectionReference(collectionName);
+    return updateData.reduce<string[]>((statements, operation) => {
+      if (operation.type !== CRUD.UPDATE || !operation.dataList || !operation.oldDataList) {
+        return statements;
+      }
+
+      const rowIndex = tableData.findIndex((item) => item[colNoCode] === operation.rowId);
+      const rowFilter = rowIndex >= 0 ? queryResultData.rowDeleteFilters?.[rowIndex] : undefined;
+      if (!rowFilter) {
+        return statements;
+      }
+
+      const changedFields = queryResultData.headerList.reduce<string[]>((fields, header, fieldIndex) => {
+        if (header.name === 'No.' || header.name === '_id') {
+          return fields;
+        }
+
+        const oldValue = operation.oldDataList?.[fieldIndex] ?? null;
+        const newValue = operation.dataList?.[fieldIndex] ?? null;
+        if (oldValue !== newValue) {
+          fields.push(`${JSON.stringify(header.name)}: ${serializeMongoValue(newValue, header.dataType)}`);
+        }
+        return fields;
+      }, []);
+
+      if (changedFields.length) {
+        statements.push(`${collectionReference}.updateOne(${rowFilter}, {$set: {${changedFields.join(', ')}}})`);
+      }
+      return statements;
+    }, []);
+  };
+
+  const handleMongoUpdate = async () => {
+    if (!updateData.length || tableLoading) {
+      return;
+    }
+
+    const updateStatements = buildMongoUpdateStatements();
+    if (!updateStatements.length) {
+      return;
+    }
+
+    setTableLoading(true);
+    try {
+      const resultList = await sqlService.executeSql({
+        ...(props.executeSqlParams || {}),
+        sql: updateStatements.join(';\n'),
+        tableName: queryResultData.tableName || props.executeSqlParams?.tableName,
+      });
+      const failedResult = resultList.find((result) => !result.success);
+      if (failedResult) {
+        throw new Error(failedResult.message || i18n('common.button.executionError'));
+      }
+      await getTableData();
+      message.success(i18n('editTableData.tips.mongoUpdateSuccess', updateStatements.length));
+    } catch (error) {
+      setTableLoading(false);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      message.error(i18n('editTableData.tips.mongoUpdateFailed', errorMessage));
+    }
+  };
+
   const handleMongoDelete = () => {
     const selectedRowIds = curOperationRowNo || (editingCell ? [editingCell[1]] : []);
     const selectedRowIndexes = selectedRowIds
@@ -835,6 +951,7 @@ export default function TableBox(props: ITableProps) {
     curOperationRowNo,
     oldDataList,
     dateTimeDisplay,
+    canEditMongo,
   ]);
 
   const hasColumnComment = queryResultData.headerList?.some((item) => item.comment?.trim());
@@ -928,7 +1045,7 @@ export default function TableBox(props: ITableProps) {
             copy(res);
           });
         },
-        hide: !queryResultData.canEdit,
+        hide: !canEditRelational,
       },
       {
         callback: () => {
@@ -950,7 +1067,7 @@ export default function TableBox(props: ITableProps) {
             copy(res);
           });
         },
-        hide: !queryResultData.canEdit,
+        hide: !canEditRelational,
       },
       // 复制当前行的数据
       {
@@ -1043,11 +1160,11 @@ export default function TableBox(props: ITableProps) {
     let rightClickMenu: any = [];
     if (curOperationRowNo) {
       rightClickMenu = [copyRow, cloneRow, deleteRow];
-      // MongoDB 结果只支持删除，不显示关系型数据编辑菜单
-      if (!queryResultData.canEdit) {
+      // MongoDB 结果不显示关系型新增和复制菜单
+      if (!canEditRelational) {
         rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.CloneRow);
       }
-      if (!queryResultData.canEdit && !queryResultData.canDelete) {
+      if (!canEditRelational && !queryResultData.canDelete) {
         rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.DeleteRow);
       }
     }
@@ -1064,15 +1181,14 @@ export default function TableBox(props: ITableProps) {
       if (!hasDefaultValue) {
         rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.SetDefault);
       }
-      // MongoDB 结果只支持删除，不显示关系型数据编辑菜单
-      if (!queryResultData.canEdit) {
-        rightClickMenu = rightClickMenu.filter(
-          (i) =>
-            i.key !== AllSupportedMenusType.CloneRow &&
-            i.key !== AllSupportedMenusType.SetNull,
-        );
+      // MongoDB 结果不显示关系型新增和复制菜单
+      if (!canEditRelational) {
+        rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.CloneRow);
+        if (!canEditMongo || isMongoIdColumn(colId)) {
+          rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.SetNull);
+        }
       }
-      if (!queryResultData.canEdit && !queryResultData.canDelete) {
+      if (!canEditRelational && !queryResultData.canDelete) {
         rightClickMenu = rightClickMenu.filter((i) => i.key !== AllSupportedMenusType.DeleteRow);
       }
     }
@@ -1081,7 +1197,7 @@ export default function TableBox(props: ITableProps) {
       return null;
     }
     return rightClickMenu;
-  }, [curOperationRowNo, editingCell, queryResultData]);
+  }, [curOperationRowNo, editingCell, queryResultData, canEditMongo, canEditRelational]);
 
   const renderContent = () => {
     const bottomStatus = (
@@ -1124,7 +1240,7 @@ export default function TableBox(props: ITableProps) {
                 </div>
               </Popover>
             </div>
-            {queryResultData.canEdit && (
+            {canEditRelational && (
               <div className={classnames(styles.toolBarItem, styles.editTableDataBar)}>
                 {/* 新增行 */}
                 <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.addRow')} trigger="hover">
@@ -1180,6 +1296,31 @@ export default function TableBox(props: ITableProps) {
                 <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.submit')} trigger="hover">
                   <div
                     onClick={handleUpdateSubmit}
+                    className={classnames(styles.updateSubmitBar, styles.editTableDataBarItem, {
+                      [styles.disableBar]: !updateData.length,
+                    })}
+                  >
+                    <Iconfont code="&#xe687;" />
+                  </div>
+                </Popover>
+              </div>
+            )}
+            {canEditMongo && (
+              <div className={classnames(styles.toolBarItem, styles.editTableDataBar)}>
+                {/* MongoDB 撤销和保存 */}
+                <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.revert')} trigger="hover">
+                  <div
+                    onClick={handleRevoke}
+                    className={classnames(styles.revokeBar, styles.editTableDataBarItem, {
+                      [styles.disableBar]: revokeDisableBarState,
+                    })}
+                  >
+                    <Iconfont code="&#xe6e2;" />
+                  </div>
+                </Popover>
+                <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.submit')} trigger="hover">
+                  <div
+                    onClick={handleMongoUpdate}
                     className={classnames(styles.updateSubmitBar, styles.editTableDataBarItem, {
                       [styles.disableBar]: !updateData.length,
                     })}
@@ -1269,7 +1410,7 @@ export default function TableBox(props: ITableProps) {
           language="plaintext"
           options={{
             lineNumbers: 'off',
-            readOnly: !queryResultData.canEdit,
+            readOnly: !queryResultData.canEdit || isMongoIdColumn(viewTableCellData?.colId),
           }}
         />
       </div>
@@ -1303,7 +1444,7 @@ export default function TableBox(props: ITableProps) {
         maskClosable={false}
         destroyOnHidden={true}
         footer={
-          queryResultData.canEdit && [
+          queryResultData.canEdit && !isMongoIdColumn(viewTableCellData?.colId) && [
             <Button key="1" type="primary" onClick={monacoEditorEditData}>
               {i18n('common.button.modify')}
             </Button>,

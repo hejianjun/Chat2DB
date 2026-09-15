@@ -7,7 +7,6 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -49,11 +48,19 @@ class MongodbCommandExecutorTest {
     }
 
     @Test
-    void findResultIsNotDeletableWhenProjectionExcludesId() {
-        List<MongodbCommandParser.MethodCall> chain = new ArrayList<>();
+    void findResultIsNotModifiableWhenProjectionExcludesId() {
         List<Document> documents = List.of(new Document("name", "Chat2DB"));
 
-        Assertions.assertFalse(MongodbCommandExecutor.canDeleteFindResult(
-                List.of("{}", "{name: 1, _id: 0}"), chain, documents));
+        Assertions.assertFalse(MongodbCommandExecutor.canModifyFindResult(
+                List.of("{}", "{name: 1, _id: 0}"), List.of(), documents));
+    }
+
+    @Test
+    void findResultCanBeEditedAndDeletedWhenIdIsVisible() {
+        List<Document> documents = List.of(
+                new Document("_id", new ObjectId("507f1f77bcf86cd799439011"))
+                        .append("name", "Chat2DB"));
+
+        Assertions.assertTrue(MongodbCommandExecutor.canModifyFindResult(List.of("{}"), List.of(), documents));
     }
 }

@@ -347,14 +347,15 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
         }
         documentsResult(result, documents, page.pageNo(), page.limit(), hasNext);
         result.setTableName(collection.getNamespace().getCollectionName());
-        boolean canDelete = canDeleteFindResult(arguments, chain, documents);
-        result.setCanDelete(canDelete);
-        result.setRowDeleteFilters(canDelete
+        boolean canModify = canModifyFindResult(arguments, chain, documents);
+        result.setCanEdit(canModify);
+        result.setCanDelete(canModify);
+        result.setRowDeleteFilters(canModify
                 ? documents.stream().map(MongodbCommandExecutor::buildDeleteFilter).toList()
                 : List.of());
     }
 
-    static boolean canDeleteFindResult(List<String> arguments, List<MongodbCommandParser.MethodCall> chain,
+    static boolean canModifyFindResult(List<String> arguments, List<MongodbCommandParser.MethodCall> chain,
                                        List<Document> documents) {
         if (documents.isEmpty() || documents.stream().anyMatch(document -> !document.containsKey("_id"))) {
             return false;
@@ -364,7 +365,8 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
         }
         return chain.stream()
                 .filter(call -> "projection".equals(call.name()))
-                .noneMatch(call -> excludesId(MongodbCommandParser.parseDocument(call.arguments().get(0))));
+                .noneMatch(call -> !call.arguments().isEmpty()
+                        && excludesId(MongodbCommandParser.parseDocument(call.arguments().get(0))));
     }
 
     static String buildDeleteFilter(Document document) {

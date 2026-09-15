@@ -7,4 +7,6 @@ export default {
   'editTableData.tips.mongoDeleteConfirm': 'Delete the selected {1} MongoDB document(s)? This action cannot be undone.',
   'editTableData.tips.mongoDeleteSuccess': 'Successfully deleted {1} MongoDB document(s)',
   'editTableData.tips.mongoDeleteFailed': 'Failed to delete MongoDB document(s): {1}',
+  'editTableData.tips.mongoUpdateSuccess': 'Successfully updated {1} MongoDB document(s)',
+  'editTableData.tips.mongoUpdateFailed': 'Failed to update MongoDB document(s): {1}',
 };

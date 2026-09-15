@@ -7,4 +7,6 @@ export default {
   'editTableData.tips.mongoDeleteConfirm': '選択した {1} 件の MongoDB ドキュメントを削除しますか？この操作は元に戻せません。',
   'editTableData.tips.mongoDeleteSuccess': '{1} 件の MongoDB ドキュメントを削除しました',
   'editTableData.tips.mongoDeleteFailed': 'MongoDB ドキュメントの削除に失敗しました：{1}',
+  'editTableData.tips.mongoUpdateSuccess': '{1} 件の MongoDB ドキュメントを更新しました',
+  'editTableData.tips.mongoUpdateFailed': 'MongoDB ドキュメントの更新に失敗しました：{1}',
 };

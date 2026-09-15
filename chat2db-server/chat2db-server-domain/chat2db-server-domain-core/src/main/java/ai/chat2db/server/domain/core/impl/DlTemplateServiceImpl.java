@@ -72,7 +72,10 @@ public class DlTemplateServiceImpl implements DlTemplateService {
         for (ExecuteResult executeResult : results) {
             ensureRowNumberColumn(executeResult, I18nUtils.getMessage("sqlResult.rowNumber"));
             List<Header> headers = executeResult.getHeaderList();
-            if (executeResult.getSuccess() && executeResult.isCanEdit() && CollectionUtils.isNotEmpty(headers)) {
+            boolean isMongoDb = DataSourceTypeEnum.MONGODB.getCode().equalsIgnoreCase(
+                    Chat2DBContext.getConnectInfo().getDbType());
+            if (executeResult.getSuccess() && executeResult.isCanEdit() && !isMongoDb
+                    && CollectionUtils.isNotEmpty(headers)) {
                 headers = setColumnInfo(headers, executeResult.getTableName(), param.getSchemaName(),
                         param.getDatabaseName());
                 executeResult.setHeaderList(headers);
