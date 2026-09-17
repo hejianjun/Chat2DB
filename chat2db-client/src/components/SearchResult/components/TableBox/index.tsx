@@ -702,7 +702,24 @@ export default function TableBox(props: ITableProps) {
 
     const collectionReference = getMongodbCollectionReference(collectionName);
     return updateData.reduce<string[]>((statements, operation) => {
-      if (operation.type !== CRUD.UPDATE || !operation.dataList || !operation.oldDataList) {
+      if (!operation.dataList) {
+        return statements;
+      }
+
+      if (operation.type === CRUD.CREATE) {
+        const fields = queryResultData.headerList.reduce<string[]>((documentFields, header, fieldIndex) => {
+          if (header.name === 'No.' || header.name === '_id') {
+            return documentFields;
+          }
+          const value = operation.dataList?.[fieldIndex] ?? null;
+          documentFields.push(`${JSON.stringify(header.name)}: ${serializeMongoValue(value, header.dataType)}`);
+          return documentFields;
+        }, []);
+        statements.push(`${collectionReference}.insertOne({${fields.join(', ')}})`);
+        return statements;
+      }
+
+      if (operation.type !== CRUD.UPDATE || !operation.oldDataList) {
         return statements;
       }
 
@@ -754,16 +771,24 @@ export default function TableBox(props: ITableProps) {
         throw new Error(failedResult.message || i18n('common.button.executionError'));
       }
       await getTableData();
-      message.success(i18n('editTableData.tips.mongoUpdateSuccess', updateStatements.length));
+      message.success(i18n('editTableData.tips.mongoSaveSuccess', updateStatements.length));
     } catch (error) {
       setTableLoading(false);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      message.error(i18n('editTableData.tips.mongoUpdateFailed', errorMessage));
+      message.error(i18n('editTableData.tips.mongoSaveFailed', errorMessage));
     }
   };
 
   const handleMongoDelete = () => {
     const selectedRowIds = curOperationRowNo || (editingCell ? [editingCell[1]] : []);
+    const hasUnsavedRows = selectedRowIds.some((rowId) =>
+      updateData.some((operation) => operation.type === CRUD.CREATE && operation.rowId === rowId),
+    );
+    if (hasUnsavedRows) {
+      handleDeleteData();
+      return;
+    }
+
     const selectedRowIndexes = selectedRowIds
       .map((rowId) => tableData.findIndex((item) => item[colNoCode] === rowId))
       .filter((rowIndex) => rowIndex >= 0);
@@ -1307,6 +1332,17 @@ export default function TableBox(props: ITableProps) {
             )}
             {canEditMongo && (
               <div className={classnames(styles.toolBarItem, styles.editTableDataBar)}>
+                {/* 新增 MongoDB 文档 */}
+                <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.addRow')} trigger="hover">
+                  <div
+                    onClick={() => {
+                      handleCreateData();
+                    }}
+                    className={classnames(styles.createDataBar, styles.editTableDataBarItem)}
+                  >
+                    <Iconfont code="&#xe61b;" />
+                  </div>
+                </Popover>
                 {/* MongoDB 撤销和保存 */}
                 <Popover mouseEnterDelay={0.8} content={i18n('editTableData.tips.revert')} trigger="hover">
                   <div
