@@ -19,7 +19,7 @@ import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Service;
 
 /**
- * MCP tools for intentionally dangerous SQL paths that require explicit server opt-in and user elicitation.
+ * MCP tools for intentionally dangerous SQL paths that require explicit server opt-in and client-side approval.
  */
 @Service
 public class DangerousSqlTools {
@@ -40,8 +40,9 @@ public class DangerousSqlTools {
     }
 
     @McpTool(description = "DESTRUCTIVE P2 DML: Execute INSERT/UPDATE/DELETE SQL statements in one transaction. "
-        + "Requires allow-write=true and a non-release datasource. The server always requests MCP elicitation "
-        + "before execution; only an explicit user acceptance with confirm=true executes SQL. "
+        + "Requires allow-write=true and a non-release datasource. Clients that support MCP elicitation are "
+        + "asked to confirm before execution; Codex clients use Codex's built-in tool approval instead. "
+        + "No SQL is executed unless the applicable approval path succeeds. "
         + "Do not use a separate confirmation parameter or try to execute this operation through another tool.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
     public String executeUpdate(McpSyncServerExchange exchange,
@@ -58,10 +59,12 @@ public class DangerousSqlTools {
 
                 List<String> statements = List.copyOf(sqlList);
                 List<Integer> expectedCounts = List.copyOf(expectedUpdateCounts);
-                McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DML",
-                    resolvedDataSource, databaseName, schemaName, statements, expectedCounts);
-                if (!isAccepted(elicitationResult)) {
-                    return noExecutionMessage("DML", elicitationResult);
+                if (!isCodexClient(exchange)) {
+                    McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DML",
+                        resolvedDataSource, databaseName, schemaName, statements, expectedCounts);
+                    if (!isAccepted(elicitationResult)) {
+                        return noExecutionMessage("DML", elicitationResult);
+                    }
                 }
 
                 // Re-check the policy after the user responds in case configuration or datasource state changed.
@@ -75,8 +78,9 @@ public class DangerousSqlTools {
     }
 
     @McpTool(description = "DESTRUCTIVE P2 DDL: Execute one CREATE/ALTER/DROP/TRUNCATE/RENAME/COMMENT/GRANT/REVOKE SQL statement. "
-        + "Requires allow-ddl=true and a non-release datasource. The server always requests MCP elicitation before "
-        + "execution; only an explicit user acceptance with confirm=true executes SQL. "
+        + "Requires allow-ddl=true and a non-release datasource. Clients that support MCP elicitation are asked to "
+        + "confirm before execution; Codex clients use Codex's built-in tool approval instead. No SQL is executed "
+        + "unless the applicable approval path succeeds. "
         + "Do not use a separate confirmation parameter or try to execute this operation through another tool.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
     public String executeDdl(McpSyncServerExchange exchange,
@@ -89,10 +93,12 @@ public class DangerousSqlTools {
                 sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId());
                 sqlGuard.requireSingleDdlSql(sql);
 
-                McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DDL",
-                    resolvedDataSource, databaseName, schemaName, List.of(sql), null);
-                if (!isAccepted(elicitationResult)) {
-                    return noExecutionMessage("DDL", elicitationResult);
+                if (!isCodexClient(exchange)) {
+                    McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DDL",
+                        resolvedDataSource, databaseName, schemaName, List.of(sql), null);
+                    if (!isAccepted(elicitationResult)) {
+                        return noExecutionMessage("DDL", elicitationResult);
+                    }
                 }
 
                 // Re-check the policy after the user responds in case configuration or datasource state changed.
@@ -107,8 +113,8 @@ public class DangerousSqlTools {
                                                         ResolvedDataSource resolvedDataSource, String databaseName,
                                                         String schemaName, List<String> sqlList,
                                                         List<Integer> expectedUpdateCounts) {
-        if (exchange == null || exchange.getClientCapabilities() == null
-            || exchange.getClientCapabilities().elicitation() == null) {
+        McpSchema.ClientCapabilities clientCapabilities = exchange == null ? null : exchange.getClientCapabilities();
+        if (clientCapabilities == null || clientCapabilities.elicitation() == null) {
             throw new IllegalStateException("MCP client does not advertise elicitation capability. "
                 + operationType + " SQL was not executed.");
         }
@@ -130,6 +136,20 @@ public class DangerousSqlTools {
                     "default", false)),
                 "required", List.of(CONFIRM_FIELD)))
             .build());
+    }
+
+    /**
+     * Codex handles approval in its host layer instead of MCP server-initiated elicitation. The client name/title
+     * is only a compatibility signal and is not an authentication boundary; MCP authentication and P2 SQL policy
+     * checks remain authoritative.
+     */
+    private boolean isCodexClient(McpSyncServerExchange exchange) {
+        McpSchema.Implementation clientInfo = exchange == null ? null : exchange.getClientInfo();
+        if (clientInfo == null) {
+            return false;
+        }
+        return StringUtils.containsIgnoreCase(clientInfo.name(), "codex")
+            || StringUtils.containsIgnoreCase(clientInfo.title(), "codex");
     }
 
     private boolean isAccepted(McpSchema.ElicitResult result) {

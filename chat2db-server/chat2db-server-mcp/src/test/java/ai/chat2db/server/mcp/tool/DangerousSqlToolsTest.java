@@ -110,6 +110,20 @@ class DangerousSqlToolsTest {
     }
 
     @Test
+    void codexClientDelegatesApprovalToHostAndDoesNotRequestElicitation() {
+        when(exchange.getClientInfo()).thenReturn(new McpSchema.Implementation("OpenAI Codex CLI", "Codex", "1.0"));
+        when(exchange.getClientCapabilities()).thenReturn(
+            new McpSchema.ClientCapabilities(null, null, null, null));
+
+        String result = tools.executeDdl(exchange, "chat2db://datasources/1", "app", null,
+            "DROP TABLE orders");
+
+        assertThat(result).isEqualTo("executed");
+        verify(exchange, never()).createElicitation(any(McpSchema.ElicitRequest.class));
+        verify(dlTemplateService).execute(any());
+    }
+
+    @Test
     void missingElicitationCapabilityFailsClosed() {
         when(exchange.getClientCapabilities()).thenReturn(
             new McpSchema.ClientCapabilities(null, null, null, null));
