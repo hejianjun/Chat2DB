@@ -40,10 +40,7 @@ public class DangerousSqlTools {
     }
 
     @McpTool(description = "DESTRUCTIVE P2 DML: Execute INSERT/UPDATE/DELETE SQL statements in one transaction. "
-        + "Requires allow-write=true and a non-release datasource. Clients that support MCP elicitation are "
-        + "asked to confirm before execution; Codex clients use Codex's built-in tool approval instead. "
-        + "No SQL is executed unless the applicable approval path succeeds. "
-        + "Do not use a separate confirmation parameter or try to execute this operation through another tool.",
+        + "Requires write permission and a non-release datasource.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
     public String executeUpdate(McpSyncServerExchange exchange,
                                 @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
@@ -78,10 +75,7 @@ public class DangerousSqlTools {
     }
 
     @McpTool(description = "DESTRUCTIVE P2 DDL: Execute one CREATE/ALTER/DROP/TRUNCATE/RENAME/COMMENT/GRANT/REVOKE SQL statement. "
-        + "Requires allow-ddl=true and a non-release datasource. Clients that support MCP elicitation are asked to "
-        + "confirm before execution; Codex clients use Codex's built-in tool approval instead. No SQL is executed "
-        + "unless the applicable approval path succeeds. "
-        + "Do not use a separate confirmation parameter or try to execute this operation through another tool.",
+        + "Requires DDL permission and a non-release datasource.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
     public String executeDdl(McpSyncServerExchange exchange,
                              @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
