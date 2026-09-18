@@ -1,18 +1,17 @@
 package ai.chat2db.server.mcp.tool;
 
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 import ai.chat2db.server.domain.api.param.DlBatchUpdateParam;
 import ai.chat2db.server.domain.api.param.DlExecuteParam;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
+import ai.chat2db.server.mcp.support.McpApprovalSupport;
 import ai.chat2db.server.mcp.support.ResolvedDataSource;
 import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.server.mcp.support.SqlGuard;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import io.modelcontextprotocol.server.McpSyncServerExchange;
-import io.modelcontextprotocol.spec.McpSchema;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
@@ -24,19 +23,19 @@ import org.springframework.stereotype.Service;
 @Service
 public class DangerousSqlTools {
 
-    private static final String CONFIRM_FIELD = "confirm";
-
     private final DlTemplateService dlTemplateService;
     private final ConnectionScope connectionScope;
     private final ResultFormatter resultFormatter;
     private final SqlGuard sqlGuard;
+    private final McpApprovalSupport approvalSupport;
 
     public DangerousSqlTools(DlTemplateService dlTemplateService, ConnectionScope connectionScope,
-                             ResultFormatter resultFormatter, SqlGuard sqlGuard) {
+                             ResultFormatter resultFormatter, SqlGuard sqlGuard, McpApprovalSupport approvalSupport) {
         this.dlTemplateService = dlTemplateService;
         this.connectionScope = connectionScope;
         this.resultFormatter = resultFormatter;
         this.sqlGuard = sqlGuard;
+        this.approvalSupport = approvalSupport;
     }
 
     @McpTool(description = "DESTRUCTIVE P2 DML: Execute INSERT/UPDATE/DELETE SQL statements in one transaction. "
@@ -56,12 +55,12 @@ public class DangerousSqlTools {
 
                 List<String> statements = List.copyOf(sqlList);
                 List<Integer> expectedCounts = List.copyOf(expectedUpdateCounts);
-                if (!isCodexClient(exchange)) {
-                    McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DML",
-                        resolvedDataSource, databaseName, schemaName, statements, expectedCounts);
-                    if (!isAccepted(elicitationResult)) {
-                        return noExecutionMessage("DML", elicitationResult);
-                    }
+                var approval = approvalSupport.confirm(exchange, "DML SQL",
+                    target(resolvedDataSource, databaseName, schemaName),
+                    I18nUtils.getMessage("mcp.approval.sqlPreview",
+                        new Object[] {expectedCounts, StringUtils.join(statements, "\n---\n")}));
+                if (!approval.approved()) {
+                    return approval.message();
                 }
 
                 // Re-check the policy after the user responds in case configuration or datasource state changed.
@@ -87,12 +86,10 @@ public class DangerousSqlTools {
                 sqlGuard.requireDdlAllowed(resolvedDataSource.getDataSourceId());
                 sqlGuard.requireSingleDdlSql(sql);
 
-                if (!isCodexClient(exchange)) {
-                    McpSchema.ElicitResult elicitationResult = requestConfirmation(exchange, "DDL",
-                        resolvedDataSource, databaseName, schemaName, List.of(sql), null);
-                    if (!isAccepted(elicitationResult)) {
-                        return noExecutionMessage("DDL", elicitationResult);
-                    }
+                var approval = approvalSupport.confirm(exchange, "DDL SQL",
+                    target(resolvedDataSource, databaseName, schemaName), sql);
+                if (!approval.approved()) {
+                    return approval.message();
                 }
 
                 // Re-check the policy after the user responds in case configuration or datasource state changed.
@@ -101,61 +98,6 @@ public class DangerousSqlTools {
                 return resultFormatter.format(dlTemplateService.execute(
                     executeParam(resolvedDataSource.getDataSourceId(), databaseName, schemaName, sql)));
             });
-    }
-
-    private McpSchema.ElicitResult requestConfirmation(McpSyncServerExchange exchange, String operationType,
-                                                        ResolvedDataSource resolvedDataSource, String databaseName,
-                                                        String schemaName, List<String> sqlList,
-                                                        List<Integer> expectedUpdateCounts) {
-        McpSchema.ClientCapabilities clientCapabilities = exchange == null ? null : exchange.getClientCapabilities();
-        if (clientCapabilities == null || clientCapabilities.elicitation() == null) {
-            throw new IllegalStateException("MCP client does not advertise elicitation capability. "
-                + operationType + " SQL was not executed.");
-        }
-        String expected = expectedUpdateCounts == null ? "not applicable"
-            : StringUtils.join(expectedUpdateCounts, ", ");
-        String message = "Chat2DB requests explicit user approval for destructive " + operationType + " SQL.\n"
-            + "Target: " + target(resolvedDataSource, databaseName, schemaName) + "\n"
-            + "Expected update counts: " + expected + "\n"
-            + "Review the exact SQL below. No SQL will execute unless you accept this request and submit confirm=true.\n"
-            + "SQL:\n" + StringUtils.join(sqlList, "\n---\n");
-        return exchange.createElicitation(McpSchema.ElicitRequest.builder()
-            .message(message)
-            .requestedSchema(Map.of(
-                "type", "object",
-                "properties", Map.of(CONFIRM_FIELD, Map.of(
-                    "type", "boolean",
-                    "title", "Confirm database change",
-                    "description", "Confirm that the displayed SQL should be executed now.",
-                    "default", false)),
-                "required", List.of(CONFIRM_FIELD)))
-            .build());
-    }
-
-    /**
-     * Codex handles approval in its host layer instead of MCP server-initiated elicitation. The client name/title
-     * is only a compatibility signal and is not an authentication boundary; MCP authentication and P2 SQL policy
-     * checks remain authoritative.
-     */
-    private boolean isCodexClient(McpSyncServerExchange exchange) {
-        McpSchema.Implementation clientInfo = exchange == null ? null : exchange.getClientInfo();
-        if (clientInfo == null) {
-            return false;
-        }
-        return StringUtils.containsIgnoreCase(clientInfo.name(), "codex")
-            || StringUtils.containsIgnoreCase(clientInfo.title(), "codex");
-    }
-
-    private boolean isAccepted(McpSchema.ElicitResult result) {
-        return result != null && result.action() == McpSchema.ElicitResult.Action.ACCEPT
-            && result.content() != null && Boolean.TRUE.equals(result.content().get(CONFIRM_FIELD));
-    }
-
-    private String noExecutionMessage(String operationType, McpSchema.ElicitResult result) {
-        String action = result == null || result.action() == null ? "unknown"
-            : result.action().name().toLowerCase(Locale.ROOT);
-        return "No SQL was executed. The destructive " + operationType
-            + " operation was not confirmed (elicitation action: " + action + ").";
     }
 
     private String target(ResolvedDataSource dataSource, String databaseName, String schemaName) {

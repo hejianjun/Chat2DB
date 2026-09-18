@@ -1,5 +1,7 @@
 package ai.chat2db.server.mcp.tool;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -7,11 +9,12 @@ import java.util.Map;
 
 import ai.chat2db.server.domain.api.service.DatabaseService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
+import ai.chat2db.server.mcp.support.McpApprovalSupport;
 import ai.chat2db.server.mcp.support.MongoToolExecutionSupport;
 import ai.chat2db.server.mcp.support.MqlGuard;
-import ai.chat2db.server.mcp.support.PreparedMongoChangeStore;
-import ai.chat2db.server.mcp.support.PreparedMongoChangeStore.PreparedMongoChange;
 import ai.chat2db.server.mcp.support.ResultFormatter;
+import ai.chat2db.server.tools.common.util.I18nUtils;
+import io.modelcontextprotocol.server.McpSyncServerExchange;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
@@ -24,25 +27,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class MongoTools {
 
-    private static final String CATEGORY_WRITE = "WRITE";
-    private static final String CATEGORY_ADMIN = "ADMIN";
-
     private final ConnectionScope connectionScope;
     private final DatabaseService databaseService;
     private final MongoToolExecutionSupport executionSupport;
     private final MqlGuard mqlGuard;
-    private final PreparedMongoChangeStore preparedChangeStore;
+    private final McpApprovalSupport approvalSupport;
     private final ResultFormatter resultFormatter;
 
     public MongoTools(ConnectionScope connectionScope, DatabaseService databaseService,
                       MongoToolExecutionSupport executionSupport,
-                      MqlGuard mqlGuard, PreparedMongoChangeStore preparedChangeStore,
+                      MqlGuard mqlGuard, McpApprovalSupport approvalSupport,
                       ResultFormatter resultFormatter) {
         this.connectionScope = connectionScope;
         this.databaseService = databaseService;
         this.executionSupport = executionSupport;
         this.mqlGuard = mqlGuard;
-        this.preparedChangeStore = preparedChangeStore;
+        this.approvalSupport = approvalSupport;
         this.resultFormatter = resultFormatter;
     }
 
@@ -79,11 +79,10 @@ public class MongoTools {
         });
     }
 
-    @McpTool(description = "DESTRUCTIVE MONGODB PREPARE: Prepare one structured MongoDB document write. "
-        + "This does not modify MongoDB. Returns an operationId and exact confirmationText for "
-        + "executePreparedMongoChange.",
+    @McpTool(description = "DESTRUCTIVE MONGODB WRITE: Execute one structured MongoDB document write after "
+        + "client approval. Shows the exact MQL and rechecks permissions and limits before execution.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String prepareMongoWriteChange(
+    public String executeMongoWrite(McpSyncServerExchange exchange,
         @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "MongoDB database name") String databaseName,
         @McpToolParam(description = "INSERT_ONE, INSERT_MANY, UPDATE_ONE, UPDATE_MANY, REPLACE_ONE, "
@@ -104,26 +103,41 @@ public class MongoTools {
         return connectionScope.run(datasourceUri, requireDatabaseName(databaseName), null, resolvedDataSource -> {
             mqlGuard.requireMongoDatasource(resolvedDataSource);
             mqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId());
-            PreparedInput input = prepareWriteInput(writeOperation, collection, filter, document, documents, update,
-                maxAffectedDocuments);
+            // 确认等待期间不再读取调用方可变参数，确保用户看到的 MQL 与实际执行内容一致。
+            Map<String, Object> filterSnapshot = snapshotDocument(filter);
+            Map<String, Object> documentSnapshot = snapshotDocument(document);
+            List<Map<String, Object>> documentsSnapshot = documents == null ? null
+                : documents.stream().map(this::snapshotDocument).toList();
+            Map<String, Object> updateSnapshot = snapshotDocument(update);
+            ValidatedInput input = validateWriteInput(writeOperation, collection, filterSnapshot, documentSnapshot,
+                documentsSnapshot, updateSnapshot, maxAffectedDocuments);
             Long estimatedMatched = input.countMql() == null ? null
                 : executionSupport.count(resolvedDataSource.getDataSourceId(), databaseName, input.countMql());
             if (input.isMulti() && estimatedMatched > input.maxAffectedDocuments()) {
                 throw new IllegalArgumentException("Matched documents " + estimatedMatched
                     + " exceed maxAffectedDocuments " + input.maxAffectedDocuments() + ".");
             }
-            PreparedMongoChange change = preparedChangeStore.prepare(CATEGORY_WRITE, writeOperation.name(),
-                datasourceUri, resolvedDataSource, databaseName, collection, input.mql(), input.countMql(),
-                estimatedMatched, input.maxAffectedDocuments(), input.riskLevel());
-            return formatPreparedChange(change);
+            String target = resolvedDataSource.getSummary() + "/" + databaseName + "." + collection;
+            var approval = approvalSupport.confirm(exchange, "MONGODB " + writeOperation.name(), target,
+                formatChangePreview(input, estimatedMatched));
+            if (!approval.approved()) {
+                return approval.message();
+            }
+            // 用户确认不冻结运行时权限与批量限制，执行前必须重新检查。
+            mqlGuard.requireMongoDatasource(resolvedDataSource);
+            mqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId());
+            validateWriteInput(writeOperation, collection, filterSnapshot, documentSnapshot, documentsSnapshot,
+                updateSnapshot, maxAffectedDocuments);
+            recheckMultiDocumentLimit(input, resolvedDataSource.getDataSourceId(), databaseName);
+            return resultFormatter.format(executionSupport.execute(resolvedDataSource.getDataSourceId(),
+                databaseName, input.mql(), 1, 100));
         });
     }
 
-    @McpTool(description = "DESTRUCTIVE MONGODB ADMIN PREPARE: Prepare one structured MongoDB collection or index "
-        + "change. This does not modify MongoDB. Returns an operationId and exact confirmationText for "
-        + "executePreparedMongoChange.",
+    @McpTool(description = "DESTRUCTIVE MONGODB ADMIN: Execute one structured MongoDB collection, index or "
+        + "database change after client approval. Shows the exact MQL and rechecks permissions before execution.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String prepareMongoAdminChange(
+    public String executeMongoAdmin(McpSyncServerExchange exchange,
         @McpToolParam(description = "Datasource resource URI, e.g. chat2db://datasources/123") String datasourceUri,
         @McpToolParam(description = "MongoDB database name") String databaseName,
         @McpToolParam(description = "CREATE_COLLECTION, CREATE_INDEX, DROP_INDEX, DROP_COLLECTION, or "
@@ -137,39 +151,24 @@ public class MongoTools {
         return connectionScope.run(datasourceUri, requireDatabaseName(databaseName), null, resolvedDataSource -> {
             mqlGuard.requireMongoDatasource(resolvedDataSource);
             mqlGuard.requireAdminAllowed(resolvedDataSource.getDataSourceId());
-            PreparedInput input = prepareAdminInput(adminOperation, collection, indexName, indexKeys);
-            PreparedMongoChange change = preparedChangeStore.prepare(CATEGORY_ADMIN, adminOperation.name(),
-                datasourceUri, resolvedDataSource, databaseName, collection, input.mql(), null, null, null,
-                input.riskLevel());
-            return formatPreparedChange(change);
-        });
-    }
-
-    @McpTool(description = "DESTRUCTIVE MONGODB EXECUTE: Execute a previously prepared MongoDB write or admin "
-        + "change. Only operationId and the exact confirmationText returned by prepare are accepted.",
-        annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String executePreparedMongoChange(
-        @McpToolParam(description = "operationId returned by prepareMongoWriteChange or prepareMongoAdminChange")
-        String operationId,
-        @McpToolParam(description = "Exact confirmationText returned by the MongoDB prepare tool")
-        String confirmationText) {
-        PreparedMongoChange change = preparedChangeStore.consume(operationId, confirmationText);
-        return connectionScope.run(change.getDatasourceUri(), change.getDatabaseName(), null, resolvedDataSource -> {
-            mqlGuard.requireMongoDatasource(resolvedDataSource);
-            if (CATEGORY_WRITE.equals(change.getCategory())) {
-                mqlGuard.requireWriteAllowed(resolvedDataSource.getDataSourceId());
-                recheckMultiDocumentLimit(change, resolvedDataSource.getDataSourceId());
-            } else if (CATEGORY_ADMIN.equals(change.getCategory())) {
-                mqlGuard.requireAdminAllowed(resolvedDataSource.getDataSourceId());
-            } else {
-                throw new IllegalStateException("Unsupported prepared MongoDB change category.");
+            Map<String, Object> indexKeysSnapshot = snapshotDocument(indexKeys);
+            ValidatedInput input = validateAdminInput(adminOperation, collection, indexName, indexKeysSnapshot);
+            String target = resolvedDataSource.getSummary() + "/" + databaseName
+                + (StringUtils.isBlank(collection) ? "" : "." + collection);
+            var approval = approvalSupport.confirm(exchange, "MONGODB " + adminOperation.name(), target,
+                formatChangePreview(input, null));
+            if (!approval.approved()) {
+                return approval.message();
             }
+            mqlGuard.requireMongoDatasource(resolvedDataSource);
+            mqlGuard.requireAdminAllowed(resolvedDataSource.getDataSourceId());
+            validateAdminInput(adminOperation, collection, indexName, indexKeysSnapshot);
             return resultFormatter.format(executionSupport.execute(resolvedDataSource.getDataSourceId(),
-                change.getDatabaseName(), change.getMql(), 1, 100));
+                databaseName, input.mql(), 1, 100));
         });
     }
 
-    private PreparedInput prepareWriteInput(WriteOperation operation, String collection,
+    private ValidatedInput validateWriteInput(WriteOperation operation, String collection,
                                             Map<String, Object> filter, Map<String, Object> document,
                                             List<Map<String, Object>> documents, Map<String, Object> update,
                                             Integer maxAffectedDocuments) {
@@ -181,7 +180,7 @@ public class MongoTools {
                 rejectPresent("update", update);
                 rejectPresent("maxAffectedDocuments", maxAffectedDocuments);
                 requireDocument(document, "document");
-                yield new PreparedInput(reference + ".insertOne(" + executionSupport.json(document) + ")",
+                yield new ValidatedInput(reference + ".insertOne(" + executionSupport.json(document) + ")",
                     null, 1, false, "HIGH");
             }
             case INSERT_MANY -> {
@@ -197,7 +196,7 @@ public class MongoTools {
                         + mqlGuard.maxBatchDocuments() + ".");
                 }
                 documents.forEach(value -> requireDocument(value, "documents item"));
-                yield new PreparedInput(reference + ".insertMany(" + executionSupport.json(documents) + ")",
+                yield new ValidatedInput(reference + ".insertMany(" + executionSupport.json(documents) + ")",
                     null, documents.size(), false, "HIGH");
             }
             case UPDATE_ONE -> {
@@ -206,7 +205,7 @@ public class MongoTools {
                 rejectPresent("maxAffectedDocuments", maxAffectedDocuments);
                 mqlGuard.requireNonEmptyFilter(filter);
                 mqlGuard.requireUpdateDocument(update);
-                yield new PreparedInput(reference + ".updateOne(" + executionSupport.json(filter) + ","
+                yield new ValidatedInput(reference + ".updateOne(" + executionSupport.json(filter) + ","
                     + executionSupport.json(update) + ")", executionSupport.countMql(collection, filter),
                     1, false, "HIGH");
             }
@@ -216,7 +215,7 @@ public class MongoTools {
                 mqlGuard.requireNonEmptyFilter(filter);
                 mqlGuard.requireUpdateDocument(update);
                 int maximum = requirePositiveMaximum(maxAffectedDocuments, operation);
-                yield new PreparedInput(reference + ".updateMany(" + executionSupport.json(filter) + ","
+                yield new ValidatedInput(reference + ".updateMany(" + executionSupport.json(filter) + ","
                     + executionSupport.json(update) + ")", executionSupport.countMql(collection, filter),
                     maximum, true, "CRITICAL");
             }
@@ -226,7 +225,7 @@ public class MongoTools {
                 rejectPresent("maxAffectedDocuments", maxAffectedDocuments);
                 mqlGuard.requireNonEmptyFilter(filter);
                 mqlGuard.requireReplacementDocument(document);
-                yield new PreparedInput(reference + ".replaceOne(" + executionSupport.json(filter) + ","
+                yield new ValidatedInput(reference + ".replaceOne(" + executionSupport.json(filter) + ","
                     + executionSupport.json(document) + ")", executionSupport.countMql(collection, filter),
                     1, false, "HIGH");
             }
@@ -236,7 +235,7 @@ public class MongoTools {
                 rejectPresent("update", update);
                 rejectPresent("maxAffectedDocuments", maxAffectedDocuments);
                 mqlGuard.requireNonEmptyFilter(filter);
-                yield new PreparedInput(reference + ".deleteOne(" + executionSupport.json(filter) + ")",
+                yield new ValidatedInput(reference + ".deleteOne(" + executionSupport.json(filter) + ")",
                     executionSupport.countMql(collection, filter), 1, false, "HIGH");
             }
             case DELETE_MANY -> {
@@ -245,27 +244,27 @@ public class MongoTools {
                 rejectPresent("update", update);
                 mqlGuard.requireNonEmptyFilter(filter);
                 int maximum = requirePositiveMaximum(maxAffectedDocuments, operation);
-                yield new PreparedInput(reference + ".deleteMany(" + executionSupport.json(filter) + ")",
+                yield new ValidatedInput(reference + ".deleteMany(" + executionSupport.json(filter) + ")",
                     executionSupport.countMql(collection, filter), maximum, true, "CRITICAL");
             }
         };
     }
 
-    private PreparedInput prepareAdminInput(AdminOperation operation, String collection, String indexName,
+    private ValidatedInput validateAdminInput(AdminOperation operation, String collection, String indexName,
                                             Map<String, Object> indexKeys) {
         return switch (operation) {
             case CREATE_COLLECTION -> {
                 rejectPresent("indexName", indexName);
                 rejectPresent("indexKeys", indexKeys);
                 requireCollection(collection);
-                yield new PreparedInput("db.createCollection(" + executionSupport.json(collection) + ")",
+                yield new ValidatedInput("db.createCollection(" + executionSupport.json(collection) + ")",
                     null, null, false, "HIGH");
             }
             case CREATE_INDEX -> {
                 rejectPresent("indexName", indexName);
                 requireCollection(collection);
                 requireDocument(indexKeys, "indexKeys");
-                yield new PreparedInput(executionSupport.collectionReference(collection) + ".createIndex("
+                yield new ValidatedInput(executionSupport.collectionReference(collection) + ".createIndex("
                     + executionSupport.json(indexKeys) + ")", null, null, false, "HIGH");
             }
             case DROP_INDEX -> {
@@ -274,50 +273,65 @@ public class MongoTools {
                 if (StringUtils.isBlank(indexName)) {
                     throw new IllegalArgumentException("indexName is required for DROP_INDEX.");
                 }
-                yield new PreparedInput(executionSupport.collectionReference(collection) + ".dropIndex("
+                yield new ValidatedInput(executionSupport.collectionReference(collection) + ".dropIndex("
                     + executionSupport.json(indexName) + ")", null, null, false, "CRITICAL");
             }
             case DROP_COLLECTION -> {
                 rejectPresent("indexName", indexName);
                 rejectPresent("indexKeys", indexKeys);
                 requireCollection(collection);
-                yield new PreparedInput(executionSupport.collectionReference(collection) + ".drop()",
+                yield new ValidatedInput(executionSupport.collectionReference(collection) + ".drop()",
                     null, null, false, "CRITICAL");
             }
             case DROP_DATABASE -> {
                 rejectPresent("collection", collection);
                 rejectPresent("indexName", indexName);
                 rejectPresent("indexKeys", indexKeys);
-                yield new PreparedInput("db.dropDatabase()", null, null, false, "CRITICAL");
+                yield new ValidatedInput("db.dropDatabase()", null, null, false, "CRITICAL");
             }
         };
     }
 
-    private void recheckMultiDocumentLimit(PreparedMongoChange change, Long dataSourceId) {
-        if (StringUtils.isBlank(change.getCountMql()) || change.getMaxAffectedDocuments() == null
-            || !("UPDATE_MANY".equals(change.getOperation()) || "DELETE_MANY".equals(change.getOperation()))) {
+    private void recheckMultiDocumentLimit(ValidatedInput input, Long dataSourceId, String databaseName) {
+        if (!input.isMulti()) {
             return;
         }
-        long matched = executionSupport.count(dataSourceId, change.getDatabaseName(), change.getCountMql());
-        if (matched > change.getMaxAffectedDocuments()) {
-            throw new IllegalStateException("Matched documents " + matched + " now exceed maxAffectedDocuments "
-                + change.getMaxAffectedDocuments() + ". Prepare the MongoDB change again.");
+        long matched = executionSupport.count(dataSourceId, databaseName, input.countMql());
+        if (matched > input.maxAffectedDocuments()) {
+            throw new IllegalStateException(I18nUtils.getMessage("mcp.mongo.maxAffectedExceededAfterApproval",
+                new Object[] {matched, input.maxAffectedDocuments()}));
         }
     }
 
-    private String formatPreparedChange(PreparedMongoChange change) {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("operationId", change.getOperationId());
-        response.put("operationType", change.getOperation());
-        response.put("riskLevel", change.getRiskLevel());
-        response.put("target", change.getTarget());
-        response.put("canonicalPreview", change.getMql());
-        response.put("estimatedMatchedDocuments", change.getEstimatedMatchedDocuments());
-        response.put("maxAffectedDocuments", change.getMaxAffectedDocuments());
-        response.put("digest", "sha256:" + change.getDigest());
-        response.put("expiresAtEpochSecond", change.getExpiresAt());
-        response.put("confirmationText", change.getConfirmationText());
-        return executionSupport.json(response);
+    private String formatChangePreview(ValidatedInput input, Long estimatedMatchedDocuments) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("riskLevel", input.riskLevel());
+        metadata.put("estimatedMatchedDocuments", estimatedMatchedDocuments);
+        metadata.put("maxAffectedDocuments", input.maxAffectedDocuments());
+        return executionSupport.json(metadata) + "\n" + input.mql();
+    }
+
+    private Map<String, Object> snapshotDocument(Map<String, Object> document) {
+        if (document == null) {
+            return null;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        document.forEach((key, value) -> copy.put(key, snapshotValue(value)));
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private Object snapshotValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, item) -> copy.put(String.valueOf(key), snapshotValue(item)));
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copy = new ArrayList<>(list.size());
+            list.forEach(item -> copy.add(snapshotValue(item)));
+            return Collections.unmodifiableList(copy);
+        }
+        return value;
     }
 
     private int requirePositiveMaximum(Integer maximum, WriteOperation operation) {
@@ -378,7 +392,7 @@ public class MongoTools {
         DROP_DATABASE
     }
 
-    private record PreparedInput(String mql, String countMql, Integer maxAffectedDocuments, boolean isMulti,
+    private record ValidatedInput(String mql, String countMql, Integer maxAffectedDocuments, boolean isMulti,
                                  String riskLevel) {
     }
 }

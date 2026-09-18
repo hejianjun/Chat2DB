@@ -42,8 +42,13 @@ export default {
   'setting.button.refresh': 'Yenile',
   'setting.label.mcpAuthType': 'MCP Kimlik Doğrulama',
   'setting.label.mcpToken': 'MCP Token',
-  'setting.label.mcpAllowWrite': 'P2 Veri Yazmalarına İzin Ver (SQL / MongoDB)',
+  'setting.label.mcpAllowWrite': 'P2 Veri Yazmalarına İzin Ver (SQL / MongoDB / Redis)',
   'setting.label.mcpAllowDdl': 'P2 Şema Yönetimine İzin Ver (SQL DDL / MongoDB)',
+  'setting.label.mcpApprovalClientKeywords': 'İstemci Onayı İzin Listesi Anahtar Kelimeleri',
+  'setting.placeholder.mcpApprovalClientKeywords': 'Anahtar kelimeyi yazıp Enter tuşuna basın',
+  'setting.text.mcpApprovalClientKeywords':
+    'İstemci adı/başlığında büyük/küçük harfe duyarsız alt dize eşleşmesi yapılır. ' +
+    'Eşleşen istemciler kendi onayını kullanır; boşsa tüm istemciler elicitation ister.',
   'setting.option.mcpAuthNone': 'Kimlik doğrulama yok',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': 'Uygula',

@@ -38,8 +38,12 @@ export default {
   'setting.button.refresh': '刷新',
   'setting.label.mcpAuthType': 'MCP 认证方式',
   'setting.label.mcpToken': 'MCP Token',
-  'setting.label.mcpAllowWrite': '允许 P2 数据写入（SQL / MongoDB）',
+  'setting.label.mcpAllowWrite': '允许 P2 数据写入（SQL / MongoDB / Redis）',
   'setting.label.mcpAllowDdl': '允许 P2 结构管理（SQL DDL / MongoDB）',
+  'setting.label.mcpApprovalClientKeywords': '客户端审批白名单关键词',
+  'setting.placeholder.mcpApprovalClientKeywords': '输入关键词后按回车',
+  'setting.text.mcpApprovalClientKeywords':
+    '客户端名称或标题包含关键词即匹配（不区分大小写），使用客户端自身审批；留空则所有客户端请求 elicitation 确认。',
   'setting.option.mcpAuthNone': '无认证',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': '应用',

@@ -42,8 +42,13 @@ export default {
   'setting.button.refresh': '更新',
   'setting.label.mcpAuthType': 'MCP認証方式',
   'setting.label.mcpToken': 'MCP Token',
-  'setting.label.mcpAllowWrite': 'P2データ書き込みを許可（SQL / MongoDB）',
+  'setting.label.mcpAllowWrite': 'P2データ書き込みを許可（SQL / MongoDB / Redis）',
   'setting.label.mcpAllowDdl': 'P2構造管理を許可（SQL DDL / MongoDB）',
+  'setting.label.mcpApprovalClientKeywords': 'クライアント承認の許可リストキーワード',
+  'setting.placeholder.mcpApprovalClientKeywords': 'キーワードを入力して Enter',
+  'setting.text.mcpApprovalClientKeywords':
+    'クライアント名・タイトルを大文字小文字を区別せず部分一致で照合します。' +
+    '一致時はクライアント自身の承認を使用し、空欄なら全クライアントが elicitation による確認を要求します。',
   'setting.option.mcpAuthNone': '認証なし',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': '適用',

@@ -6,17 +6,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+import ai.chat2db.server.domain.api.param.DlBatchUpdateParam;
 import ai.chat2db.server.domain.api.service.DlTemplateService;
+import ai.chat2db.server.mcp.config.McpServerConfigService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
+import ai.chat2db.server.mcp.support.McpApprovalSupport;
+import ai.chat2db.server.mcp.support.McpTestSupport;
 import ai.chat2db.server.mcp.support.ResolvedDataSource;
 import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.server.mcp.support.SqlGuard;
@@ -39,11 +46,13 @@ class DangerousSqlToolsTest {
     private ResultFormatter resultFormatter;
     private SqlGuard sqlGuard;
     private McpSyncServerExchange exchange;
+    private McpServerConfigService configService;
     private DangerousSqlTools tools;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
+        McpTestSupport.initializeMessages();
         connectionScope = mock(ConnectionScope.class);
         when(connectionScope.run(anyString(), anyString(), isNull(), any(Function.class)))
             .thenAnswer(invocation -> ((Function<ResolvedDataSource, Object>) invocation.getArgument(3))
@@ -57,7 +66,10 @@ class DangerousSqlToolsTest {
         when(exchange.getClientCapabilities()).thenReturn(new McpSchema.ClientCapabilities(
             null, null, null, new McpSchema.ClientCapabilities.Elicitation()));
 
-        tools = new DangerousSqlTools(dlTemplateService, connectionScope, resultFormatter, sqlGuard);
+        configService = mock(McpServerConfigService.class);
+        when(configService.getApprovalClientKeywords()).thenReturn(List.of("codex"));
+        tools = new DangerousSqlTools(dlTemplateService, connectionScope, resultFormatter, sqlGuard,
+            new McpApprovalSupport(configService));
     }
 
     @Test
@@ -79,7 +91,7 @@ class DangerousSqlToolsTest {
         Map<String, Object> properties = (Map<String, Object>) requestedSchema.get("properties");
         assertThat(properties).containsKey("confirm");
         Map<String, Object> confirmation = (Map<String, Object>) properties.get("confirm");
-        assertThat(confirmation).containsEntry("type", "boolean");
+        assertThat(confirmation).containsEntry("type", "boolean").containsEntry("default", false);
         assertThat(requestedSchema.get("required")).isEqualTo(List.of("confirm"));
         verify(dlTemplateService).executeBatchUpdate(any());
     }
@@ -92,7 +104,7 @@ class DangerousSqlToolsTest {
         String result = tools.executeUpdate(exchange, "chat2db://datasources/1", "app", null,
             List.of("DELETE FROM orders WHERE id = 1"), List.of(1));
 
-        assertThat(result).contains("No SQL was executed").contains("decline");
+        assertThat(result).contains("No database change was executed").contains("decline");
         verify(dlTemplateService, never()).executeBatchUpdate(any());
     }
 
@@ -132,6 +144,64 @@ class DangerousSqlToolsTest {
             "DROP TABLE orders"))
             .hasMessageContaining("does not advertise elicitation capability");
         verify(dlTemplateService, never()).execute(any());
+    }
+
+    @Test
+    void configuredClientKeywordDelegatesApprovalAndKeepsPolicyChecks() {
+        when(configService.getApprovalClientKeywords()).thenReturn(List.of("trusted client"));
+        when(exchange.getClientInfo()).thenReturn(new McpSchema.Implementation("host", "Trusted Client Desktop", "1"));
+        when(exchange.getClientCapabilities()).thenReturn(null);
+
+        assertThat(tools.executeUpdate(exchange, "chat2db://datasources/1", "app", null,
+            List.of("DELETE FROM orders WHERE id = 1"), List.of(1))).isEqualTo("executed");
+
+        verify(exchange, never()).createElicitation(any());
+        verify(sqlGuard, times(2)).requireWriteAllowed(1L);
+        verify(dlTemplateService).executeBatchUpdate(any());
+    }
+
+    @Test
+    void removingCodexKeywordRequiresElicitationForCodex() {
+        when(configService.getApprovalClientKeywords()).thenReturn(List.of());
+        when(exchange.getClientInfo()).thenReturn(new McpSchema.Implementation("codex", "1"));
+        when(exchange.createElicitation(any())).thenReturn(
+            new McpSchema.ElicitResult(McpSchema.ElicitResult.Action.CANCEL, Map.of()));
+
+        assertThat(tools.executeDdl(exchange, "chat2db://datasources/1", "app", null, "DROP TABLE orders"))
+            .contains("cancel");
+
+        verify(exchange).createElicitation(any());
+        verify(dlTemplateService, never()).execute(any());
+    }
+
+    @Test
+    void policyRevokedDuringApprovalPreventsExecution() {
+        when(exchange.createElicitation(any())).thenAnswer(invocation -> {
+            doThrow(new IllegalStateException("permission revoked")).when(sqlGuard).requireDdlAllowed(1L);
+            return new McpSchema.ElicitResult(McpSchema.ElicitResult.Action.ACCEPT, Map.of("confirm", true));
+        });
+
+        assertThatThrownBy(() -> tools.executeDdl(exchange, "chat2db://datasources/1", "app", null, "DROP TABLE orders"))
+            .hasMessageContaining("permission revoked");
+        verify(dlTemplateService, never()).execute(any());
+    }
+
+    @Test
+    void inputChangesDuringApprovalCannotChangeExecutedSql() {
+        List<String> statements = new ArrayList<>(List.of("DELETE FROM orders WHERE id = 1"));
+        List<Integer> expectedCounts = new ArrayList<>(List.of(1));
+        when(exchange.createElicitation(any())).thenAnswer(invocation -> {
+            statements.set(0, "DELETE FROM orders");
+            expectedCounts.set(0, -1);
+            return new McpSchema.ElicitResult(McpSchema.ElicitResult.Action.ACCEPT, Map.of("confirm", true));
+        });
+
+        tools.executeUpdate(exchange, "chat2db://datasources/1", "app", null, statements, expectedCounts);
+
+        ArgumentCaptor<DlBatchUpdateParam> captured = ArgumentCaptor.forClass(DlBatchUpdateParam.class);
+        verify(dlTemplateService).executeBatchUpdate(captured.capture());
+        assertThat(captured.getValue().getSqlList()).containsExactly("DELETE FROM orders WHERE id = 1");
+        assertThat(captured.getValue().getExpectedUpdateCounts()).containsExactly(1);
     }
 
     @Test

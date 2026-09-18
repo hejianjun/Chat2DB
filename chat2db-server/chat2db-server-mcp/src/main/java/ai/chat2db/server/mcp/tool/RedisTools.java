@@ -3,6 +3,7 @@ package ai.chat2db.server.mcp.tool;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -14,9 +15,9 @@ import ai.chat2db.server.domain.api.service.RedisKeyPrefixService;
 import ai.chat2db.server.mcp.config.McpProperties;
 import ai.chat2db.server.mcp.config.McpServerConfigService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
-import ai.chat2db.server.mcp.support.PreparedRedisChangeStore;
-import ai.chat2db.server.mcp.support.PreparedRedisChangeStore.PreparedRedisChange;
+import ai.chat2db.server.mcp.support.McpApprovalSupport;
 import ai.chat2db.server.mcp.support.SqlGuard;
+import ai.chat2db.server.tools.common.util.I18nUtils;
 import ai.chat2db.spi.MetaData;
 import ai.chat2db.spi.redis.RedisKeyBrowser;
 import ai.chat2db.spi.redis.RedisKeyInfo;
@@ -24,6 +25,7 @@ import ai.chat2db.spi.redis.RedisKeyMutation;
 import ai.chat2db.spi.redis.RedisKeyScanResult;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.server.McpSyncServerExchange;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
@@ -36,17 +38,17 @@ public class RedisTools {
     private final ConnectionScope connectionScope;
     private final RedisKeyPrefixService prefixService;
     private final McpServerConfigService configService;
-    private final PreparedRedisChangeStore changeStore;
+    private final McpApprovalSupport approvalSupport;
     private final SqlGuard sqlGuard;
     private final ObjectMapper objectMapper;
 
     public RedisTools(ConnectionScope connectionScope, RedisKeyPrefixService prefixService,
-                      McpServerConfigService configService, PreparedRedisChangeStore changeStore,
+                      McpServerConfigService configService, McpApprovalSupport approvalSupport,
                       SqlGuard sqlGuard, ObjectMapper objectMapper) {
         this.connectionScope = connectionScope;
         this.prefixService = prefixService;
         this.configService = configService;
-        this.changeStore = changeStore;
+        this.approvalSupport = approvalSupport;
         this.sqlGuard = sqlGuard;
         this.objectMapper = objectMapper;
     }
@@ -147,9 +149,10 @@ public class RedisTools {
         });
     }
 
-    @McpTool(description = "DESTRUCTIVE REDIS PREPARE: Prepare one structured Redis key change without executing it.",
+    @McpTool(description = "DESTRUCTIVE REDIS WRITE: Execute one structured Redis key change after client approval. "
+        + "Shows all mutations and rechecks permissions, limits and the key fingerprint before execution.",
         annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String prepareRedisKeyChange(
+    public String executeRedisKeyChange(McpSyncServerExchange exchange,
         @McpToolParam(description = "Datasource resource URI") String datasourceUri,
         @McpToolParam(description = "Redis database number/name") String databaseName,
         @McpToolParam(description = "CREATE, REPLACE, PATCH_HASH, PATCH_LIST, PATCH_SET, PATCH_ZSET, RENAME, SET_TTL or DELETE") String operation,
@@ -170,8 +173,11 @@ public class RedisTools {
             sqlGuard.requireWriteAllowed(dataSource.getDataSourceId());
             RedisKeyBrowser browser = browser();
             String normalizedOperation = StringUtils.upperCase(StringUtils.trim(operation), Locale.ROOT);
-            validateChange(normalizedOperation, key, keyType, value, newKey, ttlSeconds, hashUpserts, hashDeletes,
-                    listUpdates, listAppends, setAdds, setRemoves, zsetUpserts, zsetRemoves);
+            // 深拷贝所有结构化参数，用户确认期间调用方修改集合也不会改变待执行内容。
+            RedisChange change = new RedisChange(normalizedOperation, databaseName, key, normalizeType(keyType),
+                    value, newKey, hashUpserts, hashDeletes, listUpdates, listAppends, setAdds, setRemoves,
+                    zsetUpserts, zsetRemoves, ttlSeconds);
+            validateChange(change);
             String fingerprint = browser.fingerprintKey(databaseName, key);
             if ("CREATE".equals(normalizedOperation) && fingerprint != null) {
                 throw new IllegalArgumentException("Redis key already exists: " + key);
@@ -179,71 +185,57 @@ public class RedisTools {
             if (!"CREATE".equals(normalizedOperation) && fingerprint == null) {
                 throw new IllegalArgumentException("Redis key does not exist: " + key);
             }
-            PreparedRedisChange change = changeStore.prepare(PreparedRedisChange.builder()
-                    .operation(normalizedOperation).datasourceUri(datasourceUri).databaseName(databaseName)
-                    .key(key).newKey(newKey).keyType(normalizeType(keyType)).value(value)
-                    .hashUpserts(hashUpserts).hashDeletes(hashDeletes).listUpdates(listUpdates)
-                    .listAppends(listAppends).setAdds(setAdds).setRemoves(setRemoves)
-                    .zsetUpserts(zsetUpserts).zsetRemoves(zsetRemoves).ttlSeconds(ttlSeconds)
-                    .fingerprint(fingerprint).target(dataSource.getSummary() + "/" + databaseName + "/" + key)
-                    .build());
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("operationId", change.getOperationId());
-            response.put("operationType", change.getOperation());
-            response.put("riskLevel", "DELETE".equals(change.getOperation()) ? "CRITICAL" : "HIGH");
-            response.put("target", change.getTarget());
-            response.put("digest", "sha256:" + change.getDigest());
-            response.put("expiresAtEpochSecond", change.getExpiresAt());
-            response.put("confirmationText", change.getConfirmationText());
-            return json(response);
-        });
-    }
-
-    @McpTool(description = "DESTRUCTIVE REDIS EXECUTE: Execute a prepared Redis change using its exact confirmation text.",
-        annotations = @McpTool.McpAnnotations(readOnlyHint = false, destructiveHint = true))
-    public String executePreparedRedisKeyChange(
-        @McpToolParam(description = "operationId returned by prepareRedisKeyChange") String operationId,
-        @McpToolParam(description = "Exact confirmationText returned by prepareRedisKeyChange") String confirmationText) {
-        PreparedRedisChange change = changeStore.consume(operationId, confirmationText);
-        return connectionScope.run(change.getDatasourceUri(), change.getDatabaseName(), null, dataSource -> {
-            sqlGuard.requireWriteAllowed(dataSource.getDataSourceId());
-            RedisKeyBrowser browser = browser();
-            String currentFingerprint = browser.fingerprintKey(change.getDatabaseName(), change.getKey());
-            if (!StringUtils.equals(change.getFingerprint(), currentFingerprint)) {
-                throw new IllegalStateException("Redis key changed after prepare. Prepare the operation again.");
+            String target = dataSource.getSummary() + "/" + databaseName + "/" + key;
+            var approval = approvalSupport.confirm(exchange, "REDIS " + change.operation(), target, json(change));
+            if (!approval.approved()) {
+                return approval.message();
             }
-            execute(browser, change);
-            return json(Map.of("success", true, "operation", change.getOperation(), "key", change.getKey()));
+            sqlGuard.requireWriteAllowed(dataSource.getDataSourceId());
+            validateChange(change);
+            RedisKeyBrowser executionBrowser = browser();
+            String currentFingerprint = executionBrowser.fingerprintKey(databaseName, key);
+            if (!StringUtils.equals(fingerprint, currentFingerprint)) {
+                throw new IllegalStateException(I18nUtils.getMessage("mcp.redis.keyChangedAfterApproval"));
+            }
+            execute(executionBrowser, change);
+            return json(Map.of("success", true, "operation", change.operation(), "key", change.key()));
         });
     }
 
-    private void execute(RedisKeyBrowser browser, PreparedRedisChange change) {
-        switch (change.getOperation()) {
-            case "CREATE" -> browser.createKey(change.getDatabaseName(), change.getKey(), change.getKeyType(),
-                    change.getValue(), createTtl(change.getTtlSeconds()));
+    private void execute(RedisKeyBrowser browser, RedisChange change) {
+        switch (change.operation()) {
+            case "CREATE" -> browser.createKey(change.databaseName(), change.key(), change.keyType(),
+                    change.value(), createTtl(change.ttlSeconds()));
             case "REPLACE" -> {
-                Long ttl = change.getTtlSeconds();
+                Long ttl = change.ttlSeconds();
                 if (ttl == null) {
-                    ttl = browser.queryKeyPage(change.getDatabaseName(), change.getKey(), "0", 1,
+                    ttl = browser.queryKeyPage(change.databaseName(), change.key(), "0", 1,
                             configService.getEffectiveRedis().getMaxStringPageBytes()).getTtl();
                 }
-                browser.updateKey(change.getDatabaseName(), change.getKey(), change.getKey(), change.getKeyType(),
-                        change.getValue(), ttl);
+                browser.updateKey(change.databaseName(), change.key(), change.key(), change.keyType(),
+                        change.value(), ttl);
             }
-            case "PATCH_HASH", "PATCH_LIST", "PATCH_SET", "PATCH_ZSET" -> browser.partialUpdateKey(change.getDatabaseName(),
-                    RedisKeyMutation.builder().keyName(change.getKey()).keyType(change.getKeyType())
-                            .hashUpserts(change.getHashUpserts()).hashDeletes(change.getHashDeletes())
-                            .listUpdates(change.getListUpdates()).listAppends(change.getListAppends())
-                            .setAdds(change.getSetAdds()).setRemoves(change.getSetRemoves())
-                            .zsetUpserts(change.getZsetUpserts()).zsetRemoves(change.getZsetRemoves())
-                            .ttl(change.getTtlSeconds()).build());
-            case "RENAME" -> browser.updateKeyMetadata(change.getDatabaseName(), change.getKey(),
-                    change.getNewKey(), null);
-            case "SET_TTL" -> browser.updateKeyMetadata(change.getDatabaseName(), change.getKey(), null,
-                    change.getTtlSeconds());
-            case "DELETE" -> browser.deleteKey(change.getDatabaseName(), change.getKey());
-            default -> throw new IllegalStateException("Unsupported Redis operation: " + change.getOperation());
+            // 保留 SPI 的部分更新路径，其 WATCH/MULTI/EXEC（或原子 HASH 更新）继续处理并发写入。
+            case "PATCH_HASH", "PATCH_LIST", "PATCH_SET", "PATCH_ZSET" -> browser.partialUpdateKey(change.databaseName(),
+                    RedisKeyMutation.builder().keyName(change.key()).keyType(change.keyType())
+                            .hashUpserts(change.hashUpserts()).hashDeletes(change.hashDeletes())
+                            .listUpdates(change.listUpdates()).listAppends(change.listAppends())
+                            .setAdds(change.setAdds()).setRemoves(change.setRemoves())
+                            .zsetUpserts(change.zsetUpserts()).zsetRemoves(change.zsetRemoves())
+                            .ttl(change.ttlSeconds()).build());
+            case "RENAME" -> browser.updateKeyMetadata(change.databaseName(), change.key(),
+                    change.newKey(), null);
+            case "SET_TTL" -> browser.updateKeyMetadata(change.databaseName(), change.key(), null,
+                    change.ttlSeconds());
+            case "DELETE" -> browser.deleteKey(change.databaseName(), change.key());
+            default -> throw new IllegalStateException("Unsupported Redis operation: " + change.operation());
         }
+    }
+
+    private void validateChange(RedisChange change) {
+        validateChange(change.operation(), change.key(), change.keyType(), change.value(), change.newKey(),
+                change.ttlSeconds(), change.hashUpserts(), change.hashDeletes(), change.listUpdates(),
+                change.listAppends(), change.setAdds(), change.setRemoves(), change.zsetUpserts(), change.zsetRemoves());
     }
 
     private void validateChange(String operation, String key, String keyType, Object value, String newKey, Long ttl,
@@ -351,5 +343,46 @@ public class RedisTools {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to serialize Redis MCP result.", e);
         }
+    }
+
+    /** 仅在本次工具调用内存活，不存储操作 ID 或可被复用的确认凭据。 */
+    private record RedisChange(String operation, String databaseName, String key, String keyType,
+                               Object value, String newKey, Map<String, String> hashUpserts,
+                               List<String> hashDeletes, Map<Long, String> listUpdates, List<String> listAppends,
+                               List<String> setAdds, List<String> setRemoves, Map<String, Double> zsetUpserts,
+                               List<String> zsetRemoves, Long ttlSeconds) {
+        private RedisChange {
+            value = snapshotValue(value);
+            hashUpserts = snapshotMap(hashUpserts);
+            hashDeletes = snapshotList(hashDeletes);
+            listUpdates = snapshotMap(listUpdates);
+            listAppends = snapshotList(listAppends);
+            setAdds = snapshotList(setAdds);
+            setRemoves = snapshotList(setRemoves);
+            zsetUpserts = snapshotMap(zsetUpserts);
+            zsetRemoves = snapshotList(zsetRemoves);
+        }
+    }
+
+    private static <K, V> Map<K, V> snapshotMap(Map<K, V> value) {
+        return value == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(value));
+    }
+
+    private static <T> List<T> snapshotList(List<T> value) {
+        return value == null ? null : Collections.unmodifiableList(new ArrayList<>(value));
+    }
+
+    private static Object snapshotValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, item) -> copy.put(key, snapshotValue(item)));
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> copy = new ArrayList<>(collection.size());
+            collection.forEach(item -> copy.add(snapshotValue(item)));
+            return Collections.unmodifiableList(copy);
+        }
+        return value;
     }
 }

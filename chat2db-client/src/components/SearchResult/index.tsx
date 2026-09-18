@@ -212,7 +212,8 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
 
   const renderResult = (queryResultData) => {
     function renderSuccessResult() {
-      const needTable = queryResultData?.headerList?.length > 0;
+      // DML 执行结果也会被后端补充行号列，不能仅通过 headerList 判断是否为查询结果。
+      const needTable = queryResultData?.sqlType === 'SELECT' && queryResultData?.headerList?.length > 0;
       const showUpdateCount = queryResultData?.sqlType !== 'SELECT' && queryResultData?.updateCount != null;
       return (
         <div className={styles.successResult}>

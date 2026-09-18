@@ -38,8 +38,13 @@ export default {
   'setting.button.refresh': 'Refresh',
   'setting.label.mcpAuthType': 'MCP Auth Type',
   'setting.label.mcpToken': 'MCP Token',
-  'setting.label.mcpAllowWrite': 'Allow P2 Data Writes (SQL / MongoDB)',
+  'setting.label.mcpAllowWrite': 'Allow P2 Data Writes (SQL / MongoDB / Redis)',
   'setting.label.mcpAllowDdl': 'Allow P2 Schema Management (SQL DDL / MongoDB)',
+  'setting.label.mcpApprovalClientKeywords': 'Client Approval Whitelist Keywords',
+  'setting.placeholder.mcpApprovalClientKeywords': 'Enter a keyword and press Enter',
+  'setting.text.mcpApprovalClientKeywords':
+    'Matches substrings in client name/title, ignoring case. ' +
+    'Matching clients use their own approval; empty means all clients request elicitation.',
   'setting.option.mcpAuthNone': 'No Auth',
   'setting.option.mcpAuthBearer': 'Bearer Token',
   'setting.button.apply': 'Apply',

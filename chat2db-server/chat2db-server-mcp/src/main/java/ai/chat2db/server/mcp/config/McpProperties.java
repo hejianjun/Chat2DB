@@ -1,5 +1,7 @@
 package ai.chat2db.server.mcp.config;
 
+import java.util.List;
+
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -16,7 +18,10 @@ public class McpProperties {
     /** Optional bearer token required by MCP HTTP endpoints. */
     private String token;
 
-    /** Shared relational and MongoDB execution policy exposed to MCP tools. */
+    /** Client name/title keywords whose hosts handle approval instead of MCP elicitation. */
+    private List<String> approvalClientKeywords = List.of("codex");
+
+    /** Shared relational, MongoDB and Redis execution policy exposed to MCP tools. */
     private Sql sql = new Sql();
 
     /** MongoDB execution policy exposed to MCP tools. */
@@ -26,7 +31,7 @@ public class McpProperties {
     private Redis redis = new Redis();
 
     /**
-     * Shared MCP safety policy. Write covers SQL DML and MongoDB document writes; DDL covers SQL DDL and
+     * Shared MCP safety policy. Write covers SQL DML, MongoDB document writes and Redis writes; DDL covers SQL DDL and
      * MongoDB collection/index administration.
      */
     @Data
@@ -50,7 +55,7 @@ public class McpProperties {
     /** MongoDB-specific execution limits. Permissions are inherited from the shared SQL policy above. */
     @Data
     public static class Mongo {
-        /** Maximum number of documents accepted by one INSERT_MANY prepare request. */
+        /** Maximum number of documents accepted by one INSERT_MANY request. */
         private int maxBatchDocuments = 100;
     }
 

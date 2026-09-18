@@ -1,5 +1,7 @@
 package ai.chat2db.server.mcp.config;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
 import ai.chat2db.server.domain.api.model.Config;
@@ -74,6 +76,18 @@ public class McpServerConfigService {
         return effective;
     }
 
+    public List<String> getApprovalClientKeywords() {
+        McpServerConfig config = getStoredConfig();
+        // 缺少字段时兼容原有 Codex 行为；显式空数组表示所有客户端都必须 elicitation。
+        List<String> keywords = config == null || config.getApprovalClientKeywords() == null
+            ? properties.getApprovalClientKeywords() : config.getApprovalClientKeywords();
+        if (keywords == null) {
+            return List.of();
+        }
+        return keywords.stream().filter(StringUtils::isNotBlank)
+            .map(keyword -> keyword.trim().toLowerCase(Locale.ROOT)).distinct().toList();
+    }
+
     public McpProperties.Mongo getEffectiveMongo() {
         McpProperties.Mongo effective = copyMongo(properties.getMongodb());
         McpServerConfig config = getStoredConfig();
@@ -117,7 +131,7 @@ public class McpServerConfigService {
         return copy;
     }
 
-    private McpServerConfig getStoredConfig() {
+    McpServerConfig getStoredConfig() {
         try {
             AtomicReference<Config> configRef = new AtomicReference<>();
             Dbutils.runWithSession(() -> configRef.set(configService.find(MCP_SERVER_CONFIG_CODE)));
@@ -133,9 +147,11 @@ public class McpServerConfigService {
     }
 
     @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class McpServerConfig {
         private String authType;
         private String token;
+        private List<String> approvalClientKeywords;
         private McpSqlConfig sql;
         private McpMongoConfig mongodb;
     }

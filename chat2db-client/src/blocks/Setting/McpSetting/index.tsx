@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import i18n from '@/i18n';
 import configServer from '@/service/config';
 import mcpServer, { IMcpClientConnection, IMcpStatus } from '@/service/mcp';
-import { Button, Input, Modal, Select, Space, Switch, Table, Tag, message } from 'antd';
+import { Button, Input, Modal, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import classnames from 'classnames';
 import styles from '../index.less';
 
@@ -19,8 +19,24 @@ interface IMcpSqlConfig {
 interface IMcpServerConfig {
   authType?: McpAuthType;
   token?: string;
+  approvalClientKeywords?: string[];
   sql?: IMcpSqlConfig;
 }
+
+const normalizeApprovalClientKeywords = (keywords?: string[] | null): string[] => {
+  const seen = new Set<string>();
+  // 未配置时默认使用 codex，显式空数组表示所有客户端都请求 elicitation 确认。
+  return (keywords ?? ['codex'])
+    .map((keyword) => keyword.trim())
+    .filter((keyword) => {
+      const normalized = keyword.toLowerCase();
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+      seen.add(normalized);
+      return true;
+    });
+};
 
 export default function McpSetting() {
   const [storedConfig, setStoredConfig] = useState<IMcpServerConfig>({});
@@ -28,6 +44,7 @@ export default function McpSetting() {
   const [mcpToken, setMcpToken] = useState('');
   const [allowWrite, setAllowWrite] = useState(false);
   const [allowDdl, setAllowDdl] = useState(false);
+  const [approvalClientKeywords, setApprovalClientKeywords] = useState<string[]>(normalizeApprovalClientKeywords);
   const [mcpStatus, setMcpStatus] = useState<IMcpStatus>();
   const [statusLoading, setStatusLoading] = useState(false);
   const [clientModalOpen, setClientModalOpen] = useState(false);
@@ -49,6 +66,7 @@ export default function McpSetting() {
         setMcpToken(config.token || '');
         setAllowWrite(Boolean(config.sql?.allowWrite));
         setAllowDdl(Boolean(config.sql?.allowDdl));
+        setApprovalClientKeywords(normalizeApprovalClientKeywords(config.approvalClientKeywords));
       } catch {
         setStoredConfig({});
       }
@@ -79,6 +97,7 @@ export default function McpSetting() {
         ...storedConfig,
         authType: mcpAuthType,
         token: mcpAuthType === 'bearer' ? mcpToken.trim() : '',
+        approvalClientKeywords: normalizeApprovalClientKeywords(approvalClientKeywords),
         sql: {
           ...storedConfig.sql,
           allowWrite,
@@ -138,6 +157,24 @@ export default function McpSetting() {
       <div className={styles.title}>{i18n('setting.label.mcpAllowDdl')}</div>
       <div className={classnames(styles.content, styles.chatGPTKey)}>
         <Switch checked={allowDdl} onChange={setAllowDdl} />
+      </div>
+      <div className={styles.title}>{i18n('setting.label.mcpApprovalClientKeywords')}</div>
+      <div className={styles.content}>
+        <Select
+          mode="tags"
+          allowClear
+          style={{ width: '100%' }}
+          maxTagCount="responsive"
+          maxTagTextLength={24}
+          value={approvalClientKeywords}
+          tokenSeparators={[',', '，']}
+          placeholder={i18n('setting.placeholder.mcpApprovalClientKeywords')}
+          aria-label={i18n('setting.label.mcpApprovalClientKeywords')}
+          onChange={(keywords) => setApprovalClientKeywords(normalizeApprovalClientKeywords(keywords))}
+        />
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+          {i18n('setting.text.mcpApprovalClientKeywords')}
+        </Typography.Paragraph>
       </div>
       <div className={styles.bottomButton}>
         <Button type="primary" onClick={saveMcpConfig}>
