@@ -38,24 +38,6 @@ public class LogUtils {
     private static final Pattern LINE_FEED_PATTERN = Pattern.compile("\r|\n");
 
     /**
-     * mask string
-     *
-     * @param input
-     * @return
-     */
-    public static String maskString(String input) {
-        if (StringUtils.isBlank(input)) {
-            return input;
-        }
-
-        StringBuilder maskedString = new StringBuilder(input);
-        for (int i = 0; i < input.length(); i += 4) {
-            maskedString.setCharAt(i, '*');
-        }
-        return maskedString.toString();
-    }
-
-    /**
      * 去除换行符
      *
      * @param log

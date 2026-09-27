@@ -94,6 +94,7 @@ chatgpt:
 
 # Print the HTTP log
 logbook:
+  strategy: without-body
   include:
     - /api/**
   exclude:

@@ -67,7 +67,9 @@ public class DefaultDBManage implements DBManage {
                 } catch (Exception e) {
                 }
             }
-            throw new BusinessException("connection.error", null, e1);
+            String dataSourceName = StringUtils.defaultIfBlank(connectInfo.getAlias(),
+                connectInfo.getDataSourceId() == null ? "?" : connectInfo.getDataSourceId().toString());
+            throw new BusinessException("connection.dataSourceError", new Object[] {dataSourceName}, e1);
         }
         connectInfo.setSession(session);
         connectInfo.setConnection(connection);
