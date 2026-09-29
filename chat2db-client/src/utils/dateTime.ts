@@ -7,8 +7,8 @@ import {
 const ISO_INSTANT_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/i;
 const LOCAL_DATE_TIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?)?$/;
-const LOCAL_TIME_PATTERN = /^(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/;
+  /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?$/;
+const LOCAL_TIME_PATTERN = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?$/;
 const FALLBACK_TIME_ZONES = [
   'Asia/Shanghai',
   'Asia/Tokyo',
@@ -71,8 +71,8 @@ function formatParts(parts: IDateTimeParts, format: DateTimeFormat): string {
       ? `${parts.year}${dateSeparator}${parts.month}${dateSeparator}${parts.day}`
       : '';
   const time =
-    parts.hour && parts.minute && parts.second
-      ? `${parts.hour}:${parts.minute}:${parts.second}`
+    parts.hour && parts.minute
+      ? `${parts.hour}:${parts.minute}:${parts.second || '00'}`
       : '';
   const millisecond =
     format === DateTimeFormat.DATE_TIME_MILLIS && time
@@ -172,7 +172,7 @@ function formatLocalValue(value: string, config: IDateTimeDisplayConfig): string
       };
   if (config.format === DateTimeFormat.ISO_8601) {
     const date = parts.year ? `${parts.year}-${parts.month}-${parts.day}` : '';
-    const time = parts.hour ? `${parts.hour}:${parts.minute}:${parts.second}` : '';
+    const time = parts.hour ? `${parts.hour}:${parts.minute}:${parts.second || '00'}` : '';
     const millisecond = parts.millisecond ? `.${normalizeMilliseconds(parts.millisecond)}` : '';
     return date && time ? `${date}T${time}${millisecond}` : date || `${time}${millisecond}`;
   }
