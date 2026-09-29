@@ -24,6 +24,8 @@ export const initConsoleStore = {
   createConsoleLoading: false,
 };
 
+let savedConsoleRequestId = 0;
+
 export const getOpenConsoleList = () => {
   historyService
     .getConsoleList({
@@ -36,21 +38,30 @@ export const getOpenConsoleList = () => {
     });
 };
 
-export const getSavedConsoleList = (pageNo: number = 1, pageSize: number = 100) => { 
-  historyService
+export const getSavedConsoleList = (pageNo: number = 1, pageSize: number = 100, searchKey?: string) => {
+  const requestId = ++savedConsoleRequestId;
+  const normalizedSearchKey = searchKey?.trim();
+
+  return historyService
     .getConsoleList({
       pageNo,
       pageSize,
+      searchKey: normalizedSearchKey || undefined,
       status: ConsoleStatus.RELEASE,
       orderByCreateDesc: true,
     })
     .then((res) => {
-      useWorkspaceStore.setState({ 
+      if (requestId !== savedConsoleRequestId) {
+        return res;
+      }
+
+      useWorkspaceStore.setState({
         savedConsoleList: res?.data,
         savedConsoleTotal: res?.total || 0,
       });
+      return res;
     });
-}
+};
 
 export const setActiveConsoleId = (id: IConsoleStore['activeConsoleId']) => {
   useWorkspaceStore.setState({ activeConsoleId: id });

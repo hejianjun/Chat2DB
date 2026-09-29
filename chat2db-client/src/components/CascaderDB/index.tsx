@@ -30,6 +30,29 @@ function CascaderDB(props: IProps) {
   const [curSchemeName, setCurSchemeName] = useState<string| undefined>(props.curSchemaName || '');
 
   useEffect(() => {
+    if (props.curConnectionId !== curDataSourceId) {
+      setCurDataSourceId(props.curConnectionId);
+      setDatabaseOptions([]);
+      setSchemaOptions([]);
+    }
+  }, [curDataSourceId, props.curConnectionId]);
+
+  useEffect(() => {
+    const nextDatabaseName = props.curDatabaseName || '';
+    if (nextDatabaseName !== curDatabaseName) {
+      setCurDatabaseName(nextDatabaseName);
+      setSchemaOptions([]);
+    }
+  }, [curDatabaseName, props.curDatabaseName]);
+
+  useEffect(() => {
+    const nextSchemaName = props.curSchemaName || '';
+    if (nextSchemaName !== curSchemeName) {
+      setCurSchemeName(nextSchemaName);
+    }
+  }, [curSchemeName, props.curSchemaName]);
+
+  useEffect(() => {
     loadDataSource();
   }, []);
   useEffect(() => {
@@ -154,6 +177,11 @@ function CascaderDB(props: IProps) {
     }
   };
 
+  // 父组件切换会话或入口任务时，以传入上下文为准，避免异步加载旧数据覆盖当前选择。
+  const selectedDataSourceId = props.curConnectionId ?? curDataSourceId;
+  const selectedDatabaseName = props.curDatabaseName ?? curDatabaseName;
+  const selectedSchemaName = props.curSchemaName ?? curSchemeName;
+
   return (
     <div className={cs(props.className, styles.cascaderDB)}>
       <Select
@@ -162,7 +190,7 @@ function CascaderDB(props: IProps) {
         showSearch
         popupMatchSelectWidth={false}
         options={dataSourceOptions}
-        value={curDataSourceId}
+        value={selectedDataSourceId}
         onChange={handleChangeDataSource}
         className={styles.select}
         dropdownRender={(menu) => (
@@ -181,7 +209,7 @@ function CascaderDB(props: IProps) {
         showSearch
         popupMatchSelectWidth={false}
         options={databaseOptions}
-        value={curDatabaseName}
+        value={selectedDatabaseName}
         onChange={handleChangeDatabase}
         className={styles.select}
         dropdownRender={(menu) => (
@@ -201,7 +229,7 @@ function CascaderDB(props: IProps) {
           showSearch
           popupMatchSelectWidth={false}
           options={schemaOptions}
-          value={curSchemeName}
+          value={selectedSchemaName}
           onChange={handleChangeSchema}
           className={styles.select}
           dropdownRender={(menu) => (

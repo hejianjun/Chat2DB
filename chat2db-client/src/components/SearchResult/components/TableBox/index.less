@@ -70,9 +70,13 @@
     .art-table-cell {
       position: relative;
     }
-    // .art-sticky-scroll {
-    //   display: none !important;
-    // }
+    .art-sticky-scroll::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    .art-sticky-scroll::-webkit-scrollbar-thumb {
+      background-color: var(--color-fill);
+    }
 
     .art-table-row {
       height: 32px;

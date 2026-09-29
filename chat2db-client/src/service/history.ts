@@ -4,6 +4,7 @@ import { DatabaseTypeCode, ConsoleStatus } from '@/constants'
 import { ICreateConsole, IConsole, IManageResultData, IPageResponse, IPageParams } from '@/typings';
 
 export interface IGetSavedListParams extends IPageParams {
+  searchKey?: string;
   tabOpened?: 'y' | 'n';
   status?: ConsoleStatus;
   orderByCreateDesc?: boolean;

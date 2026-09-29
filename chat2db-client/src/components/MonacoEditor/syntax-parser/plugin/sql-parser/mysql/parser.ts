@@ -36,6 +36,7 @@ const statements = () => {
 
 const statement = () => {
   return chain([
+    explainStatement,
     selectStatement,
     createTableStatement,
     insertStatement,
@@ -47,6 +48,10 @@ const statement = () => {
   ])(ast => {
     return ast[0];
   });
+};
+
+const explainStatement = () => {
+  return chain('explain', selectStatement)(ast => ast[1]);
 };
 
 // ----------------------------------- select statement -----------------------------------

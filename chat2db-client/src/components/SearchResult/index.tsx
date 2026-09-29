@@ -212,8 +212,9 @@ export default forwardRef((props: IProps, ref: ForwardedRef<ISearchResultRef>) =
 
   const renderResult = (queryResultData) => {
     function renderSuccessResult() {
-      // DML 执行结果也会被后端补充行号列，不能仅通过 headerList 判断是否为查询结果。
-      const needTable = queryResultData?.sqlType === 'SELECT' && queryResultData?.headerList?.length > 0;
+      // The backend prepends a row-number column to every result. A second column means
+      // JDBC returned a result set, including commands such as EXPLAIN and SHOW.
+      const needTable = queryResultData?.headerList?.length > 1;
       const showUpdateCount = queryResultData?.sqlType !== 'SELECT' && queryResultData?.updateCount != null;
       return (
         <div className={styles.successResult}>

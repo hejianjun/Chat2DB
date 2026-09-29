@@ -519,6 +519,9 @@ export default function TableBox(props: ITableProps) {
   };
 
   const onClickTotalBtn = async () => {
+    if (queryResultData.sqlType !== 'SELECT') {
+      return Number(queryResultData.fuzzyTotal || queryResultData.dataList?.length || 0);
+    }
     if (props.executeSqlParams?.databaseType === DatabaseTypeCode.REDIS) {
       const total = Number(queryResultData.fuzzyTotal || queryResultData.dataList?.length || 0);
       setPaginationConfig({ ...paginationConfig, total });
@@ -1414,6 +1417,7 @@ export default function TableBox(props: ITableProps) {
                       components={{ EmptyContent: () => <h2>{i18n('common.text.noData')}</h2> }}
                       isStickyHead
                       stickyTop={31}
+                      stickyScrollHeight={8}
                       {...pipeline.getProps()}
                     />
                   </>

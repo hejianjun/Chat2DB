@@ -321,6 +321,15 @@ const isSameDataSource = (left?: number | null, right?: number | null): boolean 
   return String(left ?? '') === String(right ?? '');
 };
 
+const getDefaultSessionTitle = (promptType: IAiChatPromptType, messageText: string): string => {
+  // 简单任务是从其他页面跳转进来的，使用实际任务描述作为标题，避免沿用上一个会话的标题。
+  if (isSimpleTaskPromptType(promptType)) {
+    const title = messageText.trim().replace(/\s+/g, ' ');
+    return title || promptType;
+  }
+  return promptType;
+};
+
 const DatabaseStatementActionButtons = memo<{
   statement: string;
   type: DatabaseStatementType;
@@ -475,7 +484,8 @@ export default memo<IProps>(() => {
   }, [activeConsoleId, consoleList, workspaceTabList]);
 
   useEffect(() => {
-    if (!currentSession) {
+    // 待执行任务会提供明确的数据源上下文，不能被旧会话的上下文覆盖。
+    if (!currentSession || pendingAiChat?.message) {
       return;
     }
     setBoundInfo({
@@ -489,6 +499,7 @@ export default memo<IProps>(() => {
     currentSession?.dataSourceId,
     currentSession?.databaseName,
     currentSession?.schemaName,
+    pendingAiChat,
   ]);
 
   useEffect(() => {
@@ -790,9 +801,11 @@ export default memo<IProps>(() => {
       const sessionId = shouldReuseConversation ? existingSessionId! : uuidv4();
       console.log('[AiChat] Using sessionId:', sessionId, 'reuse:', shouldReuseConversation);
       sessionIdRef.current = sessionId;
-      const shouldUsePromptTypeTitle =
-        !existingSession || (existingSession.messages.length === 0 && existingSession.title === '新对话');
-      const sessionTitle = shouldUsePromptTypeTitle ? promptType : existingSession?.title || promptType;
+      const defaultSessionTitle = getDefaultSessionTitle(promptType, effectiveMessage);
+      const sessionTitle =
+        shouldReuseConversation && existingSession?.title && existingSession.title !== '新对话'
+          ? existingSession.title
+          : defaultSessionTitle;
       if (!shouldReuseConversation) {
         createSession(sessionId, {
           dataSourceId: info.dataSourceId,
@@ -1059,18 +1072,13 @@ export default memo<IProps>(() => {
   useEffect(() => {
     if (pendingAiChat && pendingAiChat.message) {
       const overrideBoundInfo = {
-        dataSourceId: pendingAiChat.dataSourceId || boundInfo.dataSourceId,
-        databaseName: pendingAiChat.databaseName || boundInfo.databaseName,
-        schemaName: pendingAiChat.schemaName || boundInfo.schemaName,
-        tableNames: pendingAiChat.tableNames || boundInfo.tableNames || null,
+        dataSourceId: pendingAiChat.dataSourceId ?? boundInfo.dataSourceId,
+        databaseName: pendingAiChat.databaseName ?? boundInfo.databaseName ?? '',
+        schemaName: pendingAiChat.schemaName ?? boundInfo.schemaName ?? '',
+        tableNames: pendingAiChat.tableNames ?? boundInfo.tableNames ?? null,
       };
-      if (pendingAiChat.dataSourceId && pendingAiChat.dataSourceId !== boundInfo.dataSourceId) {
-        setBoundInfo((prev) => ({
-          ...prev,
-          dataSourceId: pendingAiChat.dataSourceId,
-          tableNames: pendingAiChat.tableNames || prev.tableNames,
-        }));
-      }
+      // 入口页面传入的上下文优先，四个字段必须一起切换，避免出现“数据源已变但数据库仍是旧值”。
+      setBoundInfo(overrideBoundInfo);
       if (pendingAiChat.onCommentGenerated) {
         commentCallbackRef.current = pendingAiChat.onCommentGenerated;
       }

@@ -105,8 +105,12 @@ const SaveList = () => {
   };
 
   useEffect(() => {
-    getSavedConsoleList(pageNo, pageSize);
-  }, [pageNo, pageSize]);
+    const timer = window.setTimeout(() => {
+      getSavedConsoleList(pageNo, pageSize, searchValue);
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [pageNo, pageSize, searchValue]);
 
   useEffect(() => {
     if (searching) {
@@ -137,6 +141,7 @@ const SaveList = () => {
 
   function onChange(value: string) {
     setSearchValue(value);
+    setPageNo(1);
   }
 
   function clearFilters() {
@@ -174,7 +179,7 @@ const SaveList = () => {
       id: data.id,
     };
     historyServer.deleteSavedConsole(params).then(() => {
-      getSavedConsoleList(pageNo, pageSize);
+      getSavedConsoleList(pageNo, pageSize, searchValue);
     });
   }
 
@@ -216,7 +221,7 @@ const SaveList = () => {
       };
 
       historyServer.createConsole(params).then((id) => {
-        getSavedConsoleList(pageNo, pageSize);
+        getSavedConsoleList(pageNo, pageSize, searchValue);
         addWorkspaceTab({
           id,
           type: WorkspaceTabType.CONSOLE,
@@ -459,7 +464,7 @@ const SaveList = () => {
             name: editData.name,
           };
           historyServer.updateSavedConsole(params).then(() => {
-            getSavedConsoleList();
+            getSavedConsoleList(pageNo, pageSize, searchValue);
             setEditData(null);
           });
         }}
