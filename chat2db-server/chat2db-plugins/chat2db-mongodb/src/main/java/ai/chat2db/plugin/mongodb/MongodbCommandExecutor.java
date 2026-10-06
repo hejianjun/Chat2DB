@@ -10,6 +10,7 @@ import ai.chat2db.spi.model.ExecuteResult;
 import ai.chat2db.spi.model.Header;
 import ai.chat2db.spi.sql.Chat2DBContext;
 import cn.hutool.core.date.TimeInterval;
+import com.mongodb.ExplainVerbosity;
 import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
@@ -35,6 +36,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class MongodbCommandExecutor implements CommandExecutor, CommandResultStreamer {
@@ -127,7 +129,9 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
                 return false;
             }
             String method = command.calls().get(0).name();
-            return "find".equals(method) || "aggregate".equals(method);
+            // explain 返回执行计划文档，导出时走普通执行路径，避免打开业务数据游标。
+            return ("find".equals(method) || "aggregate".equals(method))
+                    && command.calls().stream().noneMatch(call -> "explain".equals(call.name()));
         } catch (RuntimeException e) {
             return false;
         }
@@ -173,6 +177,15 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
 
     private MongoCursor<Document> openFindCursor(MongoCollection<Document> collection, List<String> arguments,
                                                  List<MongodbCommandParser.MethodCall> chain, int batchSize) {
+        return configureFind(collection, arguments, chain).batchSize(batchSize).iterator();
+    }
+
+    /**
+     * 普通查询、执行计划和流式导出共用查询选项，确保过滤、投影和超时设置一致。
+     * 此处只保留 MQL 中的 skip/limit；结果表格分页由普通查询路径单独处理。
+     */
+    FindIterable<Document> configureFind(MongoCollection<Document> collection, List<String> arguments,
+                                         List<MongodbCommandParser.MethodCall> chain) {
         FindIterable<Document> iterable = collection.find(optionalDocument(arguments, 0));
         if (arguments.size() > 1) {
             iterable.projection(document(arguments, 1));
@@ -182,6 +195,7 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
                 case "sort" -> iterable.sort(document(call.arguments(), 0));
                 case "projection" -> iterable.projection(document(call.arguments(), 0));
                 case "skip" -> iterable.skip(requiredInt(call.arguments(), 0, "skip"));
+                case "maxTimeMS" -> iterable.maxTime(maxTimeMillis(call.arguments()), TimeUnit.MILLISECONDS);
                 case "limit" -> {
                     int limit = requiredInt(call.arguments(), 0, "limit");
                     if (limit < 1) {
@@ -192,7 +206,7 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
                 default -> throw new IllegalArgumentException("Unsupported find modifier: " + call.name());
             }
         }
-        return iterable.batchSize(batchSize).iterator();
+        return iterable;
     }
 
     private void executeExpression(MongoDatabase database, String statement, Integer pageNo, Integer pageSize,
@@ -322,24 +336,21 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
         scalarResult(result, "count", count);
     }
 
-    private void executeFind(MongoCollection<Document> collection, List<String> arguments,
+    void executeFind(MongoCollection<Document> collection, List<String> arguments,
                              List<MongodbCommandParser.MethodCall> chain, Integer requestedPageNo,
                              Integer requestedPageSize, ExecuteResult result) {
-        FindIterable<Document> iterable = collection.find(optionalDocument(arguments, 0));
-        if (arguments.size() > 1) {
-            iterable.projection(document(arguments, 1));
+        // explain 必须位于链尾；先剥离终结方法，再将前面的查询选项传给驱动。
+        boolean explain = !chain.isEmpty() && "explain".equals(chain.get(chain.size() - 1).name());
+        List<MongodbCommandParser.MethodCall> modifiers = explain ? chain.subList(0, chain.size() - 1) : chain;
+        FindIterable<Document> iterable = configureFind(collection, arguments, modifiers);
+        if (explain) {
+            // 执行计划保留原查询的 skip/limit，不应用结果表格分页或多取一行。
+            commandResult(result, iterable.explain(explainVerbosity(chain.get(chain.size() - 1).arguments())));
+            result.setCanEdit(false);
+            result.setCanDelete(false);
+            return;
         }
         Page page = page(chain, requestedPageNo, requestedPageSize);
-        for (MongodbCommandParser.MethodCall call : chain) {
-            switch (call.name()) {
-                case "sort" -> iterable.sort(document(call.arguments(), 0));
-                case "projection" -> iterable.projection(document(call.arguments(), 0));
-                case "skip", "limit" -> {
-                    // applied from normalized page below
-                }
-                default -> throw new IllegalArgumentException("Unsupported find modifier: " + call.name());
-            }
-        }
         List<Document> documents = iterable.skip(page.skip()).limit(page.limit() + 1).into(new ArrayList<>());
         boolean hasNext = documents.size() > page.limit();
         if (hasNext) {
@@ -542,6 +553,34 @@ public class MongodbCommandExecutor implements CommandExecutor, CommandResultStr
             throw new IllegalArgumentException("MongoDB argument must be a number: " + name);
         }
         return number.intValue();
+    }
+
+    private long maxTimeMillis(List<String> arguments) {
+        if (arguments.size() != 1) {
+            throw new IllegalArgumentException("MongoDB maxTimeMS requires one non-negative integer");
+        }
+        Object value = MongodbCommandParser.parseValue(arguments.get(0));
+        // 使用 long 保留毫秒值，拒绝小数和负数；0 保留 MongoDB 不限制执行时间的语义。
+        if (!(value instanceof Integer || value instanceof Long) || ((Number) value).longValue() < 0) {
+            throw new IllegalArgumentException("MongoDB maxTimeMS requires one non-negative integer");
+        }
+        return ((Number) value).longValue();
+    }
+
+    private ExplainVerbosity explainVerbosity(List<String> arguments) {
+        if (arguments.isEmpty()) {
+            // 与 shell 的游标 explain() 默认行为一致，仅返回查询计划。
+            return ExplainVerbosity.QUERY_PLANNER;
+        }
+        if (arguments.size() != 1) {
+            throw new IllegalArgumentException("MongoDB explain accepts at most one verbosity argument");
+        }
+        return switch (requiredString(arguments, 0, "verbosity")) {
+            case "queryPlanner" -> ExplainVerbosity.QUERY_PLANNER;
+            case "executionStats" -> ExplainVerbosity.EXECUTION_STATS;
+            case "allPlansExecution" -> ExplainVerbosity.ALL_PLANS_EXECUTIONS;
+            default -> throw new IllegalArgumentException("Unsupported MongoDB explain verbosity");
+        };
     }
 
     private String required(List<String> arguments, int index, String name) {

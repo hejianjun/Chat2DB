@@ -6,6 +6,22 @@ import org.junit.jupiter.api.Test;
 class MqlExplainCommandBuilderTest {
 
     @Test
+    void preservesTimeoutAndExplicitExplainVerbosity() {
+        Assertions.assertEquals(
+                "db.runCommand({ explain: { find: \"location\", filter: {}, "
+                        + "sort: { acquisitionTime: 1 }, limit: 10001, maxTimeMS: 30000 }, "
+                        + "verbosity: \"executionStats\" })",
+                MqlExplainCommandBuilder.build("db.getCollection('location').find({})"
+                        + ".sort({ acquisitionTime: 1 }).limit(10001).maxTimeMS(30000).explain('executionStats')"));
+        Assertions.assertTrue(MqlExplainCommandBuilder.build("db.location.find({}).maxTimeMS(30000)")
+                .contains("maxTimeMS: 30000"));
+        Assertions.assertTrue(MqlExplainCommandBuilder.build("db.location.find({}).explain()")
+                .contains("verbosity: \"queryPlanner\""));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> MqlExplainCommandBuilder.build("db.location.find({}).explain('invalid')"));
+    }
+
+    @Test
     void buildsFindExplainWithModifiers() {
         String mql = "db.orders.find({ status: 'PAID' }, { total: 1 })"
                 + ".sort({ createdAt: -1 }).skip(10).limit(20)";

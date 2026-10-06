@@ -23,6 +23,20 @@ public final class MqlExplainCommandBuilder {
 
         MqlSyntaxParser.MethodCall operation = command.calls().get(0);
         List<MqlSyntaxParser.MethodCall> modifiers = command.calls().subList(1, command.calls().size());
+        // 优化分析默认收集执行统计；输入已带 explain 时，保留其显式模式或默认 queryPlanner。
+        String verbosity = "executionStats";
+        if (!modifiers.isEmpty() && "explain".equals(modifiers.get(modifiers.size() - 1).name())) {
+            MqlSyntaxParser.MethodCall explain = modifiers.get(modifiers.size() - 1);
+            if (explain.arguments().size() > 1) {
+                throw new IllegalArgumentException("MongoDB explain accepts at most one verbosity argument");
+            }
+            verbosity = explain.arguments().isEmpty() ? "queryPlanner" : unquote(requiredArgument(explain, 0));
+            if (!List.of("queryPlanner", "executionStats", "allPlansExecution").contains(verbosity)) {
+                throw new IllegalArgumentException("Unsupported MongoDB explain verbosity");
+            }
+            // 终结方法不属于 find 命令选项，剥离后由外层 explain 命令统一承载。
+            modifiers = modifiers.subList(0, modifiers.size() - 1);
+        }
         String explainedCommand = switch (operation.name()) {
             case "find" -> buildFindCommand(command.collectionName(), operation.arguments(), modifiers, false);
             case "findOne" -> buildFindCommand(command.collectionName(), operation.arguments(), modifiers, true);
@@ -30,7 +44,7 @@ public final class MqlExplainCommandBuilder {
             default -> throw new IllegalArgumentException(
                     "MongoDB EXPLAIN only supports find, findOne and aggregate");
         };
-        return "db.runCommand({ explain: " + explainedCommand + ", verbosity: \"executionStats\" })";
+        return "db.runCommand({ explain: " + explainedCommand + ", verbosity: \"" + verbosity + "\" })";
     }
 
     public static String extractCollectionName(String mql) {
@@ -54,6 +68,8 @@ public final class MqlExplainCommandBuilder {
                 case "projection" -> fields.add("projection: " + requiredArgument(modifier, 0));
                 case "skip" -> fields.add("skip: " + requiredArgument(modifier, 0));
                 case "limit" -> fields.add("limit: " + requiredArgument(modifier, 0));
+                // 将查询超时保留在被解释的 find 命令中，避免优化分析丢失时间限制。
+                case "maxTimeMS" -> fields.add("maxTimeMS: " + requiredArgument(modifier, 0));
                 default -> throw new IllegalArgumentException(
                         "Unsupported find modifier for EXPLAIN: " + modifier.name());
             }
