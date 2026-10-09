@@ -49,4 +49,6 @@ public interface AiConversationService {
      * Spring AI has persisted a completed user/assistant turn.
      */
     void updateAfterMessageTurn(@NotNull String conversationId, @NotNull String assistantContent);
+
+    void rewindLastTurn(@NotNull String conversationId, @NotNull String expectedContent, boolean completedTurn);
 }

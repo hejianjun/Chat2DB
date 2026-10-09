@@ -14,4 +14,6 @@ public interface AiConversationMemoryStore {
     void clear(String conversationId);
 
     void discardIncompleteTurn(String conversationId);
+
+    void rewindLastTurn(String conversationId, String expectedContent, boolean completedTurn);
 }

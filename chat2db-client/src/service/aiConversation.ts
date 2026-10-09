@@ -34,6 +34,10 @@ export const deleteAiConversation = createRequest<{ conversationId: string }, vo
 );
 
 export default {
+  rewindLastTurn: createRequest<{ conversationId: string; expectedContent: string; completedTurn: boolean }, void>(
+    '/api/ai/conversation/:conversationId/rewind',
+    { method: 'post' },
+  ),
   createAiConversation,
   queryAiConversations,
   getAiConversation,

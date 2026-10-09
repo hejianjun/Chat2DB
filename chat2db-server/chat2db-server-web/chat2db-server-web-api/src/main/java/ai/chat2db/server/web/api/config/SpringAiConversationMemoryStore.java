@@ -2,6 +2,7 @@ package ai.chat2db.server.web.api.config;
 
 import ai.chat2db.server.domain.api.model.AiMessage;
 import ai.chat2db.server.domain.api.service.AiConversationMemoryStore;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
@@ -57,5 +58,27 @@ public class SpringAiConversationMemoryStore implements AiConversationMemoryStor
             messages.remove(messages.size() - 1);
             repository.saveAll(conversationId, messages);
         }
+    }
+
+    @Override
+    public void rewindLastTurn(String conversationId, String expectedContent, boolean completedTurn) {
+        List<Message> messages = new ArrayList<>(repository.findByConversationId(conversationId));
+        // 失败问题可能已被流式错误处理清理，不能回退之前成功的问答。
+        if (!completedTurn && (messages.isEmpty()
+                || messages.get(messages.size() - 1).getMessageType() != MessageType.USER)) {
+            return;
+        }
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i).getMessageType() != MessageType.USER) {
+                continue;
+            }
+            // 校验最后一个问题，避免旧页面误删其他轮次的对话。
+            if (!java.util.Objects.equals(expectedContent, messages.get(i).getText())) {
+                throw new BusinessException("ai.conversationMessageChanged");
+            }
+            repository.saveAll(conversationId, new ArrayList<>(messages.subList(0, i)));
+            return;
+        }
+        throw new BusinessException("ai.conversationMessageChanged");
     }
 }

@@ -22,6 +22,7 @@ import ai.chat2db.server.domain.repository.Dbutils;
 import ai.chat2db.server.domain.repository.entity.AiConversationDO;
 import ai.chat2db.server.domain.repository.mapper.AiConversationMapper;
 import ai.chat2db.server.tools.base.wrapper.ServicePage;
+import ai.chat2db.server.tools.base.excption.BusinessException;
 import ai.chat2db.server.tools.common.util.ContextUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -198,6 +199,24 @@ public class AiConversationServiceImpl implements AiConversationService {
                 .eq(AiConversationDO::getConversationId, conversationId)
                 .set(AiConversationDO::getMessageCount, messageCount)
                 .set(AiConversationDO::getLastMessagePreview, buildMessagePreview(assistantContent))
+                .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
+    }
+
+    @Override
+    public void rewindLastTurn(String conversationId, String expectedContent, boolean completedTurn) {
+        AiConversation conversation = findByConversationId(conversationId);
+        if (conversation == null || STATUS_DELETED.equals(conversation.getStatus())) {
+            throw new BusinessException("ai.conversationMessageChanged");
+        }
+        PermissionUtils.checkOperationPermission(conversation.getUserId());
+        memoryStore.rewindLastTurn(conversationId, expectedContent, completedTurn);
+        List<AiMessage> messages = memoryStore.get(conversationId);
+        String preview = messages.isEmpty() ? null : messages.get(messages.size() - 1).getContent();
+        getConversationMapper().update(null,
+            new LambdaUpdateWrapper<AiConversationDO>()
+                .eq(AiConversationDO::getConversationId, conversationId)
+                .set(AiConversationDO::getMessageCount, messages.size())
+                .set(AiConversationDO::getLastMessagePreview, buildMessagePreview(preview))
                 .set(AiConversationDO::getGmtModified, LocalDateTime.now()));
     }
 

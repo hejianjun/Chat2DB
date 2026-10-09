@@ -302,6 +302,10 @@ public class ChatController {
         });
     }
 
+    public boolean isConversationActive(String conversationId) {
+        return activeContexts.containsKey(conversationId);
+    }
+
     private void cleanupSession(String uid) {
         activeSessions.remove(uid);
         activeContexts.remove(uid);

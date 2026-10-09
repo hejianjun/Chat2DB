@@ -91,6 +91,7 @@ interface IAiChatStore {
   updateState: (sessionId: string, state: ChatStateType) => void;
   appendContent: (sessionId: string, content: string) => void;
   addMessage: (sessionId: string, message: IChatMessage) => void;
+  rewindLastTurn: (sessionId: string, messageId: string) => void;
   setSelectedTables: (sessionId: string, tables: string[]) => void;
   setSchemaInfo: (sessionId: string, ddl: string) => void;
   setExplainResult: (sessionId: string, explain: AiChatSession['explainResult']) => void;
@@ -251,6 +252,32 @@ export const useAiChatStore = create<IAiChatStore>()(
               [sessionId]: {
                 ...session,
                 messages,
+                updatedAt: Date.now(),
+              },
+            },
+            conversationList: updateConversationSummary(state.conversationList, sessionId, messages),
+          };
+        });
+      },
+
+      rewindLastTurn: (sessionId, messageId) => {
+        set((state) => {
+          const session = state.sessions[sessionId];
+          const index = session?.messages.findIndex((item) => item.id === messageId && item.role === 'user') ?? -1;
+          if (!session || index < 0 || session.messages.slice(index + 1).some((item) => item.role === 'user')) {
+            return state;
+          }
+          const messages = normalizeMessages(session.messages.slice(0, index));
+          return {
+            sessions: {
+              ...state.sessions,
+              [sessionId]: {
+                ...session,
+                messages,
+                currentContent: '',
+                error: undefined,
+                explainResult: undefined,
+                state: 'IDLE' as ChatStateType,
                 updatedAt: Date.now(),
               },
             },
@@ -522,6 +549,23 @@ export const useAiChatStore = create<IAiChatStore>()(
     {
       name: 'ai-chat-store',
       storage: persistStorage,
+      merge: (persistedState, currentState) => {
+        const saved = persistedState as Partial<IAiChatStore> | undefined;
+        const restoredSessions = Object.fromEntries(
+          Object.entries(saved?.sessions || {}).map(([sessionId, session]) => {
+            const disconnected = [
+              'AUTO_SELECTING_TABLES', 'FETCHING_TABLE_SCHEMA', 'EXECUTING_EXPLAIN', 'BUILDING_PROMPT', 'STREAMING',
+            ].includes(session.state);
+            return [sessionId, disconnected ? {
+              ...session,
+              state: 'FAILED' as ChatStateType,
+              error: '页面已刷新，原请求连接已断开，请编辑最后一条消息后重新发送。',
+            } : session];
+          }),
+        );
+        // IndexedDB 只能恢复对话内容，不能恢复刷新前的 SSE 连接。
+        return { ...currentState, ...saved, sessions: restoredSessions };
+      },
       partialize: (state) => ({
         sessions: filterPersistentSessions(state.sessions),
         currentSessionId: state.currentSessionId && state.sessions[state.currentSessionId]?.transient

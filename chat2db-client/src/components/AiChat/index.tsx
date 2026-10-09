@@ -1,5 +1,5 @@
 import React, { memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Button, Mentions, Spin, message, Tag, Alert, Modal, Select, Upload } from 'antd';
+import { Button, Input, Mentions, Spin, message, Tag, Alert, Modal, Select, Upload } from 'antd';
 import {
   DownOutlined,
   RightOutlined,
@@ -10,6 +10,7 @@ import {
   DeleteOutlined,
   PaperClipOutlined,
   CloseOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -364,6 +365,10 @@ interface IProps {
 
 export default memo<IProps>(() => {
   const [inputValue, setInputValue] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const editSavingRef = useRef(false);
   const closeEventSource = useRef<() => void>();
   const closeTitleEventSource = useRef<() => void>();
   const sessionIdRef = useRef<string>();
@@ -393,13 +398,17 @@ export default memo<IProps>(() => {
     setSchemaInfo,
     setError,
     setLastRequest,
-    clearSession,
     resetCurrentContent,
     renameSession,
     lastRequest,
   } = useAiChatStore();
 
   const currentSession = currentSessionId ? sessions[currentSessionId] : null;
+
+  useEffect(() => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  }, [currentSessionId]);
 
   const addImageFiles = useCallback(async (files: File[]) => {
     const validFiles = files.filter((file) => {
@@ -590,6 +599,9 @@ export default memo<IProps>(() => {
     ext?: string,
     images: IChatImageAttachment[] = pendingImages,
   ) => {
+    if (editingMessageId || editSavingRef.current || isActiveState(currentSession?.state)) {
+      return;
+    }
     const infoWithTables = {
       ...boundInfo,
       tableNames: tableNames !== undefined ? tableNames : boundInfo.tableNames,
@@ -731,6 +743,7 @@ export default memo<IProps>(() => {
       info: typeof boundInfo,
       ext?: string,
       images: IChatImageAttachment[] = [],
+      editedSessionId?: string,
     ) => {
       if (!messageText.trim() && images.length === 0) {
         message.warning('请输入问题');
@@ -745,8 +758,11 @@ export default memo<IProps>(() => {
       }
 
       const storeState = useAiChatStore.getState();
-      const existingSessionId = storeState.currentSessionId;
+      const existingSessionId = editedSessionId || storeState.currentSessionId;
       const existingSession = existingSessionId ? storeState.sessions[existingSessionId] : null;
+      if (editedSessionId && (!existingSession || isActiveState(existingSession.state))) {
+        return;
+      }
       const previousRequest = storeState.lastRequest;
       const promptType =
         requestedPromptType === 'NL_2_SQL' && existingSession?.promptType
@@ -774,7 +790,7 @@ export default memo<IProps>(() => {
         !isActiveState(existingSession.state);
       const canUseEmptyConversation =
         isConversationalTask &&
-        promptType === 'NL_2_SQL' &&
+        (promptType === 'NL_2_SQL' || !!editedSessionId) &&
         isSameConnection &&
         !!existingSessionId &&
         !!existingSession &&
@@ -857,6 +873,7 @@ export default memo<IProps>(() => {
       });
 
       resetCurrentContent(sessionId);
+      updateState(sessionId, 'BUILDING_PROMPT');
 
       const requestParams = {
         message: effectiveMessage,
@@ -876,8 +893,10 @@ export default memo<IProps>(() => {
         })),
       };
 
-      setInputValue('');
-      setPendingImages([]);
+      if (!editedSessionId) {
+        setInputValue('');
+        setPendingImages([]);
+      }
 
       const containsImages = requestImages.length > 0;
       let params = containsImages ? '' : formatParams(requestParams);
@@ -903,7 +922,7 @@ export default memo<IProps>(() => {
         uid: sessionId,
         onOpen: () => {
           console.log('[AiChat] SSE connection opened');
-          updateState(sessionId, 'IDLE');
+          updateState(sessionId, 'BUILDING_PROMPT');
         },
         onStateChange: (state, _msg) => {
           console.log('[AiChat] State changed:', state, _msg);
@@ -916,10 +935,12 @@ export default memo<IProps>(() => {
         onTablesSelected: (tables) => {
           console.log('[AiChat] Tables selected:', tables);
           setSelectedTables(sessionId, tables);
-          setBoundInfo((prev) => ({
-            ...prev,
-            tableNames: tables.length ? tables : null,
-          }));
+          if (useAiChatStore.getState().currentSessionId === sessionId) {
+            setBoundInfo((prev) => ({
+              ...prev,
+              tableNames: tables.length ? tables : null,
+            }));
+          }
         },
         onSchemaFetched: (ddl) => {
           console.log('[AiChat] Schema fetched, ddl length:', ddl?.length);
@@ -1103,13 +1124,23 @@ export default memo<IProps>(() => {
   }, [pendingAiChat, boundInfo, sendAiChatInternal]);
 
   const handleCancel = async () => {
-    if (closeEventSource.current) {
+    const sessionId = currentSessionId || sessionIdRef.current;
+    if (!sessionId) {
+      return;
+    }
+    if (sessionIdRef.current === sessionId && closeEventSource.current) {
       closeEventSource.current();
       closeEventSource.current = undefined;
     }
-    if (sessionIdRef.current) {
-      await cancelChatSession(sessionIdRef.current);
-      clearSession(sessionIdRef.current);
+    try {
+      await cancelChatSession(sessionId);
+      // 停止只结束当前请求，保留问题和前文，方便编辑后再次发送。
+      resetCurrentContent(sessionId);
+      setError(sessionId, '已停止生成，可编辑最后一条消息后重新发送。');
+    } catch (error) {
+      console.error('[AiChat] Failed to cancel chat:', error);
+      setError(sessionId, '停止请求失败，请稍后重试。');
+      message.error('停止请求失败，请稍后重试');
     }
   };
 
@@ -1154,6 +1185,63 @@ export default memo<IProps>(() => {
         lastRequest.ext,
         lastRequest.images,
       );
+    }
+  };
+
+  const handleSaveEditedMessage = async () => {
+    if (!currentSession || !editingMessageId || editSavingRef.current || isActiveState(currentSession.state)) {
+      return;
+    }
+    const index = currentSession.messages.findIndex((item) => item.id === editingMessageId);
+    const original = currentSession.messages[index];
+    if (!original || currentSession.messages.slice(index + 1).some((item) => item.role === 'user')) {
+      return;
+    }
+    if (!editingContent.trim() && !original.images?.length) {
+      message.warning('请输入问题');
+      return;
+    }
+    if (!currentSession.dataSourceId) {
+      message.warning('请先选择数据库连接');
+      return;
+    }
+    const sessionId = currentSession.sessionId;
+    const editedText = editingContent;
+    editSavingRef.current = true;
+    setEditSaving(true);
+    try {
+      const hasReply = currentSession.messages.slice(index + 1).some((item) => item.role === 'assistant');
+      await aiConversationService.rewindLastTurn({
+        conversationId: sessionId,
+        expectedContent: original.content,
+        completedTurn: hasReply,
+      });
+      useAiChatStore.getState().rewindLastTurn(sessionId, original.id);
+      setEditingMessageId(null);
+      const request = useAiChatStore.getState().lastRequest;
+      const editInfo = {
+        dataSourceId: currentSession.dataSourceId,
+        databaseName: currentSession.databaseName || '',
+        schemaName: currentSession.schemaName || '',
+        tableNames: currentSession.selectedTables || null,
+      };
+      if (useAiChatStore.getState().currentSessionId === sessionId) {
+        setBoundInfo(editInfo);
+      }
+      await sendAiChatInternal(
+        editedText,
+        (currentSession.promptType || 'NL_2_SQL') as IAiChatPromptType,
+        editInfo,
+        request?.conversationId === sessionId ? request.ext : undefined,
+        original.images || [],
+        sessionId,
+      );
+    } catch (error) {
+      console.error('[AiChat] Failed to edit last message:', error);
+      message.error('修改消息失败，请稍后重试');
+    } finally {
+      editSavingRef.current = false;
+      setEditSaving(false);
     }
   };
 
@@ -1239,8 +1327,12 @@ export default memo<IProps>(() => {
       };
 
   const stateInfo = currentSession ? STATE_LABELS[currentSession.state] : null;
-  const isProcessing = isActiveState(currentSession?.state);
-  const isInputDisabled = isProcessing || !boundInfo.dataSourceId;
+  const isProcessing = isActiveState(currentSession?.state) || editSaving;
+  const isInputDisabled = isProcessing || !!editingMessageId || !boundInfo.dataSourceId;
+  const lastUserMessage = currentSession?.messages.filter((item) => item.role === 'user').slice(-1)[0];
+  const canEditLastMessage =
+    !!currentSession && !currentSession.transient &&
+    isConversationalSqlPromptType((currentSession.promptType || 'NL_2_SQL') as IAiChatPromptType);
   const selectedTablesForDisplay = currentSession ? currentSession.selectedTables || [] : boundInfo.tableNames || [];
   const tableOptions = databaseTables.map((table) => ({
     label: table.comment ? `${table.name} - ${table.comment}` : table.name,
@@ -1313,7 +1405,7 @@ export default memo<IProps>(() => {
             )}
           </div>
           {isProcessing && (
-            <Button size="small" danger onClick={handleCancel}>
+            <Button size="small" danger disabled={editSaving} onClick={handleCancel}>
               停止
             </Button>
           )}
@@ -1333,9 +1425,54 @@ export default memo<IProps>(() => {
                   ))}
                 </div>
               )}
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-                {markdownContent}
-              </ReactMarkdown>
+              {editingMessageId === msg.id ? (
+                <div className={styles.messageEditor}>
+                  <Input.TextArea
+                    autoFocus
+                    value={editingContent}
+                    onChange={(event) => setEditingContent(event.target.value)}
+                    autoSize={{ minRows: 3, maxRows: 12 }}
+                    disabled={isProcessing}
+                    aria-label="编辑最后一条消息"
+                  />
+                  <div className={styles.messageEditActions}>
+                    <Button size="small" disabled={isProcessing} onClick={() => setEditingMessageId(null)}>
+                      取消
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={editSaving}
+                      disabled={isProcessing || (!editingContent.trim() && !msg.images?.length)}
+                      onClick={handleSaveEditedMessage}
+                    >
+                      保存并重新发送
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                    {markdownContent}
+                  </ReactMarkdown>
+                  {canEditLastMessage && msg.id === lastUserMessage?.id && (
+                    <div className={styles.messageEditActions}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<EditOutlined />}
+                        disabled={isProcessing}
+                        onClick={() => {
+                          setEditingMessageId(msg.id);
+                          setEditingContent(msg.content);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
               {databaseStatement && msg.role === 'assistant' && (
                 <DatabaseStatementActionButtons
                   statement={databaseStatement.statement}
@@ -1364,9 +1501,13 @@ export default memo<IProps>(() => {
         {currentSession?.state === 'FAILED' && currentSession.error && (
           <div className={styles.errorBlock}>
             <Alert type="error" message={currentSession.error} />
-            <Button type="primary" onClick={handleRetry} style={{ marginTop: 8 }}>
-              重试
-            </Button>
+            {lastRequest?.conversationId === currentSessionId && (
+              <Button type="primary" onClick={handleRetry} disabled={isProcessing || !!editingMessageId}
+                style={{ marginTop: 8 }}
+              >
+                重试
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1408,7 +1549,7 @@ export default memo<IProps>(() => {
           placement="top"
           placeholder="请输入您的问题..."
           autoSize={{ minRows: 3, maxRows: 6 }}
-          disabled={isProcessing}
+          disabled={isInputDisabled}
         />
         <div className={styles.buttonGroup}>
           <Upload

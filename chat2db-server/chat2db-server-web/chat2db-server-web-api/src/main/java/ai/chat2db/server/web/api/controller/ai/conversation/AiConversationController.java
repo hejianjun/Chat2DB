@@ -12,10 +12,14 @@ import ai.chat2db.server.tools.base.wrapper.result.ActionResult;
 import ai.chat2db.server.tools.base.wrapper.result.DataResult;
 import ai.chat2db.server.tools.base.wrapper.result.web.WebPageResult;
 import ai.chat2db.server.tools.common.util.ContextUtils;
+import ai.chat2db.server.tools.base.excption.BusinessException;
+import ai.chat2db.server.web.api.controller.ai.ChatController;
 import ai.chat2db.server.web.api.controller.ai.conversation.converter.AiConversationWebConverter;
 import ai.chat2db.server.web.api.controller.ai.conversation.request.AiConversationCreateRequest;
 import ai.chat2db.server.web.api.controller.ai.conversation.request.AiConversationQueryRequest;
 import ai.chat2db.server.web.api.controller.ai.conversation.request.AiConversationRenameRequest;
+import ai.chat2db.server.web.api.controller.ai.conversation.request.AiConversationRewindRequest;
+import jakarta.validation.Valid;
 import ai.chat2db.server.web.api.controller.ai.conversation.vo.AiConversationDetailVO;
 import ai.chat2db.server.web.api.controller.ai.conversation.vo.AiConversationVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +37,9 @@ public class AiConversationController {
 
     @Autowired
     private AiConversationService aiConversationService;
+
+    @Autowired
+    private ChatController chatController;
 
     @Autowired
     private AiConversationWebConverter webConverter;
@@ -89,6 +96,16 @@ public class AiConversationController {
     @DeleteMapping("/{conversationId}")
     public ActionResult delete(@PathVariable("conversationId") String conversationId) {
         aiConversationService.deleteWithPermission(conversationId, ContextUtils.getUserId());
+        return ActionResult.isSuccess();
+    }
+
+    @PostMapping("/{conversationId}/rewind")
+    public ActionResult rewind(@PathVariable("conversationId") String conversationId,
+                               @Valid @RequestBody AiConversationRewindRequest request) {
+        if (chatController.isConversationActive(conversationId)) {
+            throw new BusinessException("ai.conversationBusy");
+        }
+        aiConversationService.rewindLastTurn(conversationId, request.getExpectedContent(), request.isCompletedTurn());
         return ActionResult.isSuccess();
     }
 
