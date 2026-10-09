@@ -119,6 +119,9 @@ public class PromptBuilderImpl implements PromptBuilder {
 
         PromptTemplate template = templateRegistry.getTemplate(type);
         String builtPrompt = fillTemplate(template, context);
+        if (type == PromptType.SELECT_TABLES) {
+            builtPrompt = appendSelectTablesRevisionContext(builtPrompt, context);
+        }
 
         return validator.cleanPrompt(builtPrompt);
     }
@@ -278,13 +281,24 @@ public class PromptBuilderImpl implements PromptBuilder {
     }
 
     private String appendSelectTablesRevisionContext(String filledTemplate, PromptContext context) {
+        String formattedHistory = formatConversationHistory(context.getHistory());
+        if (StringUtils.isBlank(formattedHistory) && StringUtils.isBlank(context.getPreviousSql())) {
+            return filledTemplate;
+        }
         StringBuilder builder = new StringBuilder(filledTemplate);
-        builder.append("\n\n")
-                .append("### 上一版 SQL\n")
-                .append("```sql\n")
-                .append(truncate(context.getPreviousSql(), MAX_PREVIOUS_SQL_LENGTH))
-                .append("\n```\n")
-                .append("上一版 SQL 仅用于理解用户当前修正意图和选择相关表，不要直接生成 SQL。\n");
+        if (StringUtils.isNotBlank(formattedHistory)) {
+            builder.append("\n\n### 最近对话历史\n").append(formattedHistory).append("\n");
+        }
+        if (StringUtils.isNotBlank(context.getPreviousSql())) {
+            boolean mongoDataSource = isMongoDataSource(context);
+            builder.append(mongoDataSource ? "\n### 上一版 MQL\n```javascript\n" : "\n### 上一版 SQL\n```sql\n")
+                    .append(truncate(context.getPreviousSql(), MAX_PREVIOUS_SQL_LENGTH))
+                    .append("\n```\n");
+        }
+        builder.append("\n历史对话和上一版查询仅作为背景，用于理解当前 User input 的意图。")
+                .append("以当前问题为准；如果用户切换了主题，不要沿用无关历史表。\n")
+                .append("只能选择当前数据库元数据中存在的相关表或集合，不要直接生成 SQL/MQL。")
+                .append("只输出 {\"table_names\":[\"object1\",\"object2\"]} 格式的 JSON，不要输出其他内容。\n");
         return builder.toString();
     }
 

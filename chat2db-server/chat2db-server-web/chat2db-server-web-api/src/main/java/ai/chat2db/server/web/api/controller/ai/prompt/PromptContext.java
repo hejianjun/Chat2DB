@@ -66,12 +66,18 @@ public class PromptContext {
     private String conversationId;
 
     /**
-     * Legacy fields retained only for binary compatibility. ChatMemory now supplies history.
+     * 选表阶段只读的最近对话；正式生成阶段由 ChatMemory 提供历史。
      */
-    @Deprecated
     private String history;
-    @Deprecated
+
+    /**
+     * 选表阶段参考的最近 SQL/MQL。
+     */
     private String previousSql;
+
+    /**
+     * Legacy field retained only for binary compatibility.
+     */
     @Deprecated
     private Boolean isRevision;
 

@@ -1,8 +1,11 @@
 package ai.chat2db.server.web.api.controller.ai.statemachine.actions;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import ai.chat2db.server.domain.api.model.AiMessage;
+import ai.chat2db.server.domain.api.service.AiConversationMemoryStore;
 import ai.chat2db.server.web.api.config.AiChatConfig;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -34,6 +37,10 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class SelectTablesAction extends BaseChatAction {
 
+    private static final int MAX_HISTORY_MESSAGES = 6;
+    private static final Pattern QUERY_CODE_BLOCK_PATTERN = Pattern.compile(
+            "```(?:sql|mql|javascript|js)\\s+([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+
     @Autowired
     private PromptBuilder promptBuilder;
 
@@ -45,6 +52,9 @@ public class SelectTablesAction extends BaseChatAction {
 
     @Autowired
     private AiChatConfig aiChatConfig;
+
+    @Autowired
+    private AiConversationMemoryStore memoryStore;
 
     @Override
     public void execute(StateContext<ChatState, ChatEvent> context) {
@@ -101,7 +111,7 @@ public class SelectTablesAction extends BaseChatAction {
         return parseTableNames(content, ctx.getRequest().getTableNames());
     }
 
-    private String buildSelectPrompt(ChatContext ctx) {
+    String buildSelectPrompt(ChatContext ctx) {
         String schemaDdl = databaseService.queryDatabaseTables(
                 ctx.getRequest().getDataSourceId(),
                 ctx.getRequest().getDatabaseName(),
@@ -115,7 +125,39 @@ public class SelectTablesAction extends BaseChatAction {
                 .dataSourceType(dataSourceService.queryDatabaseType(ctx.getRequest().getDataSourceId()))
                 .build();
 
+        String conversationId = ctx.getRequest().getConversationId();
+        if (StringUtils.isNotBlank(conversationId)) {
+            // 选表只读取正式对话，避免将选表 JSON 写入会话记忆。
+            List<AiMessage> history = memoryStore.get(conversationId).stream()
+                    .filter(message -> "user".equals(message.getRole()) || "assistant".equals(message.getRole()))
+                    .toList();
+            int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
+            promptContext.setHistory(JSONArray.toJSONString(history.subList(start, history.size())));
+            promptContext.setPreviousSql(extractPreviousQuery(history));
+        }
+
         return promptBuilder.context(promptContext).build();
+    }
+
+    private String extractPreviousQuery(List<AiMessage> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            AiMessage message = history.get(i);
+            if (!"assistant".equals(message.getRole()) || StringUtils.isBlank(message.getContent())) {
+                continue;
+            }
+            Matcher matcher = QUERY_CODE_BLOCK_PATTERN.matcher(message.getContent());
+            String query = null;
+            // 同一条回复含多个代码块时，优先使用最后一个查询。
+            while (matcher.find()) {
+                if (StringUtils.isNotBlank(matcher.group(1))) {
+                    query = matcher.group(1).trim();
+                }
+            }
+            if (query != null) {
+                return query;
+            }
+        }
+        return null;
     }
 
     private String extractContent(ChatResponse chatResponse) {

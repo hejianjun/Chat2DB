@@ -18,6 +18,53 @@ class PromptBuilderImplTest {
     }
 
     @Test
+    void tableSelectionIncludesHistoryEvenWithoutSql() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SELECT_TABLES)
+                .message("只看今年的")
+                .history("[{\"role\":\"user\",\"content\":\"查询各车型销量\"}]")
+                .schemaDdl("CREATE TABLE sales(model varchar(32))")
+                .dataSourceType("MYSQL")
+                .build()).build();
+
+        assertTrue(prompt.contains("user: 查询各车型销量"));
+        assertTrue(prompt.contains("User input: 只看今年的"));
+        assertTrue(prompt.contains("只能选择当前数据库元数据中存在的相关表或集合"));
+        assertFalse(prompt.contains("上一版 SQL"));
+    }
+
+    @Test
+    void tableSelectionLimitsHistoryAndPreviousSql() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SELECT_TABLES)
+                .message("按销量排序")
+                .history("[{\"role\":\"assistant\",\"content\":\"" + "h".repeat(1300) + "\"}]")
+                .previousSql("SELECT " + "s".repeat(6500))
+                .dataSourceType("MYSQL")
+                .build()).build();
+
+        assertTrue(prompt.contains("上一版 SQL"));
+        assertTrue(prompt.contains("已截断"));
+        assertFalse(prompt.contains("h".repeat(1201)));
+        assertFalse(prompt.contains("s".repeat(6001)));
+    }
+
+    @Test
+    void mongoTableSelectionIncludesPreviousMql() {
+        String prompt = promptBuilder.context(PromptContext.builder()
+                .promptType(PromptType.SELECT_TABLES)
+                .message("再按时间排序")
+                .previousSql("db.orders.find({})")
+                .dataSourceType("MONGODB")
+                .build()).build();
+
+        assertTrue(prompt.contains("上一版 MQL"));
+        assertTrue(prompt.contains("db.orders.find({})"));
+        assertTrue(prompt.contains("只输出 {\"table_names\""));
+        assertFalse(prompt.contains("上一版 SQL"));
+    }
+
+    @Test
     void buildNl2SqlWithoutHistoryKeepsInitialTemplate() {
         String prompt = promptBuilder.context(PromptContext.builder()
                 .promptType(PromptType.NL_2_SQL)
