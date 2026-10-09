@@ -28,7 +28,7 @@ class PromptBuilderImplTest {
                 .build()).build();
 
         assertTrue(prompt.contains("user: 查询各车型销量"));
-        assertTrue(prompt.contains("User input: 只看今年的"));
+        assertTrue(prompt.contains("用户输入：只看今年的"));
         assertTrue(prompt.contains("只能选择当前数据库元数据中存在的相关表或集合"));
         assertFalse(prompt.contains("上一版 SQL"));
     }
@@ -122,9 +122,9 @@ class PromptBuilderImplTest {
                 .dataSourceType("MONGODB")
                 .build()).build();
 
-        assertTrue(prompt.contains("MONGODB database objects (tables or collections)"));
-        assertTrue(prompt.contains("User input: 查询待处理的位置回填任务"));
-        assertTrue(prompt.contains("table_names key is also used for MongoDB collection names"));
+        assertTrue(prompt.contains("MONGODB 数据库对象（表或集合）"));
+        assertTrue(prompt.contains("用户输入：查询待处理的位置回填任务"));
+        assertTrue(prompt.contains("MongoDB 集合名称同样使用 table_names 字段返回"));
         assertFalse(prompt.contains("SQL tables"));
         assertFalse(prompt.contains("SQL input"));
     }

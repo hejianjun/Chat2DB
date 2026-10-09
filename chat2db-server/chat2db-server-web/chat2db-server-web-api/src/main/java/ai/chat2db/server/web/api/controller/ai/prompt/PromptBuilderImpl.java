@@ -295,10 +295,10 @@ public class PromptBuilderImpl implements PromptBuilder {
                     .append(truncate(context.getPreviousSql(), MAX_PREVIOUS_SQL_LENGTH))
                     .append("\n```\n");
         }
-        builder.append("\n历史对话和上一版查询仅作为背景，用于理解当前 User input 的意图。")
+        builder.append("\n历史对话和上一版查询仅作为背景，用于理解当前用户输入的意图。")
                 .append("以当前问题为准；如果用户切换了主题，不要沿用无关历史表。\n")
                 .append("只能选择当前数据库元数据中存在的相关表或集合，不要直接生成 SQL/MQL。")
-                .append("只输出 {\"table_names\":[\"object1\",\"object2\"]} 格式的 JSON，不要输出其他内容。\n");
+                .append("只输出 {\"table_names\":[\"对象名1\",\"对象名2\"]} 格式的 JSON，不要输出其他内容。\n");
         return builder.toString();
     }
 

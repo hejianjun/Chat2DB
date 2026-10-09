@@ -79,18 +79,18 @@ prompts:
   # 表选择
   select_tables:
     name: "select_tables"
-    description: "Select database objects for query"
+    description: "选择查询所需的表或集合"
     template: |
-      ### Based on the following database object metadata and user input, {description}. {ext}
+      ### 请根据以下数据库对象元数据和用户输入，{description}。{ext}
       #
-      ### {db_type} database objects (tables or collections):
+      ### {db_type} 数据库对象（表或集合）：
       #
       # {schema}
       #
       #
-      ### User input: {message}
+      ### 用户输入：{message}
       
-      Output only JSON in format: {"table_names":["object1","object2"]}. The table_names key is also used for MongoDB collection names. Do not output any other text.
+      只输出以下格式的 JSON：{"table_names":["对象名1","对象名2"]}。MongoDB 集合名称同样使用 table_names 字段返回。不要输出任何其他内容。
 
   # 文本生成
   text_generation:
