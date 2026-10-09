@@ -4,6 +4,9 @@ const registerAppMenu = require('./menu');
 const registerAnalysis = require('./analysis');
 const store = require('./store');
 const { loadMainResource, isMac } = require('./utils');
+const { registerDiagnostics, registerWindowDiagnostics } = require('./diagnostics');
+
+registerDiagnostics();
 
 let mainWindow = null;
 
@@ -37,6 +40,7 @@ function createWindow() {
   };
 
   mainWindow = new BrowserWindow(options);
+  registerWindowDiagnostics(mainWindow);
   mainWindow.show();
 
   // 加载应用-----

@@ -10,12 +10,12 @@
   "main": "src/main/index.js",
   "scripts": {
     "build": "npm run build:web && npm run build:main",
-    "build:desktop": "npm run build:web:desktop && npm run build:main:prod",
+    "build:desktop": "yarn run build:web:desktop && yarn run build:main:prod",
     "build:main": "cross-env NODE_ENV=development electron-builder",
-    "build:main:prod": "cross-env NODE_ENV=production electron-builder",
+    "build:main:prod": "node scripts/check-desktop-runtime.cjs && cross-env NODE_ENV=production electron-builder",
     "build:prod": "npm run build:web:prod && npm run build:main:prod",
     "build:web": "umi build",
-    "build:web:desktop": "cross-env UMI_ENV=desktop umi build",
+    "build:web:desktop": "cross-env UMI_ENV=desktop umi build && node scripts/prepare-desktop.cjs",
     "build:web:prod": "cross-env UMI_ENV=prod umi build",
     "postinstall": "umi setup",
     "lint": "umi lint",
@@ -23,7 +23,8 @@
     "start:main": "cross-env NODE_ENV=development electron .",
     "start:main:prod": "cross-env NODE_ENV=production electron .",
     "start:web": "cross-env UMI_ENV=local HMR=none umi dev",
-    "start:web:hot": "cross-env UMI_ENV=local umi dev"
+    "start:web:hot": "cross-env UMI_ENV=local umi dev",
+    "test:desktop": "electron scripts/electron-smoke.cjs"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -35,6 +36,8 @@
     "copy-to-clipboard": "^3.3.3",
     "echarts": "^5.4.2",
     "echarts-for-react": "^3.0.2",
+    "electron-log": "5.0.3",
+    "electron-store": "8.1.0",
     "event-source-polyfill": "^1.0.31",
     "highlight.js": "^11.9.0",
     "html-to-image": "^1.11.13",
@@ -43,6 +46,7 @@
     "monaco-editor": "^0.44.0",
     "monaco-editor-esm-webpack-plugin": "^2.1.0",
     "monaco-editor-webpack-plugin": "^7.0.1",
+    "node-machine-id": "1.1.12",
     "react-markdown": "^8.0.7",
     "react-monaco-editor": "^0.54.0",
     "react-sortablejs": "^6.1.4",
@@ -65,7 +69,7 @@
     "@umijs/plugins": "^4.0.55",
     "concurrently": "^8.1.0",
     "cross-env": "^7.0.3",
-    "electron": "^22.3.0",
+    "electron": "44.7.0",
     "electron-builder": "^23.6.0",
     "electron-debug": "^3.2.0",
     "eslint": "^8.49.0",
@@ -92,7 +96,7 @@
   },
   "packageManager": "yarn@4.13.0+sha512.5c20ba010c99815433e5c8453112165e673f1c7948d8d2b267f4b5e52097538658388ebc9f9580656d9b75c5cc996f990f611f99304a2197d4c56d21eea370e7",
   "engines": {
-    "node": ">=16"
+    "node": ">=22.12.0"
   },
   "build": {
     "appId": "com.chat2db",
@@ -106,8 +110,7 @@
       "src/main",
       "static/",
       "versions/**/*",
-      "package.json",
-      "!node_modules/**/*"
+      "package.json"
     ],
     "nsis": {
       "oneClick": false,

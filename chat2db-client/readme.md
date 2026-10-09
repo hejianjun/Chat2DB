@@ -10,8 +10,17 @@
 
 ## 启动项目
 
+桌面端使用 Electron 44.7.0，安装依赖和构建需要 Node.js >= 22.12.0（CI 使用 Node.js 24）。使用项目 `packageManager` 指定的 Yarn 版本。
 
-强制使用 yarn，因为环境变量、lock 文件只维护了 yarn，npm/pnpm 可能会产生意想不到的 bug node 版本要求 16 以上 `npm i -g yarn` `yarn` `yarn run build:web:prod` `cp -r dist ../chat2db-server/chat2db-server-start/src/main/resources/static/front` (复制打包结果到指定目录。windows 可能命令不一样，可以手动复制下) 之后就可以启动后端了 `mvn clean package -B '-Dmaven.test.skip=true' -f chat2db-server/pom.xml`
+- `yarn run build:desktop`：构建桌面前端、复制到 `versions/version` 指定的版本目录并打包。Java JAR 和 JRE 仍由已有发布流程准备。
+- `yarn run test:desktop`：在隐藏测试窗口中验证 preload、IPC、页面加载失败和真实渲染进程崩溃日志，不启动 Java 服务。
+- 桌面诊断日志：`~/.chat2db/logs/electron.log`，包含版本、进程退出原因及每分钟的进程资源采样；文件达到 10 MB 后轮转。
+- 崩溃转储仅保存在本机，目录记录在启动日志中，不上传。
+- GPU 对照测试（PowerShell）：先设置 `$env:CHAT2DB_DISABLE_GPU='1'`，再启动桌面程序；恢复默认时运行 `Remove-Item Env:CHAT2DB_DISABLE_GPU` 并重启。默认开启硬件加速。
+- Electron 44 需要 Windows 10 及以上的 64 位系统，macOS 13 及以上；Linux 需按 Electron 官方系统要求部署。
+
+
+强制使用 yarn，因为环境变量、lock 文件只维护了 yarn，npm/pnpm 可能会产生意想不到的 bug。Node 版本要求 22.12.0 以上。使用 Corepack 启用项目指定的 Yarn 后执行 `yarn`、`yarn run build:web:prod`、`cp -r dist ../chat2db-server/chat2db-server-start/src/main/resources/static/front` (复制打包结果到指定目录。windows 可能命令不一样，可以手动复制下) 之后就可以启动后端了 `mvn clean package -B '-Dmaven.test.skip=true' -f chat2db-server/pom.xml`
 
 启动前端项目调试 `yarn run start:web` 注意：因为 electron 包比较难下载，如果 yarn 时 electron 下载失败或超时，可以删除掉 chat2db-client/package.json 下的 electron，再次 yarn
 
