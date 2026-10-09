@@ -17,6 +17,7 @@ import ai.chat2db.spi.model.SimpleTable;
 import ai.chat2db.spi.model.Table;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,8 +31,8 @@ public class MetadataTools {
     private final ConnectionScope connectionScope;
     private final ResultFormatter resultFormatter;
 
-    public MetadataTools(DatabaseService databaseService, TableService tableService, ConnectionScope connectionScope,
-        ResultFormatter resultFormatter) {
+    public MetadataTools(@Lazy DatabaseService databaseService, @Lazy TableService tableService,
+        ConnectionScope connectionScope, ResultFormatter resultFormatter) {
         this.databaseService = databaseService;
         this.tableService = tableService;
         this.connectionScope = connectionScope;

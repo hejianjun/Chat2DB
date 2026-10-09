@@ -7,6 +7,7 @@ import ai.chat2db.server.mcp.support.ResultFormatter;
 import ai.chat2db.server.mcp.support.SqlGuard;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,7 +21,7 @@ public class QueryTools {
     private final ResultFormatter resultFormatter;
     private final SqlGuard sqlGuard;
 
-    public QueryTools(DlTemplateService dlTemplateService, ConnectionScope connectionScope,
+    public QueryTools(@Lazy DlTemplateService dlTemplateService, ConnectionScope connectionScope,
         ResultFormatter resultFormatter, SqlGuard sqlGuard) {
         this.dlTemplateService = dlTemplateService;
         this.connectionScope = connectionScope;

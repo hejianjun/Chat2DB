@@ -10,6 +10,7 @@ import ai.chat2db.spi.model.ForeignKey;
 import ai.chat2db.spi.model.VirtualForeignKey;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,7 +22,7 @@ public class ForeignKeyTools {
     private final ForeignKeySyncService foreignKeySyncService;
     private final ConnectionScope connectionScope;
 
-    public ForeignKeyTools(ForeignKeySyncService foreignKeySyncService, ConnectionScope connectionScope) {
+    public ForeignKeyTools(@Lazy ForeignKeySyncService foreignKeySyncService, ConnectionScope connectionScope) {
         this.foreignKeySyncService = foreignKeySyncService;
         this.connectionScope = connectionScope;
     }

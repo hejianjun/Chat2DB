@@ -375,6 +375,12 @@
                         <arg>-Amapstruct.disableBuilders=true</arg>
                     </compilerArgs>
                     <annotationProcessorPaths>
+                        <!-- 编译期生成组件索引，避免启动时遍历所有 JAR 查找业务组件。 -->
+                        <path>
+                            <groupId>org.springframework</groupId>
+                            <artifactId>spring-context-indexer</artifactId>
+                            <version>${spring-framework.version}</version>
+                        </path>
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>

@@ -29,6 +29,7 @@ public class McpServerConfiguration {
     public List<McpServerFeatures.SyncToolSpecification> chat2dbMcpTools(MetadataTools metadataTools,
         QueryTools queryTools, DangerousSqlTools dangerousSqlTools, MongoTools mongoTools,
         ForeignKeyTools foreignKeyTools, SchemaInsightTools schemaInsightTools, RedisTools redisTools) {
+        // 注册时保留工具实例的注解，业务服务由工具构造参数上的 @Lazy 延迟到首次调用。
         return SyncMcpAnnotationProviders.toolSpecifications(List.of(metadataTools, queryTools, dangerousSqlTools,
             mongoTools, foreignKeyTools, schemaInsightTools, redisTools));
     }

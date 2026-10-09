@@ -12,6 +12,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,7 +24,7 @@ public class MongoToolExecutionSupport {
     private final DlTemplateService dlTemplateService;
     private final ObjectMapper objectMapper;
 
-    public MongoToolExecutionSupport(DlTemplateService dlTemplateService, ObjectMapper objectMapper) {
+    public MongoToolExecutionSupport(@Lazy DlTemplateService dlTemplateService, ObjectMapper objectMapper) {
         this.dlTemplateService = dlTemplateService;
         this.objectMapper = objectMapper;
     }

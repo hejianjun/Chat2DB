@@ -29,6 +29,7 @@ import io.modelcontextprotocol.server.McpSyncServerExchange;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /** MCP tools for bounded Redis browsing and guarded structured changes. */
@@ -42,7 +43,7 @@ public class RedisTools {
     private final SqlGuard sqlGuard;
     private final ObjectMapper objectMapper;
 
-    public RedisTools(ConnectionScope connectionScope, RedisKeyPrefixService prefixService,
+    public RedisTools(ConnectionScope connectionScope, @Lazy RedisKeyPrefixService prefixService,
                       McpServerConfigService configService, McpApprovalSupport approvalSupport,
                       SqlGuard sqlGuard, ObjectMapper objectMapper) {
         this.connectionScope = connectionScope;

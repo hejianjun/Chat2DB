@@ -15,6 +15,7 @@ import io.modelcontextprotocol.server.McpSyncServerExchange;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,7 +30,7 @@ public class DangerousSqlTools {
     private final SqlGuard sqlGuard;
     private final McpApprovalSupport approvalSupport;
 
-    public DangerousSqlTools(DlTemplateService dlTemplateService, ConnectionScope connectionScope,
+    public DangerousSqlTools(@Lazy DlTemplateService dlTemplateService, ConnectionScope connectionScope,
                              ResultFormatter resultFormatter, SqlGuard sqlGuard, McpApprovalSupport approvalSupport) {
         this.dlTemplateService = dlTemplateService;
         this.connectionScope = connectionScope;

@@ -7,6 +7,7 @@ import ai.chat2db.server.domain.api.service.ViewService;
 import ai.chat2db.server.mcp.support.ConnectionScope;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,8 +22,8 @@ public class SchemaInsightTools {
     private final ProcedureService procedureService;
     private final ConnectionScope connectionScope;
 
-    public SchemaInsightTools(DatabaseService databaseService, ViewService viewService, FunctionService functionService,
-        ProcedureService procedureService, ConnectionScope connectionScope) {
+    public SchemaInsightTools(@Lazy DatabaseService databaseService, @Lazy ViewService viewService,
+        @Lazy FunctionService functionService, @Lazy ProcedureService procedureService, ConnectionScope connectionScope) {
         this.databaseService = databaseService;
         this.viewService = viewService;
         this.functionService = functionService;

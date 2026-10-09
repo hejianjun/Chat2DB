@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 public class RedisCommandOperationLogRegistrar implements InitializingBean {
 
     @Autowired
+    @Lazy
     private OperationLogService operationLogService;
 
     @Override

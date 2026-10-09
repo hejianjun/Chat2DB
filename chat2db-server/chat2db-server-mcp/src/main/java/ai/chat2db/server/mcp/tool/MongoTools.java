@@ -19,6 +19,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springaicommunity.mcp.annotation.McpTool;
 import org.springaicommunity.mcp.annotation.McpToolParam;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,7 +35,7 @@ public class MongoTools {
     private final McpApprovalSupport approvalSupport;
     private final ResultFormatter resultFormatter;
 
-    public MongoTools(ConnectionScope connectionScope, DatabaseService databaseService,
+    public MongoTools(ConnectionScope connectionScope, @Lazy DatabaseService databaseService,
                       MongoToolExecutionSupport executionSupport,
                       MqlGuard mqlGuard, McpApprovalSupport approvalSupport,
                       ResultFormatter resultFormatter) {
