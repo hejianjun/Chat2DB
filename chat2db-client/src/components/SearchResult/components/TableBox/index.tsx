@@ -690,11 +690,14 @@ export default function TableBox(props: ITableProps) {
       ...(params || {}),
     };
 
-    return sqlService.executeSql(executeSQLParams).then((res) => {
-      setTableLoading(false);
-      setQueryResultData(res?.[0]);
-      setUpdateData([]);
-    });
+    return sqlService.executeSql(executeSQLParams)
+      .then((res) => {
+        setQueryResultData(res?.[0]);
+        setUpdateData([]);
+      })
+      .finally(() => {
+        setTableLoading(false);
+      });
   };
 
   const buildMongoUpdateStatements = () => {
@@ -1402,28 +1405,37 @@ export default function TableBox(props: ITableProps) {
             />
           )}
           {isActive ? (
-            <RightClickMenu menuList={rowRightClickMenu}>
-              <div
-                ref={tableBoxRef}
-                className={classnames(styles.supportBaseTableBox, { [styles.supportBaseTableBoxHidden]: tableLoading })}
-              >
-                {allDataReady && (
-                  <>
-                    {tableLoading && <Spin className={styles.supportBaseTableSpin} />}
-                    <SupportBaseTable
-                      className={classnames('supportBaseTable', props.className, styles.table, {
-                        [styles.tableWithColumnComment]: hasColumnComment,
-                      })}
-                      components={{ EmptyContent: () => <h2>{i18n('common.text.noData')}</h2> }}
-                      isStickyHead
-                      stickyTop={31}
-                      stickyScrollHeight={8}
-                      {...pipeline.getProps()}
-                    />
-                  </>
-                )}
-              </div>
-            </RightClickMenu>
+            <div className={styles.tableViewport} aria-busy={tableLoading}>
+              <RightClickMenu menuList={rowRightClickMenu}>
+                <div
+                  ref={tableBoxRef}
+                  className={classnames(styles.supportBaseTableBox, {
+                    [styles.supportBaseTableBoxHidden]: tableLoading,
+                  })}
+                >
+                  {allDataReady && (
+                    <>
+                      <SupportBaseTable
+                        className={classnames('supportBaseTable', props.className, styles.table, {
+                          [styles.tableWithColumnComment]: hasColumnComment,
+                        })}
+                        components={{ EmptyContent: () => <h2>{i18n('common.text.noData')}</h2> }}
+                        isStickyHead
+                        stickyTop={31}
+                        stickyScrollHeight={8}
+                        {...pipeline.getProps()}
+                      />
+                    </>
+                  )}
+                </div>
+              </RightClickMenu>
+              {/* 遮罩放在滚动容器外，避免滚动后离开表格可视区域。 */}
+              {tableLoading && (
+                <div className={styles.tableLoadingMask}>
+                  <Spin size="large" />
+                </div>
+              )}
+            </div>
           ) : (
             <div className={styles.supportBaseTableBox} />
           )}

@@ -186,23 +186,37 @@
   }
 }
 
+.tableViewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.tableLoadingMask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 40;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-bg-base);
+    opacity: 0.85;
+  }
+  :global(.ant-spin) {
+    position: relative;
+  }
+}
+
 .supportBaseTableBox {
   flex: 1;
   overflow-y: auto;
-  height: 0px;
+  height: 100%;
   position: relative;
-  .supportBaseTableSpin {
-    position: absolute;
-    top: 0px;
-    left: 0px;
-    right: 0px;
-    bottom: 0px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 10;
-    background-color: var(--color-fill-quaternary);
-  }
 }
 
 .supportBaseTableBoxHidden {
